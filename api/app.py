@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.database import Base, engine
-from api.routes import health
+from api.routes import health, users
 from api.config import config
 
 
@@ -22,4 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 app.include_router(health.router)
+app.include_router(users.router)
