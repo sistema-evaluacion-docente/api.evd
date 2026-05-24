@@ -1,0 +1,35 @@
+services:
+  api.evd:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=${PORT}
+      - DATABASE_URL=${DATABASE_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+    depends_on:
+      - db.evd
+    networks:
+       - network_evd
+
+  db.evd:
+    image: postgres:16
+    container_name: postgres_evd
+    restart: always
+    volumes:
+      - pgdata_evd:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    networks:
+      - network_evd
+    ports:
+      - "5432:5432"
+
+volumes:
+  pgdata_evd:
+
+networks:
+  network_evd:
+    driver: bridge
