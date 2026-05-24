@@ -2,7 +2,7 @@ services:
   api.evd:
     build:
       context: .
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.dev
     ports:
       - "8000:8000"
     environment:
@@ -23,12 +23,14 @@ services:
     depends_on:
       - db.evd
     networks:
-       - network_evd
+      - network_evd
+    volumes:
+      - .:/app
 
   db.evd:
     image: postgres:16
     container_name: postgres_evd
-    restart: always
+    restart: unless-stopped
     volumes:
       - pgdata_evd:/var/lib/postgresql/data
     environment:
