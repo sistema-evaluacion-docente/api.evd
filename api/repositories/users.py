@@ -5,9 +5,9 @@ Users repository
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
-from api.schemas.user import UserCreate, UserUpdate
-from api.models.user import UserModel
 from api.database import get_db
+from api.models.user import UserModel
+from api.schemas.user import UserCreate, UserUpdate
 from api.serializers.users import user_to_dict
 
 
@@ -62,8 +62,7 @@ class UsersRepository:
         Get user by username and ensure options and editor_options are loaded
         """
 
-        user = self.db.query(UserModel).filter(
-            UserModel.username == username).first()
+        user = self.db.query(UserModel).filter(UserModel.username == username).first()
 
         if not user:
             return None

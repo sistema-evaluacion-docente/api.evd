@@ -3,11 +3,14 @@ Routes for user-related operations.
 """
 
 from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends
 
+from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user
 from api.repositories.users import UsersRepository, get_users_repository
-from api.schemas.user import UserCreate, UserUpdate
+from api.schemas.response import ResponseSchema
+from api.schemas.user import UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -15,43 +18,20 @@ router = APIRouter(prefix="/users", tags=["Users"])
 @router.get("/auth")
 async def login_user(
     current_user=Depends(get_current_user),
-    repository: UsersRepository = Depends(get_users_repository),
+    controller: UsersController = Depends(get_users_controller),
 ):
     """Endpoint to verify user login."""
 
-    try:
-        user = await repository.get_by_uid(current_user.uid)
+    user = await controller.login(current_user)
 
-        if not user:
-            username = current_user.email.split("@")[0]
+    if not user:
+        return ResponseSchema(
+            status=401, message="Authentication failed", path="/users/auth"
+        )
 
-            user = await repository.save(
-                UserCreate(
-                    uid=current_user.uid,
-                    email=current_user.email,
-                    name=current_user.name,
-                    username=username,
-                    photo_url=current_user.picture,
-                )
-            )
-
-        # create log
-        # await logs_repository.create_log(
-        #     level="info",
-        #     source="auth",
-        #     message=f"User {user.get('username', 'Unknown')} logged in successfully.",
-        #     created_at=datetime.now(timezone.utc),
-        # )
-
-        return {
-            "message": "Authentication successful",
-            "data": user,
-            "error": None,
-            "status": 200,
-            "timestamp": datetime.now(timezone.utc),
-        }
-    except Exception as e:
-        return {"error": str(e)}
+    return ResponseSchema(
+        status=200, message="Authentication successful", data=user, path="/users/auth"
+    )
 
 
 @router.get("/{uid}")

@@ -2,17 +2,14 @@
 Firebase auth middleware.
 """
 
-
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from firebase_admin import auth, credentials, initialize_app
 
-from firebase_admin import auth, initialize_app
-from firebase_admin import credentials
 from api.config import config
 from api.schemas.user import TokenUser
 
-app = initialize_app(credential=credentials.Certificate(
-    config.FIREBASE_CREDENTIALS))
+app = initialize_app(credential=credentials.Certificate(config.FIREBASE_CREDENTIALS))
 
 security = HTTPBearer()
 
@@ -80,34 +77,21 @@ def is_authenticated(token: str) -> bool:
 
 def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> TokenUser:
-    """
-    FastAPI dependency to get the current authenticated user.
-
-    Args:
-        credentials: HTTP Bearer token credentials from the Authorization header.
-
-    Returns:
-        TokenUser: The decoded token information if authentication is successful.
-
-    Raises:
-        HTTPException: If authentication fails.
-    """
+) -> TokenUser | None:
+    """FastAPI dependency to get the current authenticated user."""
 
     token = credentials.credentials
 
     if not is_authenticated(token):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        return None
 
     decoded_token = verify_token(token)
 
     return TokenUser(
         uid=decoded_token["user_id"],
         email=decoded_token["email"],
-        name=decoded_token["name"] if "name" in decoded_token else decoded_token["email"],
+        name=decoded_token["name"]
+        if "name" in decoded_token
+        else decoded_token["email"],
         picture=decoded_token["picture"] if "picture" in decoded_token else "",
     )
