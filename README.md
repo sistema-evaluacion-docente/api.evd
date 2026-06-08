@@ -2,7 +2,7 @@
 
 ## Database
 
-Visist [https://chartdb.byandrev.dev](https://chartdb.byandrev.dev) and import the file `db.json` to view the database schema.
+Visist [https://chartdb.byandrev.dev](https://chartdb.byandrev.dev) and import the file `db.json` to view the database schema. If you make changes, export the JSON file and update it in the repository
 
 ## Instructions
 
