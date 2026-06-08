@@ -5,10 +5,9 @@ FastAPI EVD API
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.database import Base, engine
-from api.routes import health, users
 from api.config import config
-
+from api.database import Base, engine
+from api.routes import audits, health, users
 
 Base.metadata.create_all(bind=engine)
 
@@ -25,3 +24,4 @@ app.add_middleware(
 
 app.include_router(health.router)
 app.include_router(users.router)
+app.include_router(audits.router)

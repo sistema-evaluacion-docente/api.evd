@@ -2,13 +2,18 @@ from webbrowser import get
 
 from fastapi.param_functions import Depends
 
+from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
+from api.schemas.audit import AuditCreate
 from api.schemas.user import UserCreate
 
 
 class UsersController:
-    def __init__(self, repository: UsersRepository):
+    def __init__(
+        self, repository: UsersRepository, audits_repository: AuditsRepository
+    ):
         self.repository = repository
+        self.audits_repository = audits_repository
 
     async def login(self, current_user):
         try:
@@ -28,12 +33,14 @@ class UsersController:
                 )
 
             # create log
-            # await logs_repository.create_log(
-            #     level="info",
-            #     source="auth",
-            #     message=f"User {user.get('username', 'Unknown')} logged in successfully.",
-            #     created_at=datetime.now(timezone.utc),
-            # )
+            await self.audits_repository.create(
+                data=AuditCreate(
+                    user_id=current_user.uid,
+                    table_name="users",
+                    operation="login",
+                    created_at=None,
+                )
+            )
 
             return user
         except Exception as e:
@@ -41,9 +48,12 @@ class UsersController:
             return None
 
 
-def get_users_controller(users_repository=Depends(get_users_repository)):
+def get_users_controller(
+    users_repository=Depends(get_users_repository),
+    audits_repository=Depends(get_audits_repository),
+):
     """
     Get users controller
     """
 
-    return UsersController(users_repository)
+    return UsersController(users_repository, audits_repository)
