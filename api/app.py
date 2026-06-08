@@ -7,10 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.config import config
 from api.database import Base, engine
-from api.models import audit, department, user
+from api.models import audit, department, role, user, user_role
 from api.routes import audits, health, users
 
-_ = (audit, department, user)
+_ = (audit, department, role, user, user_role)
 
 Base.metadata.create_all(bind=engine)
 

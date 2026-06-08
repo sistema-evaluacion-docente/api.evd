@@ -10,7 +10,7 @@ from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.response import ResponseSchema
-from api.schemas.user import UserUpdate
+from api.schemas.user import UserRolesUpdate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -83,3 +83,43 @@ async def update_user(
         return {"error": str(e)}
 
     return {"message": "User updated successfully", "user": updated_user}
+
+
+@router.put("/{uid}/roles")
+async def replace_user_roles(
+    uid: str,
+    payload: UserRolesUpdate,
+    current_user=Depends(get_current_user),
+    repository: UsersRepository = Depends(get_users_repository),
+):
+    """Endpoint to replace all roles for a user."""
+
+    requester = await repository.get_by_uid(current_user.uid)
+
+    if not requester:
+        return {"error": "Requester user not found", "status": 404}
+
+    requester_roles = requester.get("roles", [])
+
+    if "ADMIN" not in requester_roles and current_user.uid != uid:
+        return {
+            "error": "Only ADMIN can update roles for other users",
+            "status": 403,
+        }
+
+    try:
+        updated_user = await repository.update(
+            uid,
+            UserUpdate(roles=payload.roles),
+        )
+    except ValueError as e:
+        return {"error": str(e), "status": 400}
+
+    if not updated_user:
+        return {"error": "User not found", "status": 404}
+
+    return {
+        "message": "Roles updated successfully",
+        "user": updated_user,
+        "status": 200,
+    }

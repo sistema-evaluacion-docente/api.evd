@@ -7,7 +7,9 @@ from api.config import config as app_config
 from api.database import Base
 from api.models.audit import AuditModel
 from api.models.department import DepartmentModel
+from api.models.role import RoleModel
 from api.models.user import UserModel
+from api.models.user_role import UserRoleModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -23,7 +25,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # importing models ensures they are registered in Base.metadata
-_ = (UserModel, AuditModel, DepartmentModel)
+_ = (UserModel, AuditModel, DepartmentModel, RoleModel, UserRoleModel)
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.

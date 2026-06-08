@@ -2,12 +2,15 @@
 Firebase auth middleware.
 """
 
+from typing import Sequence
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth, credentials, initialize_app
 
 from api.config import config
-from api.schemas.user import TokenUser
+from api.repositories.users import UsersRepository, get_users_repository
+from api.schemas.user import RoleName, TokenUser
 
 app = initialize_app(credential=credentials.Certificate(config.FIREBASE_CREDENTIALS))
 
@@ -95,3 +98,45 @@ def get_current_user(
         else decoded_token["email"],
         picture=decoded_token["picture"] if "picture" in decoded_token else "",
     )
+
+
+def require_roles(required_roles: Sequence[RoleName | str]):
+    """Dependency factory to authorize users by roles."""
+
+    normalized_required_roles = {
+        role.value if isinstance(role, RoleName) else str(role)
+        for role in required_roles
+    }
+
+    async def dependency(
+        current_user: TokenUser | None = Depends(get_current_user),
+        users_repository: UsersRepository = Depends(get_users_repository),
+    ):
+        if current_user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required",
+            )
+
+        user = await users_repository.get_by_uid(current_user.uid)
+
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found",
+            )
+
+        user_roles = set(user.get("roles", []))
+
+        if normalized_required_roles.isdisjoint(user_roles):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "You do not have permission to access this resource. "
+                    f"Required roles: {', '.join(sorted(normalized_required_roles))}"
+                ),
+            )
+
+        return user
+
+    return dependency
