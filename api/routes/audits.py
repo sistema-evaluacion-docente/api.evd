@@ -7,12 +7,15 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from api.controllers.audits import AuditsController, get_audits_controller
+from api.middlewares.auth import require_roles
+from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/audits", tags=["Audits"])
 
 
 @router.get("/")
 async def get_audits(
+    _: dict = Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
     """Endpoint to get all audit logs."""
@@ -30,6 +33,7 @@ async def get_audits(
 @router.get("/{audit_id}")
 async def get_audit_by_id(
     audit_id: int,
+    _: dict = Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
     """Endpoint to get an audit log by ID."""

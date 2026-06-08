@@ -4,7 +4,7 @@ Firebase auth middleware.
 
 from typing import Sequence
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth, credentials, initialize_app
 
@@ -14,7 +14,7 @@ from api.schemas.user import RoleName, TokenUser
 
 app = initialize_app(credential=credentials.Certificate(config.FIREBASE_CREDENTIALS))
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
 
 def verify_token(token: str) -> dict:
@@ -79,16 +79,33 @@ def is_authenticated(token: str) -> bool:
 
 
 def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+    authorization: str | None = Header(default=None, alias="Authorization"),
 ) -> TokenUser | None:
     """FastAPI dependency to get the current authenticated user."""
 
-    token = credentials.credentials
+    token: str | None = None
 
-    if not is_authenticated(token):
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif authorization:
+        auth_value = authorization.strip()
+        if auth_value.lower().startswith("bearer "):
+            token = auth_value[7:].strip()
+        else:
+            token = auth_value
+
+    if not token:
         return None
 
-    decoded_token = verify_token(token)
+    try:
+        decoded_token = verify_token(token)
+    except (
+        auth.InvalidIdTokenError,
+        auth.ExpiredIdTokenError,
+        auth.RevokedIdTokenError,
+    ):
+        return None
 
     return TokenUser(
         uid=decoded_token["user_id"],
