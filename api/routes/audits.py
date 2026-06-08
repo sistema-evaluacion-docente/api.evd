@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from api.controllers.audits import AuditsController, get_audits_controller
-from api.schemas.audit import AuditCreate, AuditUpdate
+from api.schemas.audit import AuditCreate
 
 router = APIRouter(prefix="/audits", tags=["Audits"])
 
@@ -65,55 +65,6 @@ async def get_audit_by_id(
     return {
         "data": audit,
         "error": None,
-        "status": 200,
-        "timestamp": datetime.now(timezone.utc),
-    }
-
-
-@router.put("/{audit_id}")
-async def update_audit(
-    audit_id: int,
-    payload: AuditUpdate,
-    controller: AuditsController = Depends(get_audits_controller),
-):
-    """Endpoint to update an audit log."""
-
-    updated_audit = await controller.update(audit_id, payload)
-
-    if not updated_audit:
-        return {
-            "message": "Audit log not found",
-            "status": 404,
-            "timestamp": datetime.now(timezone.utc),
-        }
-
-    return {
-        "message": "Audit log updated successfully",
-        "audit": updated_audit,
-        "status": 200,
-        "timestamp": datetime.now(timezone.utc),
-    }
-
-
-@router.delete("/{audit_id}")
-async def delete_audit(
-    audit_id: int,
-    controller: AuditsController = Depends(get_audits_controller),
-):
-    """Endpoint to delete an audit log."""
-
-    deleted_audit = await controller.delete(audit_id)
-
-    if not deleted_audit:
-        return {
-            "message": "Audit log not found",
-            "status": 404,
-            "timestamp": datetime.now(timezone.utc),
-        }
-
-    return {
-        "message": "Audit log deleted successfully",
-        "audit": deleted_audit,
         "status": 200,
         "timestamp": datetime.now(timezone.utc),
     }
