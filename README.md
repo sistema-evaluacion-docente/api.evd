@@ -26,3 +26,19 @@ Visist [https://chartdb.byandrev.dev](https://chartdb.byandrev.dev) and import t
 ## Migration
 
 - For migration instructions and the recommended workflow, see [MIGRATIONS.md](MIGRATIONS.md).
+
+## Seeding (roles + admin)
+
+1. Run migrations first:
+   - `alembic upgrade head`
+2. Set required env vars:
+   - `SEED_ADMIN_UID`
+   - `SEED_ADMIN_EMAIL`
+3. (Optional) Set:
+   - `SEED_ADMIN_USERNAME`
+   - `SEED_ADMIN_NAME`
+   - `SEED_ADMIN_AVATAR_URL`
+   - `SEED_ADMIN_DEPARTMENT_ID`
+   - `SEED_ADMIN_ROLES` (comma-separated, default `ADMIN`)
+4. Run seed script:
+   - `python scripts/seed_roles_admin.py`
