@@ -49,7 +49,7 @@ class DefaultRole:
 
 DEFAULT_ROLES: list[DefaultRole] = [
     DefaultRole(
-        name=RoleName.DOCETE.value, description="Rol base para usuarios docentes"
+        name=RoleName.DOCENTE.value, description="Rol base para usuarios docentes"
     ),
     DefaultRole(
         name=RoleName.DIRECTOR_DE_DEPARTAMENTO.value,

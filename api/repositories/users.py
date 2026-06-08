@@ -114,7 +114,7 @@ class UsersRepository:
         self.db.add(user)
         self.db.flush()
 
-        roles_to_assign = normalized_roles or [RoleName.DOCETE.value]
+        roles_to_assign = normalized_roles or [RoleName.DOCENTE.value]
         self._replace_user_roles(str(user.uid), roles_to_assign)
 
         self.db.commit()
@@ -200,26 +200,6 @@ class UsersRepository:
 
         # update fields
         for field, value in payload.items():
-            if field == "username" and value != user.username:
-                existing_user = (
-                    self.db.query(UserModel)
-                    .filter(UserModel.username == value, UserModel.uid != uid)
-                    .first()
-                )
-
-                if existing_user:
-                    raise ValueError("Username already taken")
-
-            if field == "email" and value != user.email:
-                existing_email = (
-                    self.db.query(UserModel)
-                    .filter(UserModel.email == value, UserModel.uid != uid)
-                    .first()
-                )
-
-                if existing_email:
-                    raise ValueError("Email already taken")
-
             if value is not None and field != "uid":
                 setattr(user, field, value)
 

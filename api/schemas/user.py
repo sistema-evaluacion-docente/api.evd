@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 class RoleName(str, Enum):
     """Allowed role names in the system."""
 
-    DOCETE = "DOCETE"
+    DOCENTE = "DOCENTE"
     DIRECTOR_DE_DEPARTAMENTO = "DIRECTOR DE DEPARTAMENTO"
     ADMIN = "ADMIN"
 
@@ -30,7 +30,7 @@ class UserCreate(BaseModel):
     active: Optional[bool] = True
     avatar_url: Optional[str] = None
     roles: list[RoleName] = Field(
-        default_factory=lambda: [RoleName.DOCETE],
+        default_factory=lambda: [RoleName.DOCENTE],
         min_length=1,
     )
 
@@ -40,8 +40,6 @@ class UserUpdate(BaseModel):
     Schema for updating a user.
     """
 
-    email: Optional[str] = None
-    username: Optional[str] = None
     name: Optional[str] = None
     department_id: Optional[int] = None
     active: Optional[bool] = None
