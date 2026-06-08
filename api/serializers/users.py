@@ -9,9 +9,11 @@ def user_to_dict(user: UserModel) -> dict:
     return {
         "uid": user.uid,
         "email": user.email,
-        "name": user.name,
         "username": user.username,
-        "photo_url": user.photo_url,
+        "name": user.name,
+        "department_id": user.department_id,
+        "active": user.active,
+        "avatar_url": user.avatar_url,
         "created_at": user.created_at.isoformat() if user.created_at else None,
         "updated_at": user.updated_at.isoformat() if user.updated_at else None,
     }

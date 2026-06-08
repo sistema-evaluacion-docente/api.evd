@@ -6,6 +6,7 @@ from alembic import context
 from api.config import config as app_config
 from api.database import Base
 from api.models.audit import AuditModel
+from api.models.department import DepartmentModel
 from api.models.user import UserModel
 
 # this is the Alembic Config object, which provides
@@ -22,7 +23,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # importing models ensures they are registered in Base.metadata
-_ = (UserModel, AuditModel)
+_ = (UserModel, AuditModel, DepartmentModel)
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.

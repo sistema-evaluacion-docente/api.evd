@@ -2,6 +2,8 @@
 Users repository
 """
 
+from typing import Annotated
+
 from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
@@ -34,9 +36,11 @@ class UsersRepository:
         user = UserModel(
             uid=data.uid,
             email=data.email,
-            name=data.name,
-            photo_url=data.photo_url,
             username=data.username,
+            name=data.name,
+            department_id=data.department_id,
+            active=data.active,
+            avatar_url=data.avatar_url,
         )
 
         self.db.add(user)
@@ -82,14 +86,20 @@ class UsersRepository:
         def user_to_dict_simple(user: UserModel):
             return dict(
                 uid=user.uid,
-                name=user.name,
-                photo_url=user.photo_url,
+                institutional_code=user.institutional_code,
+                email=user.email,
                 username=user.username,
+                name=user.name,
+                department_id=user.department_id,
+                active=user.active,
+                avatar_url=user.avatar_url,
             )
 
-        users_dict = {user.uid: user_to_dict_simple(user) for user in users}
+        users_dict: dict[str, dict] = {
+            str(user.uid): user_to_dict_simple(user) for user in users
+        }
 
-        return [users_dict.get(uid) for uid in uids if uid in users_dict]
+        return [users_dict[uid] for uid in uids if uid in users_dict]
 
     async def update(self, uid: str, data: UserUpdate):
         """
@@ -117,6 +127,29 @@ class UsersRepository:
                 if existing_user:
                     raise ValueError("Username already taken")
 
+            if field == "institutional_code" and value != user.institutional_code:
+                existing_code = (
+                    self.db.query(UserModel)
+                    .filter(
+                        UserModel.institutional_code == value,
+                        UserModel.uid != uid,
+                    )
+                    .first()
+                )
+
+                if existing_code:
+                    raise ValueError("Institutional code already taken")
+
+            if field == "email" and value != user.email:
+                existing_email = (
+                    self.db.query(UserModel)
+                    .filter(UserModel.email == value, UserModel.uid != uid)
+                    .first()
+                )
+
+                if existing_email:
+                    raise ValueError("Email already taken")
+
             if value is not None and field != "uid":
                 setattr(user, field, value)
 
@@ -126,7 +159,7 @@ class UsersRepository:
         return user_to_dict(user)
 
 
-def get_users_repository(db: Session = Depends(get_db)):
+def get_users_repository(db: Annotated[Session, Depends(get_db)]):
     """
     Get users repository
     """

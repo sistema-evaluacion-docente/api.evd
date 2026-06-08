@@ -1,5 +1,3 @@
-from webbrowser import get
-
 from fastapi.param_functions import Depends
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
@@ -26,9 +24,11 @@ class UsersController:
                     UserCreate(
                         uid=current_user.uid,
                         email=current_user.email,
-                        name=current_user.name,
                         username=username,
-                        photo_url=current_user.picture,
+                        name=current_user.name,
+                        department_id=None,
+                        active=True,
+                        avatar_url=current_user.picture,
                     )
                 )
 
