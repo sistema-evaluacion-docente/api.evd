@@ -1,9 +1,11 @@
+from fastapi import HTTPException
 from fastapi.param_functions import Depends
+from sqlalchemy.sql.lambdas import NonAnalyzedFunction
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
-from api.schemas.user import UserCreate
+from api.schemas.user import UserCreate, UserRolesUpdate, UserUpdate
 
 
 class UsersController:
@@ -46,6 +48,65 @@ class UsersController:
         except Exception as e:
             print(e)
             return None
+
+    async def get_by_uid(
+        self,
+        uid: str,
+    ):
+        """Endpoint to get user information by UID."""
+
+        try:
+            user = await self.repository.get_by_uid(uid)
+
+            if not user:
+                return None
+        except ValueError as e:
+            print(e)
+            return None
+
+        return user
+
+    async def update(self, payload: UserUpdate, current_user):
+        """Endpoint to update user information."""
+
+        try:
+            updated_user = await self.repository.update(current_user.uid, payload)
+        except ValueError as e:
+            print(e)
+            return None
+
+        return updated_user
+
+    async def replace_roles(
+        self,
+        uid: str,
+        payload: UserRolesUpdate,
+        current_user,
+    ):
+        """Endpoint to replace all roles for a user."""
+
+        requester = await self.repository.get_by_uid(current_user.uid)
+
+        if not requester:
+            return None
+
+        requester_roles = requester.get("roles", [])
+
+        if "ADMIN" not in requester_roles and current_user.uid != uid:
+            raise ValueError(
+                "You do not have permission to replace roles for this user"
+            )
+
+        try:
+            updated_user = await self.repository.update(
+                uid,
+                UserUpdate(roles=payload.roles),
+            )
+        except ValueError as e:
+            print(e)
+            raise ValueError("Error updating roles")
+
+        return updated_user or None
 
 
 def get_users_controller(
