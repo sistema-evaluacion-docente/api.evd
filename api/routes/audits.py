@@ -8,12 +8,17 @@ from fastapi import APIRouter, Depends, Query
 
 from api.controllers.audits import AuditsController, get_audits_controller
 from api.middlewares.auth import require_roles
+from api.schemas.audit import AuditDetailResponse, AuditListResponse
 from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/audits", tags=["Audits"])
 
 
-@router.get("/")
+@router.get(
+    "/",
+    response_model=AuditListResponse,
+    responses={403: {"description": "Forbidden"}},
+)
 async def get_audits(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
@@ -38,7 +43,11 @@ async def get_audits(
     }
 
 
-@router.get("/{audit_id}")
+@router.get(
+    "/{audit_id}",
+    response_model=AuditDetailResponse,
+    responses={404: {"model": AuditDetailResponse}, 403: {"description": "Forbidden"}},
+)
 async def get_audit_by_id(
     audit_id: int,
     _: dict = Depends(require_roles([RoleName.ADMIN])),

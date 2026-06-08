@@ -2,10 +2,12 @@
 Schemas for request and response bodies related to audit logs.
 """
 
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel
+
+from api.schemas.pagination import Pagination
 
 
 class AuditCreate(BaseModel):
@@ -40,3 +42,23 @@ class AuditOut(BaseModel):
     table_name: Optional[str]
     operation: Optional[str]
     created_at: Optional[date]
+    updated_at: Optional[datetime]
+
+
+class AuditDetailResponse(BaseModel):
+    """Response envelope for a single audit log."""
+
+    data: Optional[AuditOut]
+    error: Optional[str]
+    status: int
+    timestamp: datetime
+
+
+class AuditListResponse(BaseModel):
+    """Response envelope for paginated audit logs."""
+
+    data: list[AuditOut]
+    pagination: Pagination
+    error: Optional[str]
+    status: int
+    timestamp: datetime

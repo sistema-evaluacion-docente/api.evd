@@ -87,3 +87,12 @@ class TokenUser(BaseModel):
     email: str
     name: str
     picture: str
+
+
+class UserDetailResponse(BaseModel):
+    """Schema for the detailed response of a user."""
+
+    data: Optional[UserOut]
+    error: Optional[str]
+    status: int
+    timestamp: datetime

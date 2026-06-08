@@ -7,12 +7,16 @@ from fastapi import APIRouter, Depends
 from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.response import ResponseSchema
-from api.schemas.user import RoleName, UserRolesUpdate, UserUpdate
+from api.schemas.user import RoleName, UserDetailResponse, UserRolesUpdate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
 
-@router.get("/auth")
+@router.get(
+    "/auth",
+    response_model=UserDetailResponse,
+    responses={401: {"model": ResponseSchema}},
+)
 async def login_user(
     current_user=Depends(get_current_user),
     controller: UsersController = Depends(get_users_controller),
@@ -31,7 +35,11 @@ async def login_user(
     )
 
 
-@router.get("/{uid}")
+@router.get(
+    "/{uid}",
+    response_model=UserDetailResponse,
+    responses={401: {"model": ResponseSchema}},
+)
 async def get_user_by_uid(
     uid: str,
     _=Depends(get_current_user),
@@ -51,7 +59,11 @@ async def get_user_by_uid(
     )
 
 
-@router.put("/")
+@router.put(
+    "/",
+    response_model=UserDetailResponse,
+    responses={400: {"model": ResponseSchema}},
+)
 async def update_user(
     payload: UserUpdate,
     current_user=Depends(get_current_user),
@@ -69,7 +81,11 @@ async def update_user(
     )
 
 
-@router.put("/{uid}/roles")
+@router.put(
+    "/{uid}/roles",
+    response_model=UserDetailResponse,
+    responses={400: {"model": ResponseSchema}},
+)
 async def replace_user_roles(
     uid: str,
     payload: UserRolesUpdate,
