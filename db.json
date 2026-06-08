@@ -1,0 +1,3160 @@
+{
+  "id": "0",
+  "name": "Evaluacion Docente",
+  "createdAt": "2026-05-30T15:25:58.831Z",
+  "updatedAt": "2026-06-08T14:55:40.560Z",
+  "databaseType": "postgresql",
+  "tables": [
+    {
+      "id": "1",
+      "name": "roles",
+      "schema": "public",
+      "order": 0,
+      "fields": [
+        {
+          "id": "2",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "3",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre del rol: DIRECTOR, DOCENTE, ADMIN."
+        },
+        {
+          "id": "4",
+          "name": "description",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Descripcion detallada de los permisos y alcance del rol"
+        },
+        {
+          "id": "5",
+          "name": "active",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Indica si el rol esta habilitado en el sistema"
+        },
+        {
+          "id": "6",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155523532
+        },
+        {
+          "id": "7",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155529284
+        }
+      ],
+      "indexes": [
+        {
+          "id": "8",
+          "name": "",
+          "fieldIds": [
+            "2"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 149.90740254800264,
+      "y": -286.28160114406023,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "9",
+      "name": "departments",
+      "schema": "public",
+      "order": 1,
+      "fields": [
+        {
+          "id": "10",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "11",
+          "name": "code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Codigo institucional del departamento. Ej: INGE-001"
+        },
+        {
+          "id": "12",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre completo del departamento academico"
+        },
+        {
+          "id": "13",
+          "name": "faculty",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Facultad a la que pertenece el departamento. Ej: Facultad de Ingenieria"
+        },
+        {
+          "id": "14",
+          "name": "active",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Permite desactivar departamentos sin eliminarlos"
+        },
+        {
+          "id": "15",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155507125
+        },
+        {
+          "id": "16",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155512437
+        }
+      ],
+      "indexes": [
+        {
+          "id": "17",
+          "name": "",
+          "fieldIds": [
+            "10"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 273.03959422207424,
+      "y": 205.54423806001805,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "18",
+      "name": "users",
+      "schema": "public",
+      "order": 2,
+      "fields": [
+        {
+          "id": "19",
+          "name": "uid",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "comments": "Identificador unico generado por el proveedor de autenticacion (Firebase)"
+        },
+        {
+          "id": "20",
+          "name": "institutional_code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Codigo institucional UFPS del usuario. Ej: 1152167"
+        },
+        {
+          "id": "21",
+          "name": "email",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Correo institucional. Ej: orlandojosebv@ufps.edu.co"
+        },
+        {
+          "id": "22",
+          "name": "username",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre de usuario para mostrar en la interfaz"
+        },
+        {
+          "id": "23",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre completo del usuario"
+        },
+        {
+          "id": "24",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Departamento al que pertenece el usuario (director o administrativo)"
+        },
+        {
+          "id": "25",
+          "name": "active",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Permite suspender acceso sin eliminar el registro"
+        },
+        {
+          "id": "26",
+          "name": "last_access",
+          "type": {
+            "name": "timestamp",
+            "id": "timestamp",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Fecha y hora del ultimo inicio de sesion exitoso"
+        },
+        {
+          "id": "27",
+          "name": "avatar_url",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155083123,
+          "comments": "URL de la foto de perfil del usuario"
+        },
+        {
+          "id": "28",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155010521
+        },
+        {
+          "id": "29",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155019664
+        }
+      ],
+      "indexes": [
+        {
+          "id": "30",
+          "name": "",
+          "fieldIds": [
+            "19"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": -262.88859663166,
+      "y": 46.078013920445656,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "expanded": true,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "31",
+      "name": "teachers",
+      "schema": "public",
+      "order": 3,
+      "fields": [
+        {
+          "id": "32",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "33",
+          "name": "institutional_code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Codigo institucional del docente en la UFPS"
+        },
+        {
+          "id": "34",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Departamento al que esta adscrito el docente"
+        },
+        {
+          "id": "35",
+          "name": "contract_type",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Tipo de vinculacion: PLANTA, OCASIONAL, CATEDRA, etc."
+        },
+        {
+          "id": "36",
+          "name": "user_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Referencia al usuario del sistema si el docente tiene acceso. Nullable si no tiene cuenta"
+        },
+        {
+          "id": "37",
+          "name": "active",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Permite marcar docentes inactivos sin eliminar su historial de evaluaciones"
+        },
+        {
+          "id": "38",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155544246
+        },
+        {
+          "id": "39",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155550144
+        }
+      ],
+      "indexes": [
+        {
+          "id": "40",
+          "name": "",
+          "fieldIds": [
+            "32"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 225.42941291846387,
+      "y": 669.1834348426481,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240",
+      "width": 337
+    },
+    {
+      "id": "41",
+      "name": "user_roles",
+      "schema": "public",
+      "order": 3,
+      "fields": [
+        {
+          "id": "42",
+          "name": "user_id",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": false,
+          "createdAt": 1780170964462,
+          "comments": "Usuario al que se le asigna el rol"
+        },
+        {
+          "id": "43",
+          "name": "role_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": false,
+          "createdAt": 1780170964462,
+          "comments": "Rol asignado al usuario"
+        }
+      ],
+      "indexes": [
+        {
+          "id": "44",
+          "name": "",
+          "fieldIds": [
+            "42",
+            "43"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780170964462
+        }
+      ],
+      "x": -265.5747117406764,
+      "y": -169.00833320239812,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780170964462,
+      "comments": "Tabla pivot que permite roles multiples por usuario",
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "45",
+      "name": "academic_periods",
+      "schema": "public",
+      "order": 4,
+      "fields": [
+        {
+          "id": "46",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "47",
+          "name": "code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Codigo del periodo academico. Ej: 2025-1, 2025-2"
+        },
+        {
+          "id": "48",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre descriptivo del periodo. Ej: Primer semestre 2025"
+        },
+        {
+          "id": "49",
+          "name": "start_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Fecha de inicio de clases del periodo"
+        },
+        {
+          "id": "50",
+          "name": "end_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Fecha de fin de clases del periodo"
+        },
+        {
+          "id": "51",
+          "name": "evaluation_end_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Fecha limite para que los estudiantes diligencien la heteroevaluacion en Divisist"
+        },
+        {
+          "id": "52",
+          "name": "final_evaluation_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Fecha limite para que los directores entreguen el analisis y compromisos docentes"
+        },
+        {
+          "id": "53",
+          "name": "active",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Solo un periodo puede estar activo a la vez; controla que evaluaciones se procesan actualmente"
+        },
+        {
+          "id": "54",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "55",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155149522
+        }
+      ],
+      "indexes": [
+        {
+          "id": "56",
+          "name": "",
+          "fieldIds": [
+            "46"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 741.209765329145,
+      "y": 807.4186051955535,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "57",
+      "name": "courses",
+      "schema": "public",
+      "order": 5,
+      "fields": [
+        {
+          "id": "58",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "59",
+          "name": "code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Codigo de la asignatura segun el plan de estudios. Ej: 1154304"
+        },
+        {
+          "id": "60",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre oficial de la asignatura. Ej: ESTRUCTURA DE DATOS"
+        },
+        {
+          "id": "61",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Departamento que oferta la asignatura"
+        },
+        {
+          "id": "62",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "63",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155232634
+        }
+      ],
+      "indexes": [
+        {
+          "id": "64",
+          "name": "",
+          "fieldIds": [
+            "58"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 753.775751056058,
+      "y": -240.92235748622682,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "65",
+      "name": "reports",
+      "schema": "public",
+      "order": 6,
+      "fields": [
+        {
+          "id": "66",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "67",
+          "name": "user_id",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Usuario que genero el reporte"
+        },
+        {
+          "id": "68",
+          "name": "type",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Tipo de reporte: DEPARTAMENTO, DOCENTE, PERIODO, etc."
+        },
+        {
+          "id": "69",
+          "name": "format",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Formato de exportacion: PDF, XLSX, CSV"
+        },
+        {
+          "id": "70",
+          "name": "academic_period_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Periodo academico sobre el que se genero el reporte"
+        },
+        {
+          "id": "71",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Departamento filtrado en el reporte. Nullable si el reporte es institucional"
+        },
+        {
+          "id": "72",
+          "name": "teacher_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Docente filtrado en el reporte. Nullable si el reporte es departamental o global"
+        },
+        {
+          "id": "73",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155115330
+        },
+        {
+          "id": "74",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155122194
+        }
+      ],
+      "indexes": [
+        {
+          "id": "75",
+          "name": "",
+          "fieldIds": [
+            "66"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 742.1074020430237,
+      "y": 244.3012553337864,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "76",
+      "name": "academic_groups",
+      "schema": "public",
+      "order": 8,
+      "fields": [
+        {
+          "id": "77",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780171476047
+        },
+        {
+          "id": "78",
+          "name": "course_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171476047,
+          "comments": "Asignatura que se dicta en este grupo"
+        },
+        {
+          "id": "79",
+          "name": "teacher_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171476047,
+          "comments": "Docente responsable del grupo en el periodo"
+        },
+        {
+          "id": "80",
+          "name": "academic_period_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171476047,
+          "comments": "Periodo en que se ofrece el grupo"
+        },
+        {
+          "id": "81",
+          "name": "group_name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171476047,
+          "characterMaximumLength": "255",
+          "comments": "Identificador del grupo. Ej: A, B, 01, 02"
+        },
+        {
+          "id": "82",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171682156
+        },
+        {
+          "id": "83",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171688301
+        }
+      ],
+      "indexes": [
+        {
+          "id": "84",
+          "name": "",
+          "fieldIds": [
+            "77"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780171476047
+        }
+      ],
+      "x": 1535.802968710672,
+      "y": 148.8242020102309,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780171476047,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "85",
+      "name": "evaluations",
+      "schema": "public",
+      "order": 9,
+      "fields": [
+        {
+          "id": "86",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "87",
+          "name": "user_id",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Usuario (director) que cargo o proceso el PDF de heteroevaluacion"
+        },
+        {
+          "id": "88",
+          "name": "academic_period_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Periodo academico al que corresponde la evaluacion"
+        },
+        {
+          "id": "89",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Departamento evaluado"
+        },
+        {
+          "id": "90",
+          "name": "pdf_url",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "URL del archivo PDF de heteroevaluacion almacenado"
+        },
+        {
+          "id": "91",
+          "name": "status",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Estado del procesamiento: PENDIENTE, PROCESANDO, COMPLETADO, ERROR"
+        },
+        {
+          "id": "92",
+          "name": "count",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171724685,
+          "comments": "Total de registros (docentes) extraidos del PDF"
+        },
+        {
+          "id": "93",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "94",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155252970
+        }
+      ],
+      "indexes": [
+        {
+          "id": "95",
+          "name": "",
+          "fieldIds": [
+            "86"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 2201.6314993682813,
+      "y": 359.198807699669,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "96",
+      "name": "comments",
+      "schema": "public",
+      "order": 10,
+      "fields": [
+        {
+          "id": "97",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "98",
+          "name": "teacher_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780930405079,
+          "comments": "Referencia interna de trazabilidad; el comentario original es anonimo para preservar confidencialidad del estudiante"
+        },
+        {
+          "id": "99",
+          "name": "evaluation_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Evaluacion de la que proviene el comentario"
+        },
+        {
+          "id": "100",
+          "name": "academic_groups_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171476047,
+          "comments": "Grupo academico al que corresponde el comentario"
+        },
+        {
+          "id": "101",
+          "name": "original_text",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Texto literal del comentario cualitativo escrito por el estudiante en Divisist"
+        },
+        {
+          "id": "102",
+          "name": "risk_level",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171576762,
+          "comments": "Nivel de riesgo asignado por el componente de IA"
+        },
+        {
+          "id": "103",
+          "name": "pedagogical_category_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171619853,
+          "comments": "Categoria pedagogica identificada por IA"
+        },
+        {
+          "id": "104",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171663301
+        },
+        {
+          "id": "105",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171671244
+        }
+      ],
+      "indexes": [
+        {
+          "id": "106",
+          "name": "",
+          "fieldIds": [
+            "97"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 1857.789004536295,
+      "y": -224.16774557033082,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "107",
+      "name": "risk_levels",
+      "x": 2061.9437084830583,
+      "y": -581.4226218413895,
+      "fields": [
+        {
+          "id": "108",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "109",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Etiqueta del nivel: BAJO, MEDIO, ALTO"
+        },
+        {
+          "id": "110",
+          "name": "description",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Criterios que definen cuando un comentario pertenece a este nivel de riesgo"
+        },
+        {
+          "id": "111",
+          "name": "color_hex",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "50",
+          "comments": "Color hexadecimal para representar visualmente el nivel en el dashboard. Ej: #E24B4A"
+        },
+        {
+          "id": "112",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155294916
+        },
+        {
+          "id": "113",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155304611
+        }
+      ],
+      "indexes": [
+        {
+          "id": "114",
+          "name": "",
+          "fieldIds": [
+            "108"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "color": "#8eb7ff",
+      "createdAt": 1780154774237,
+      "isView": false,
+      "order": 11,
+      "schema": "public",
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "115",
+      "name": "pedagogical_categories",
+      "schema": "public",
+      "order": 11,
+      "fields": [
+        {
+          "id": "116",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774237
+        },
+        {
+          "id": "117",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": true,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "255",
+          "comments": "Nombre de la categoria pedagogica"
+        },
+        {
+          "id": "118",
+          "name": "description",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "comments": "Descripcion de los tipos de comentarios que pertenecen a esta categoria"
+        },
+        {
+          "id": "119",
+          "name": "color_hex",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774237,
+          "characterMaximumLength": "50",
+          "comments": "Color hexadecimal para identificar la categoria en graficas del dashboard"
+        },
+        {
+          "id": "120",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155294916
+        },
+        {
+          "id": "121",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155304611
+        }
+      ],
+      "indexes": [
+        {
+          "id": "122",
+          "name": "",
+          "fieldIds": [
+            "116"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 1436.3811555777766,
+      "y": -429.6998216637941,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774237,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "123",
+      "name": "council_minutes",
+      "schema": "public",
+      "order": 14,
+      "fields": [
+        {
+          "id": "124",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "125",
+          "name": "minute_number",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Numero oficial del acta de consejo de departamento. Ej: ACTA-2025-012"
+        },
+        {
+          "id": "126",
+          "name": "department_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Departamento cuyo consejo genero el acta"
+        },
+        {
+          "id": "127",
+          "name": "academic_period_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Periodo academico al que hace referencia el acta"
+        },
+        {
+          "id": "128",
+          "name": "session_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Fecha en que se realizo la sesion del consejo de departamento"
+        },
+        {
+          "id": "129",
+          "name": "status",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Estado del acta: BORRADOR, FIRMADA, ARCHIVADA"
+        },
+        {
+          "id": "130",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155443028
+        },
+        {
+          "id": "131",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780155449269
+        }
+      ],
+      "indexes": [
+        {
+          "id": "132",
+          "name": "",
+          "fieldIds": [
+            "124"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 1295.1551440090077,
+      "y": 638.1821969408915,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "133",
+      "name": "audit",
+      "schema": "public",
+      "order": 16,
+      "fields": [
+        {
+          "id": "134",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "135",
+          "name": "user_id",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Usuario que ejecuto la operacion registrada"
+        },
+        {
+          "id": "136",
+          "name": "table_name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Nombre de la tabla afectada por la operacion"
+        },
+        {
+          "id": "137",
+          "name": "operation",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Tipo de operacion: INSERT, UPDATE, DELETE"
+        },
+        {
+          "id": "138",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Timestamp exacto de la operacion para trazabilidad"
+        }
+      ],
+      "indexes": [
+        {
+          "id": "139",
+          "name": "",
+          "fieldIds": [
+            "134"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": -229.23108434598598,
+      "y": 608.4287752717141,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240",
+      "width": 337
+    },
+    {
+      "id": "140",
+      "name": "evaluation_scores",
+      "schema": "public",
+      "order": 18,
+      "fields": [
+        {
+          "id": "141",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "142",
+          "name": "evaluation_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "143",
+          "name": "academic_group_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "144",
+          "name": "respondent_count",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252,
+          "comments": "Columna Enc. — numero de estudiantes que respondieron"
+        },
+        {
+          "id": "145",
+          "name": "overall_average",
+          "type": {
+            "name": "numeric",
+            "id": "numeric",
+            "usageLevel": 2,
+            "fieldAttributes": {
+              "precision": {
+                "max": 131072,
+                "min": 0,
+                "default": 10
+              },
+              "scale": {
+                "max": 16383,
+                "min": 0,
+                "default": 2
+              }
+            }
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252,
+          "precision": 4,
+          "scale": 2,
+          "comments": "Promedio final del docente en ese grupo (columna resaltada)"
+        },
+        {
+          "id": "146",
+          "name": "created_at",
+          "type": {
+            "name": "timestamp",
+            "id": "timestamp",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "147",
+          "name": "updated_at",
+          "type": {
+            "name": "timestamp",
+            "id": "timestamp",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252
+        }
+      ],
+      "indexes": [
+        {
+          "id": "148",
+          "name": "",
+          "fieldIds": [
+            "141"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780929589252
+        }
+      ],
+      "x": 2819.7071983926,
+      "y": 445.13660318577024,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780929589252,
+      "comments": "Una fila por cada grupo academico dentro de una evaluacion. Ej: ESTRUCTURA DE DATOS con 15 encuestados → promedio 4.70",
+      "width": 337
+    },
+    {
+      "id": "149",
+      "name": "institutional_notifications",
+      "schema": "public",
+      "order": 19,
+      "fields": [
+        {
+          "id": "150",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "151",
+          "name": "comment_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "152",
+          "name": "notification_type",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255"
+        },
+        {
+          "id": "153",
+          "name": "destination",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255"
+        },
+        {
+          "id": "154",
+          "name": "status",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255"
+        },
+        {
+          "id": "155",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780172151758
+        },
+        {
+          "id": "156",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780172157526
+        }
+      ],
+      "indexes": [
+        {
+          "id": "157",
+          "name": "",
+          "fieldIds": [
+            "150"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 2326.0800897502077,
+      "y": -256.52758084415694,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "158",
+      "name": "evaluation_question_scores",
+      "schema": "public",
+      "order": 19,
+      "fields": [
+        {
+          "id": "159",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "160",
+          "name": "evaluation_score_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "161",
+          "name": "question_code",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252,
+          "characterMaximumLength": "3",
+          "comments": "Codigo de pregunta: 001, 002, … 022"
+        },
+        {
+          "id": "162",
+          "name": "score",
+          "type": {
+            "name": "numeric",
+            "id": "numeric",
+            "usageLevel": 2,
+            "fieldAttributes": {
+              "precision": {
+                "max": 131072,
+                "min": 0,
+                "default": 10
+              },
+              "scale": {
+                "max": 16383,
+                "min": 0,
+                "default": 2
+              }
+            }
+          },
+          "nullable": false,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780929589252,
+          "precision": 4,
+          "scale": 2,
+          "comments": "Puntaje Likert promedio para esa pregunta (ej: 4.73)"
+        }
+      ],
+      "indexes": [
+        {
+          "id": "163",
+          "name": "",
+          "fieldIds": [
+            "159"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780929589252
+        },
+        {
+          "id": "164",
+          "name": "idx_evaluation_question_scores_evaluation_score_id_question_code",
+          "fieldIds": [
+            "160",
+            "161"
+          ],
+          "unique": true,
+          "createdAt": 1780929589252
+        }
+      ],
+      "x": 2808.322886338777,
+      "y": 861.3696911487568,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780929589252,
+      "comments": "Una fila por cada pregunta (001–022) dentro de un evaluation_score",
+      "width": 337
+    },
+    {
+      "id": "165",
+      "name": "improvement_plans",
+      "schema": "public",
+      "order": 20,
+      "fields": [
+        {
+          "id": "166",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "167",
+          "name": "teacher_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Docente al que se le asigna el plan de mejora"
+        },
+        {
+          "id": "168",
+          "name": "academic_period_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Periodo en el que se origina el plan, generalmente por una evaluacion baja"
+        },
+        {
+          "id": "169",
+          "name": "alert_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Alerta generada por el componente de IA que motivo la creacion del plan. Nullable si el plan es preventivo"
+        },
+        {
+          "id": "170",
+          "name": "description",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Descripcion del compromiso acordado entre el director y el docente en el consejo de departamento"
+        },
+        {
+          "id": "171",
+          "name": "start_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Fecha a partir de la cual el docente debe comenzar a ejecutar el plan"
+        },
+        {
+          "id": "172",
+          "name": "responsible_id",
+          "type": {
+            "name": "text",
+            "id": "text",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Director de departamento responsable de hacer seguimiento al plan"
+        },
+        {
+          "id": "173",
+          "name": "status",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Estado actual del plan: ACTIVO, EN_SEGUIMIENTO, COMPLETADO, VENCIDO"
+        },
+        {
+          "id": "174",
+          "name": "finished",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Indica si el plan fue cerrado formalmente, independiente del estado"
+        },
+        {
+          "id": "175",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171157523
+        },
+        {
+          "id": "176",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171163875
+        }
+      ],
+      "indexes": [
+        {
+          "id": "177",
+          "name": "",
+          "fieldIds": [
+            "166"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 1295.7918557227463,
+      "y": 1074.4551551050715,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240",
+      "expanded": true
+    },
+    {
+      "id": "178",
+      "name": "improvement_tasks",
+      "schema": "public",
+      "order": 21,
+      "fields": [
+        {
+          "id": "179",
+          "name": "id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": false,
+          "primaryKey": true,
+          "unique": true,
+          "createdAt": 1780154774238
+        },
+        {
+          "id": "180",
+          "name": "improvement_plan_id",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Plan de mejora al que pertenece esta tarea"
+        },
+        {
+          "id": "181",
+          "name": "name",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Descripcion corta de la tarea o actividad de mejora. Ej: Asistir a taller de didactica"
+        },
+        {
+          "id": "182",
+          "name": "scheduled_date",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Fecha comprometida para completar la tarea"
+        },
+        {
+          "id": "183",
+          "name": "completed",
+          "type": {
+            "name": "boolean",
+            "id": "boolean",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Marca si la tarea fue finalizada por el docente"
+        },
+        {
+          "id": "184",
+          "name": "state",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "characterMaximumLength": "255",
+          "comments": "Estado detallado de la tarea: PENDIENTE, EN_PROGRESO, COMPLETADA, ATRASADA"
+        },
+        {
+          "id": "185",
+          "name": "progress_percentage",
+          "type": {
+            "name": "int",
+            "id": "int",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780154774238,
+          "comments": "Porcentaje de avance de 0 a 100, reportado en las revisiones de seguimiento"
+        },
+        {
+          "id": "186",
+          "name": "created_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171983531
+        },
+        {
+          "id": "187",
+          "name": "updated_at",
+          "type": {
+            "name": "date",
+            "id": "date",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1780171989779
+        }
+      ],
+      "indexes": [
+        {
+          "id": "188",
+          "name": "",
+          "fieldIds": [
+            "179"
+          ],
+          "unique": true,
+          "isPrimaryKey": true,
+          "createdAt": 1780154774240
+        }
+      ],
+      "x": 1828.0916677616608,
+      "y": 879.4102344630144,
+      "color": "#8eb7ff",
+      "isView": false,
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    }
+  ],
+  "relationships": [
+    {
+      "id": "189",
+      "name": "academic_groups_id_comments_academic_groups_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "76",
+      "targetTableId": "96",
+      "sourceFieldId": "77",
+      "targetFieldId": "100",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780171476047,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "190",
+      "name": "academic_periods_id_academic_groups_academic_period_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "45",
+      "targetTableId": "76",
+      "sourceFieldId": "46",
+      "targetFieldId": "80",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780171476047,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "191",
+      "name": "comments_pedagogical_category_fk",
+      "sourceSchema": "public",
+      "sourceTableId": "96",
+      "targetSchema": "public",
+      "targetTableId": "115",
+      "sourceFieldId": "103",
+      "targetFieldId": "116",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780172229535,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "192",
+      "name": "comments_risk_level_fk",
+      "sourceSchema": "public",
+      "sourceTableId": "96",
+      "targetSchema": "public",
+      "targetTableId": "107",
+      "sourceFieldId": "102",
+      "targetFieldId": "108",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780172275600,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "193",
+      "name": "courses_id_academic_groups_course_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "57",
+      "targetTableId": "76",
+      "sourceFieldId": "58",
+      "targetFieldId": "78",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780171476047,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "194",
+      "name": "fk_audit_user_id_users",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "133",
+      "sourceFieldId": "19",
+      "targetFieldId": "135",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "195",
+      "name": "fk_comments_evaluation_id_evaluations",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "85",
+      "targetTableId": "96",
+      "sourceFieldId": "86",
+      "targetFieldId": "99",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "196",
+      "name": "fk_council_minutes_academic_period_id_academic_periods",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "45",
+      "targetTableId": "123",
+      "sourceFieldId": "46",
+      "targetFieldId": "127",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "197",
+      "name": "fk_council_minutes_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "123",
+      "sourceFieldId": "10",
+      "targetFieldId": "126",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "198",
+      "name": "fk_courses_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "57",
+      "sourceFieldId": "10",
+      "targetFieldId": "61",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "199",
+      "name": "fk_evaluations_academic_period_id_academic_periods",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "45",
+      "targetTableId": "85",
+      "sourceFieldId": "46",
+      "targetFieldId": "88",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "200",
+      "name": "fk_evaluations_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "85",
+      "sourceFieldId": "10",
+      "targetFieldId": "89",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "201",
+      "name": "fk_evaluations_user_id_users",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "85",
+      "sourceFieldId": "19",
+      "targetFieldId": "87",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "202",
+      "name": "fk_improvement_plans_academic_period_id_academic_periods",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "45",
+      "targetTableId": "165",
+      "sourceFieldId": "46",
+      "targetFieldId": "168",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "203",
+      "name": "fk_improvement_plans_responsible_id_users",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "165",
+      "sourceFieldId": "19",
+      "targetFieldId": "172",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "204",
+      "name": "fk_improvement_plans_teacher_id_teachers",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "31",
+      "targetTableId": "165",
+      "sourceFieldId": "32",
+      "targetFieldId": "167",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "205",
+      "name": "fk_improvement_tasks_improvement_plan_id_improvement_plans",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "165",
+      "targetTableId": "178",
+      "sourceFieldId": "166",
+      "targetFieldId": "180",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "206",
+      "name": "fk_institutional_notifications_comment_id_comments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "96",
+      "targetTableId": "149",
+      "sourceFieldId": "97",
+      "targetFieldId": "151",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774239,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "207",
+      "name": "fk_reports_academic_period_id_academic_periods",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "45",
+      "targetTableId": "65",
+      "sourceFieldId": "46",
+      "targetFieldId": "70",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "208",
+      "name": "fk_reports_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "65",
+      "sourceFieldId": "10",
+      "targetFieldId": "71",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "209",
+      "name": "fk_reports_teacher_id_teachers",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "31",
+      "targetTableId": "65",
+      "sourceFieldId": "32",
+      "targetFieldId": "72",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "210",
+      "name": "fk_reports_user_id_users",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "65",
+      "sourceFieldId": "19",
+      "targetFieldId": "67",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "211",
+      "name": "fk_teachers_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "31",
+      "sourceFieldId": "10",
+      "targetFieldId": "34",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "212",
+      "name": "fk_teachers_user_id_users",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "31",
+      "sourceFieldId": "19",
+      "targetFieldId": "36",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "213",
+      "name": "fk_users_department_id_departments",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "9",
+      "targetTableId": "18",
+      "sourceFieldId": "10",
+      "targetFieldId": "24",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780154774238,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "214",
+      "name": "roles_id_user_roles_role_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "1",
+      "targetTableId": "41",
+      "sourceFieldId": "2",
+      "targetFieldId": "43",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780170964463,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "215",
+      "name": "teachers_id_academic_groups_teacher_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "31",
+      "targetTableId": "76",
+      "sourceFieldId": "32",
+      "targetFieldId": "79",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780171476047,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "216",
+      "name": "users_uid_user_roles_user_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "18",
+      "targetTableId": "41",
+      "sourceFieldId": "19",
+      "targetFieldId": "42",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780170964463,
+      "diagramId": "rcypf64zc240"
+    },
+    {
+      "id": "217",
+      "name": "evaluations_id_evaluation_scores_evaluation_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "85",
+      "targetTableId": "140",
+      "sourceFieldId": "86",
+      "targetFieldId": "142",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780929589253
+    },
+    {
+      "id": "218",
+      "name": "academic_groups_id_evaluation_scores_academic_group_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "76",
+      "targetTableId": "140",
+      "sourceFieldId": "77",
+      "targetFieldId": "143",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780929589253
+    },
+    {
+      "id": "219",
+      "name": "evaluation_scores_id_evaluation_question_scores_evaluation_score_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "140",
+      "targetTableId": "158",
+      "sourceFieldId": "141",
+      "targetFieldId": "160",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780929589253
+    },
+    {
+      "id": "220",
+      "name": "teachers_id_comments_teacher_id",
+      "sourceSchema": "public",
+      "targetSchema": "public",
+      "sourceTableId": "31",
+      "targetTableId": "96",
+      "sourceFieldId": "32",
+      "targetFieldId": "98",
+      "sourceCardinality": "one",
+      "targetCardinality": "many",
+      "createdAt": 1780930405080
+    }
+  ],
+  "dependencies": [],
+  "areas": [],
+  "customTypes": [],
+  "notes": []
+}

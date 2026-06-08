@@ -1,5 +1,9 @@
 # EVD API
 
+## Database
+
+Visist [https://chartdb.byandrev.dev](https://chartdb.byandrev.dev) and import the file `db.json` to view the database schema.
+
 ## Instructions
 
 1. `python -m venv venv`
