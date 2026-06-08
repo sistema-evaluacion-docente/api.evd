@@ -1,34 +1,37 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
-
-from api import models
+from api.config import config as app_config
 from api.database import Base
-from api.config import config
+from api.models.audit import AuditModel
+from api.models.user import UserModel
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
-config_alembic = context.config
+config = context.config
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
-if config_alembic.config_file_name is not None:
-    fileConfig(config_alembic.config_file_name)
-
-
-config_alembic.set_main_option(
-    "sqlalchemy.url",
-    config.SQLALCHEMY_DATABASE_URI
-)
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
 
 # add your model's MetaData object here
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
+# importing models ensures they are registered in Base.metadata
+_ = (UserModel, AuditModel)
 target_metadata = Base.metadata
+
+# Use application database URL for Alembic.
+# Note: ConfigParser requires escaping '%' characters as '%%'.
+database_url = app_config.SQLALCHEMY_DATABASE_URI
+if not database_url:
+    raise RuntimeError("DATABASE_URL is not configured")
+
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:
@@ -48,7 +51,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = config_alembic.get_main_option("sqlalchemy.url")
+    url = config.get_main_option("sqlalchemy.url")
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -68,15 +71,13 @@ def run_migrations_online() -> None:
 
     """
     connectable = engine_from_config(
-        config_alembic.get_section(config_alembic.config_ini_section, {}),
+        config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
     with connectable.connect() as connection:
-        context.configure(
-            connection=connection, target_metadata=target_metadata
-        )
+        context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()

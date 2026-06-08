@@ -20,30 +20,8 @@ services:
       - FIREBASE_AUTH_PROVIDER_X509_CERT_URL=${FIREBASE_AUTH_PROVIDER_X509_CERT_URL}
       - FIREBASE_CLIENT_X509_CERT_URL=${FIREBASE_CLIENT_X509_CERT_URL}
       - FIREBASE_UNIVERSE_DOMAIN=${FIREBASE_UNIVERSE_DOMAIN}
-    depends_on:
-      db_evd:
-        condition: service_healthy
     volumes:
       - .:/app
-
-  db_evd:
-    image: postgres:16
-    container_name: postgres_evd
-    restart: unless-stopped
-    volumes:
-      - pgdata_evd:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-    ports:
-      - "5432:5432"
 
 volumes:
   pgdata_evd:
