@@ -7,26 +7,8 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends
 
 from api.controllers.audits import AuditsController, get_audits_controller
-from api.schemas.audit import AuditCreate
 
 router = APIRouter(prefix="/audits", tags=["Audits"])
-
-
-@router.post("/")
-async def create_audit(
-    payload: AuditCreate,
-    controller: AuditsController = Depends(get_audits_controller),
-):
-    """Endpoint to create an audit log."""
-
-    audit = await controller.create(payload)
-
-    return {
-        "message": "Audit log created successfully",
-        "audit": audit,
-        "status": 201,
-        "timestamp": datetime.now(timezone.utc),
-    }
 
 
 @router.get("/")
