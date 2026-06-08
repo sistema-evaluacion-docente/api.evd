@@ -2,17 +2,19 @@
 User model
 """
 
-from datetime import date
+import datetime
 
 from sqlalchemy import (
     Boolean,
     Column,
-    Date,
+    DateTime,
     ForeignKey,
     Integer,
     String,
     Text,
+    func,
 )
+from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
 
@@ -32,5 +34,15 @@ class UserModel(Base):
     active = Column(Boolean, nullable=True, default=True)
     avatar_url = Column(Text, nullable=True)
 
-    created_at = Column(Date, default=date.today)
-    updated_at = Column(Date, default=date.today, onupdate=date.today)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+    )
+
+    updated_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )

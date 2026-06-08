@@ -2,7 +2,7 @@
 Schemas for request and response bodies related to users.
 """
 
-from datetime import date
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -48,8 +48,8 @@ class UserOut(BaseModel):
     active: Optional[bool]
     avatar_url: Optional[str]
 
-    created_at: date
-    updated_at: date
+    created_at: datetime
+    updated_at: datetime
 
 
 class TokenUser(BaseModel):

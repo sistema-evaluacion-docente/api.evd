@@ -2,7 +2,6 @@
 Audit repository
 """
 
-from datetime import date
 from typing import Annotated
 
 from fastapi import Depends
@@ -31,7 +30,6 @@ class AuditsRepository:
             user_id=data.user_id,
             table_name=data.table_name,
             operation=data.operation,
-            created_at=data.created_at or date.today(),
         )
 
         self.db.add(audit)
