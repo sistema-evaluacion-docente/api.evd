@@ -38,13 +38,24 @@ class AuditsRepository:
 
         return audit_to_dict(audit)
 
-    async def get_all(self):
+    async def get_all(self, page: int = 1, limit: int = 10):
         """
-        Get all audit logs
+        Get paginated audit logs
         """
 
-        audits = self.db.query(AuditModel).order_by(AuditModel.id.desc()).all()
-        return [audit_to_dict(audit) for audit in audits]
+        offset = (page - 1) * limit
+        query = self.db.query(AuditModel)
+        total = query.count()
+
+        audits = query.order_by(AuditModel.id.desc()).offset(offset).limit(limit).all()
+
+        return {
+            "items": [audit_to_dict(audit) for audit in audits],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": (total + limit - 1) // limit,
+        }
 
     async def get_by_id(self, audit_id: int):
         """

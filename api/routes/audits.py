@@ -4,7 +4,7 @@ Routes for audit log operations.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.audits import AuditsController, get_audits_controller
 from api.middlewares.auth import require_roles
@@ -15,15 +15,23 @@ router = APIRouter(prefix="/audits", tags=["Audits"])
 
 @router.get("/")
 async def get_audits(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
     _: dict = Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
-    """Endpoint to get all audit logs."""
+    """Endpoint to get paginated audit logs."""
 
-    audits = await controller.get_all()
+    audits = await controller.get_all(page=page, limit=limit)
 
     return {
-        "data": audits,
+        "data": audits["items"],
+        "pagination": {
+            "total": audits["total"],
+            "page": audits["page"],
+            "limit": audits["limit"],
+            "pages": audits["pages"],
+        },
         "error": None,
         "status": 200,
         "timestamp": datetime.now(timezone.utc),

@@ -19,8 +19,8 @@ class AuditsController:
     async def create(self, payload: AuditCreate):
         return await self.repository.create(payload)
 
-    async def get_all(self):
-        return await self.repository.get_all()
+    async def get_all(self, page: int = 1, limit: int = 10):
+        return await self.repository.get_all(page=page, limit=limit)
 
     async def get_by_id(self, audit_id: int):
         return await self.repository.get_by_id(audit_id)
