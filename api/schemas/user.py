@@ -90,9 +90,11 @@ class TokenUser(BaseModel):
 
 
 class UserDetailResponse(BaseModel):
-    """Schema for the detailed response of a user."""
+    """Schema for user endpoint response envelopes."""
 
-    data: Optional[UserOut]
-    error: Optional[str]
     status: int
+    message: str
+    data: Optional[UserOut] = None
+    error: Optional[str] = None
     timestamp: datetime
+    path: str
