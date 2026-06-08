@@ -2,7 +2,18 @@
 
 This document describes a minimal, safe workflow for schema migrations when using FastAPI with SQLAlchemy and Alembic.
 
+## Add model
+
+1. Add the model to your SQLAlchemy models in code.
+2. Import the model in `alembic/env.py`.
+3. Generate a migration script (autogenerate):
+   - `alembic revision --autogenerate -m "add project table"`
+   - Inspect the generated migration file in `migrations/versions/`.
+4. Apply the migration to the database:
+   - `alembic upgrade head`
+
 ## Typical workflow
+
 1. Change your SQLAlchemy models in code.
 2. Generate a migration script (autogenerate):
    - `alembic revision --autogenerate -m "add project table"`
