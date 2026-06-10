@@ -149,6 +149,37 @@ class UsersRepository:
         roles = self._get_user_role_names(str(user.uid))
         return user_to_dict(user, roles=roles)
 
+    async def get_all(self):
+        """
+        Get all users
+        """
+
+        users = self.db.query(UserModel).order_by(UserModel.created_at.desc()).all()
+
+        if not users:
+            return []
+
+        uids = [str(user.uid) for user in users]
+
+        role_rows = (
+            self.db.query(UserRoleModel.user_id, RoleModel.name)
+            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+            .filter(UserRoleModel.user_id.in_(uids))
+            .all()
+        )
+
+        roles_by_user: dict[str, list[str]] = {}
+        for user_id, role_name in role_rows:
+            key = str(user_id)
+            if key not in roles_by_user:
+                roles_by_user[key] = []
+            roles_by_user[key].append(role_name)
+
+        return [
+            user_to_dict(user, roles=roles_by_user.get(str(user.uid), []))
+            for user in users
+        ]
+
     async def get_by_uids(self, uids: list[str]):
         """
         Get multiple users by their uids in a single query

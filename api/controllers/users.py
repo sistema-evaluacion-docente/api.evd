@@ -1,6 +1,4 @@
-from fastapi import HTTPException
 from fastapi.param_functions import Depends
-from sqlalchemy.sql.lambdas import NonAnalyzedFunction
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
@@ -48,6 +46,17 @@ class UsersController:
         except Exception as e:
             print(e)
             return None
+
+    async def get_all(self):
+        """Endpoint to get all users."""
+
+        try:
+            users = await self.repository.get_all()
+        except ValueError as e:
+            print(e)
+            return None
+
+        return users
 
     async def get_by_uid(
         self,

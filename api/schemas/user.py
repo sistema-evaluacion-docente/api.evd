@@ -98,3 +98,14 @@ class UserDetailResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class UserListResponse(BaseModel):
+    """Schema for users list endpoint response envelopes."""
+
+    status: int
+    message: str
+    data: list[UserOut]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str

@@ -7,9 +7,39 @@ from fastapi import APIRouter, Depends
 from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.response import ResponseSchema
-from api.schemas.user import RoleName, UserDetailResponse, UserRolesUpdate, UserUpdate
+from api.schemas.user import (
+    RoleName,
+    UserDetailResponse,
+    UserListResponse,
+    UserRolesUpdate,
+    UserUpdate,
+)
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.get(
+    "/",
+    response_model=UserListResponse,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_all_users(
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """Endpoint to get all users."""
+
+    users = await controller.get_all()
+
+    if users is None:
+        return ResponseSchema(status=400, message="Error getting users", path="/users")
+
+    return ResponseSchema(
+        status=200,
+        message="Users found",
+        data=users,
+        path="/users",
+    )
 
 
 @router.get(
