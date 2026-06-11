@@ -47,11 +47,11 @@ class UsersController:
             print(e)
             return None
 
-    async def get_all(self):
+    async def get_all(self, search: str | None = None):
         """Endpoint to get all users."""
 
         try:
-            users = await self.repository.get_all()
+            users = await self.repository.get_all(search=search)
         except ValueError as e:
             print(e)
             return None

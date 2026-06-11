@@ -5,6 +5,7 @@ Users repository
 from typing import Annotated, Sequence
 
 from fastapi.params import Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.database import get_db
@@ -149,12 +150,27 @@ class UsersRepository:
         roles = self._get_user_role_names(str(user.uid))
         return user_to_dict(user, roles=roles)
 
-    async def get_all(self):
+    async def get_all(self, search: str | None = None):
         """
-        Get all users
+        Get all users, optionally filtered by search
         """
 
-        users = self.db.query(UserModel).order_by(UserModel.created_at.desc()).all()
+        query = self.db.query(UserModel)
+
+        if search:
+            term = search.strip()
+            if term:
+                like_term = f"%{term}%"
+                query = query.filter(
+                    or_(
+                        UserModel.uid.ilike(like_term),
+                        UserModel.email.ilike(like_term),
+                        UserModel.username.ilike(like_term),
+                        UserModel.name.ilike(like_term),
+                    )
+                )
+
+        users = query.order_by(UserModel.created_at.desc()).all()
 
         if not users:
             return []

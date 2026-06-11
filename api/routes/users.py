@@ -2,7 +2,7 @@
 Routes for user-related operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user, require_roles
@@ -24,12 +24,13 @@ router = APIRouter(prefix="/users", tags=["Users"])
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_users(
+    search: str | None = Query(default=None, min_length=1),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: UsersController = Depends(get_users_controller),
 ):
     """Endpoint to get all users."""
 
-    users = await controller.get_all()
+    users = await controller.get_all(search=search)
 
     if users is None:
         return ResponseSchema(status=400, message="Error getting users", path="/users")
