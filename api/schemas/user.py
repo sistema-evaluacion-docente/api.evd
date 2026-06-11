@@ -8,6 +8,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from api.schemas.pagination import Pagination
+
 
 class RoleName(str, Enum):
     """Allowed role names in the system."""
@@ -106,6 +108,7 @@ class UserListResponse(BaseModel):
     status: int
     message: str
     data: list[UserOut]
+    pagination: Pagination
     error: Optional[str] = None
     timestamp: datetime
     path: str

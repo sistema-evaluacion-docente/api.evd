@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.controllers.users import UsersController, get_users_controller
 from api.middlewares.auth import get_current_user, require_roles
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import (
     RoleName,
@@ -25,20 +26,28 @@ router = APIRouter(prefix="/users", tags=["Users"])
 )
 async def get_all_users(
     search: str | None = Query(default=None, min_length=1),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: UsersController = Depends(get_users_controller),
 ):
     """Endpoint to get all users."""
 
-    users = await controller.get_all(search=search)
+    users = await controller.get_all(search=search, page=page, limit=limit)
 
     if users is None:
         return ResponseSchema(status=400, message="Error getting users", path="/users")
 
     return ResponseSchema(
         status=200,
+        data=users["items"],
+        pagination=Pagination(
+            limit=users["limit"],
+            total=users["total"],
+            pages=users["pages"],
+            page=users["page"],
+        ),
         message="Users found",
-        data=users,
         path="/users",
     )
 

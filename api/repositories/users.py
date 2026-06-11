@@ -150,9 +150,14 @@ class UsersRepository:
         roles = self._get_user_role_names(str(user.uid))
         return user_to_dict(user, roles=roles)
 
-    async def get_all(self, search: str | None = None):
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ):
         """
-        Get all users, optionally filtered by search
+        Get users with pagination and optional search filter
         """
 
         query = self.db.query(UserModel)
@@ -170,10 +175,25 @@ class UsersRepository:
                     )
                 )
 
-        users = query.order_by(UserModel.created_at.desc()).all()
+        total = query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        users = (
+            query.order_by(UserModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
 
         if not users:
-            return []
+            return {
+                "items": [],
+                "total": total,
+                "page": page,
+                "limit": limit,
+                "pages": pages,
+            }
 
         uids = [str(user.uid) for user in users]
 
@@ -191,10 +211,16 @@ class UsersRepository:
                 roles_by_user[key] = []
             roles_by_user[key].append(role_name)
 
-        return [
-            user_to_dict(user, roles=roles_by_user.get(str(user.uid), []))
-            for user in users
-        ]
+        return {
+            "items": [
+                user_to_dict(user, roles=roles_by_user.get(str(user.uid), []))
+                for user in users
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_uids(self, uids: list[str]):
         """
