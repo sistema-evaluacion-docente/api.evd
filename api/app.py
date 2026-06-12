@@ -1,4 +1,4 @@
-"""
+﻿"""
 FastAPI EVD API
 """
 
@@ -12,10 +12,10 @@ from starlette.responses import JSONResponse
 
 from api.config import config
 from api.database import Base, engine
-from api.models import audit, department, role, user, user_role
-from api.routes import audits, health, users
+from api.models import academic_period, audit, department, role, user, user_role
+from api.routes import academic_periods, audits, health, users
 
-_ = (audit, department, role, user, user_role)
+_ = (academic_period, audit, department, role, user, user_role)
 
 Base.metadata.create_all(bind=engine)
 
@@ -48,5 +48,6 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
 
 
 app.include_router(health.router)
+app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
