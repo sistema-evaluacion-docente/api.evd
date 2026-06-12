@@ -5,6 +5,7 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from api.config import config as app_config
 from api.database import Base
+from api.models.academic_period import AcademicPeriodModel
 from api.models.audit import AuditModel
 from api.models.department import DepartmentModel
 from api.models.role import RoleModel
@@ -25,7 +26,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # importing models ensures they are registered in Base.metadata
-_ = (UserModel, AuditModel, DepartmentModel, RoleModel, UserRoleModel)
+_ = (AcademicPeriodModel, UserModel, AuditModel, DepartmentModel, RoleModel, UserRoleModel)
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.

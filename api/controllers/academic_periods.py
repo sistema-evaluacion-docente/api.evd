@@ -1,0 +1,133 @@
+"""
+Academic periods controller
+"""
+
+from fastapi.param_functions import Depends
+
+from api.repositories.academic_periods import (
+    AcademicPeriodsRepository,
+    get_academic_periods_repository,
+)
+from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.schemas.academic_period import AcademicPeriodCreate, AcademicPeriodUpdate
+from api.schemas.audit import AuditCreate
+
+
+class AcademicPeriodsController:
+    """Academic periods controller"""
+
+    def __init__(
+        self,
+        repository: AcademicPeriodsRepository,
+        audits_repository: AuditsRepository,
+    ):
+        self.repository = repository
+        self.audits_repository = audits_repository
+
+    async def create(self, data: AcademicPeriodCreate, current_user) -> dict | None:
+        """Create a new academic period."""
+
+        existing = await self.repository.get_by_code(data.code)
+
+        if existing:
+            raise ValueError(f"An academic period with code '{data.code}' already exists")
+
+        period = await self.repository.create(data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_periods",
+                operation="create",
+                created_at=None,
+            )
+        )
+
+        return period
+
+    async def get_all(self) -> list[dict]:
+        """Get all academic periods."""
+
+        return await self.repository.get_all()
+
+    async def get_by_id(self, period_id: int) -> dict | None:
+        """Get an academic period by ID."""
+
+        return await self.repository.get_by_id(period_id)
+
+    async def update(
+        self, period_id: int, data: AcademicPeriodUpdate, current_user
+    ) -> dict | None:
+        """Update an academic period."""
+
+        period = await self.repository.get_by_id(period_id)
+
+        if not period:
+            return None
+
+        updated = await self.repository.update(period_id, data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_periods",
+                operation="update",
+                created_at=None,
+            )
+        )
+
+        return updated
+
+    async def activate(self, period_id: int, current_user) -> dict | None:
+        """Activate an academic period, deactivating any currently active one."""
+
+        period = await self.repository.get_by_id(period_id)
+
+        if not period:
+            return None
+
+        activated = await self.repository.set_active(period_id)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_periods",
+                operation="activate",
+                created_at=None,
+            )
+        )
+
+        return activated
+
+    async def close(self, period_id: int, current_user) -> dict | None:
+        """Close an academic period."""
+
+        period = await self.repository.get_by_id(period_id)
+
+        if not period:
+            return None
+
+        if not period.get("active"):
+            raise ValueError("Only the active period can be closed")
+
+        closed = await self.repository.close(period_id)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_periods",
+                operation="close",
+                created_at=None,
+            )
+        )
+
+        return closed
+
+
+def get_academic_periods_controller(
+    repository: AcademicPeriodsRepository = Depends(get_academic_periods_repository),
+    audits_repository: AuditsRepository = Depends(get_audits_repository),
+):
+    """Get academic periods controller"""
+
+    return AcademicPeriodsController(repository, audits_repository)
