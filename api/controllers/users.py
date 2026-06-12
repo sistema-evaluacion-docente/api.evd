@@ -4,6 +4,7 @@ from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.user import (
+    RoleName,
     UserCreate,
     UserRolesUpdate,
     UserStatusUpdate,
@@ -115,6 +116,9 @@ class UsersController:
             raise ValueError(
                 "You do not have permission to replace roles for this user"
             )
+
+        if "ADMIN" in requester_roles:
+            payload.roles.append(RoleName.ADMIN)
 
         try:
             updated_user = await self.repository.update(
