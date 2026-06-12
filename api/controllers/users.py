@@ -3,7 +3,12 @@ from fastapi.param_functions import Depends
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
-from api.schemas.user import UserCreate, UserRolesUpdate, UserUpdate
+from api.schemas.user import (
+    UserCreate,
+    UserRolesUpdate,
+    UserStatusUpdate,
+    UserUpdate,
+)
 
 
 class UsersController:
@@ -121,6 +126,20 @@ class UsersController:
             raise ValueError("Error updating roles")
 
         return updated_user or None
+
+    async def update_status(self, uid: str, payload: UserStatusUpdate):
+        """Endpoint to activate/deactivate a user."""
+
+        try:
+            updated_user = await self.repository.update_status(uid, payload)
+
+            if not updated_user:
+                return None
+        except ValueError as e:
+            print(e)
+            return None
+
+        return updated_user
 
 
 def get_users_controller(

@@ -12,7 +12,7 @@ from api.database import get_db
 from api.models.role import RoleModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
-from api.schemas.user import RoleName, UserCreate, UserUpdate
+from api.schemas.user import RoleName, UserCreate, UserStatusUpdate, UserUpdate
 from api.serializers.users import user_to_dict
 
 
@@ -279,6 +279,22 @@ class UsersRepository:
         if requested_roles is not None:
             normalized_roles = self._normalize_role_names(requested_roles)
             self._replace_user_roles(str(user.uid), normalized_roles)
+
+        self.db.commit()
+        self.db.refresh(user)
+
+        roles = self._get_user_role_names(str(user.uid))
+        return user_to_dict(user, roles=roles)
+
+    async def update_status(self, uid: str, data: UserStatusUpdate):
+        """Activate/deactivate user by uid."""
+
+        user = self.db.query(UserModel).filter(UserModel.uid == uid).first()
+
+        if not user:
+            return None
+
+        setattr(user, "active", data.active)
 
         self.db.commit()
         self.db.refresh(user)

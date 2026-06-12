@@ -13,6 +13,7 @@ from api.schemas.user import (
     UserDetailResponse,
     UserListResponse,
     UserRolesUpdate,
+    UserStatusUpdate,
     UserUpdate,
 )
 
@@ -150,4 +151,34 @@ async def replace_user_roles(
         message="Roles updated successfully",
         data=result,
         path=f"/users/{uid}/roles",
+    )
+
+
+@router.patch(
+    "/{uid}/status",
+    response_model=UserDetailResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def update_user_status(
+    uid: str,
+    payload: UserStatusUpdate,
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """Endpoint to activate/deactivate a user."""
+
+    result = await controller.update_status(uid, payload)
+
+    if not result:
+        return ResponseSchema(
+            status=400,
+            message="Error updating user status",
+            path=f"/users/{uid}/status",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="User status updated successfully",
+        data=result,
+        path=f"/users/{uid}/status",
     )

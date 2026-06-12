@@ -73,6 +73,12 @@ class UserRolesUpdate(BaseModel):
     roles: list[RoleName] = Field(min_length=1)
 
 
+class UserStatusUpdate(BaseModel):
+    """Schema for activating/deactivating a user."""
+
+    active: bool
+
+
 class UserRolesOut(BaseModel):
     """Schema for roles assigned to a user."""
 
