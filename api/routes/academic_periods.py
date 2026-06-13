@@ -13,6 +13,7 @@ from api.schemas.academic_period import (
     AcademicPeriodCreate,
     AcademicPeriodDetailResponse,
     AcademicPeriodListResponse,
+    AcademicPeriodStatusUpdate,
     AcademicPeriodUpdate,
 )
 from api.schemas.response import ResponseSchema
@@ -197,4 +198,35 @@ async def close_academic_period(
         message="Academic period closed successfully",
         data=period,
         path=f"/academic-periods/{period_id}/close",
+    )
+
+
+@router.patch(
+    "/{period_id}/status",
+    response_model=AcademicPeriodDetailResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def update_academic_period_status(
+    period_id: int,
+    payload: AcademicPeriodStatusUpdate,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
+):
+    """Endpoint to activate/deactivate an academic period."""
+
+    period = await controller.update_status(period_id, payload, current_user)
+
+    if not period:
+        return ResponseSchema(
+            status=404,
+            message="Academic period not found",
+            path=f"/academic-periods/{period_id}/status",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Academic period status updated successfully",
+        data=period,
+        path=f"/academic-periods/{period_id}/status",
     )

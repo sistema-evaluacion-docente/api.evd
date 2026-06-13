@@ -9,7 +9,11 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.academic_period import AcademicPeriodModel
-from api.schemas.academic_period import AcademicPeriodCreate, AcademicPeriodUpdate
+from api.schemas.academic_period import (
+    AcademicPeriodCreate,
+    AcademicPeriodStatusUpdate,
+    AcademicPeriodUpdate,
+)
 from api.serializers.academic_periods import academic_period_to_dict
 
 
@@ -112,7 +116,7 @@ class AcademicPeriodsRepository:
             return None
 
         self.db.query(AcademicPeriodModel).update({AcademicPeriodModel.active: False})
-        period.active = True
+        setattr(period, "active", True)
 
         self.db.commit()
         self.db.refresh(period)
@@ -131,7 +135,30 @@ class AcademicPeriodsRepository:
         if not period:
             return None
 
-        period.active = False
+        setattr(period, "active", False)
+
+        self.db.commit()
+        self.db.refresh(period)
+
+        return academic_period_to_dict(period)
+
+    async def update_status(
+        self,
+        period_id: int,
+        data: AcademicPeriodStatusUpdate,
+    ) -> dict | None:
+        """Activate/deactivate an academic period by ID."""
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == period_id)
+            .first()
+        )
+
+        if not period:
+            return None
+
+        setattr(period, "active", data.active)
 
         self.db.commit()
         self.db.refresh(period)

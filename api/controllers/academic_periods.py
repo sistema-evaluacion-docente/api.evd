@@ -9,7 +9,11 @@ from api.repositories.academic_periods import (
     get_academic_periods_repository,
 )
 from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.schemas.academic_period import AcademicPeriodCreate, AcademicPeriodUpdate
+from api.schemas.academic_period import (
+    AcademicPeriodCreate,
+    AcademicPeriodStatusUpdate,
+    AcademicPeriodUpdate,
+)
 from api.schemas.audit import AuditCreate
 
 
@@ -30,7 +34,9 @@ class AcademicPeriodsController:
         existing = await self.repository.get_by_code(data.code)
 
         if existing:
-            raise ValueError(f"An academic period with code '{data.code}' already exists")
+            raise ValueError(
+                f"An academic period with code '{data.code}' already exists"
+            )
 
         period = await self.repository.create(data)
 
@@ -122,6 +128,32 @@ class AcademicPeriodsController:
         )
 
         return closed
+
+    async def update_status(
+        self,
+        period_id: int,
+        data: AcademicPeriodStatusUpdate,
+        current_user,
+    ) -> dict | None:
+        """Activate/deactivate an academic period."""
+
+        period = await self.repository.get_by_id(period_id)
+
+        if not period:
+            return None
+
+        updated = await self.repository.update_status(period_id, data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_periods",
+                operation="update_status",
+                created_at=None,
+            )
+        )
+
+        return updated
 
 
 def get_academic_periods_controller(

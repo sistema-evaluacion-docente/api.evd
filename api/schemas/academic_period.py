@@ -29,6 +29,12 @@ class AcademicPeriodUpdate(BaseModel):
     final_evaluation_date: Optional[date] = None
 
 
+class AcademicPeriodStatusUpdate(BaseModel):
+    """Schema for activating/deactivating an academic period."""
+
+    active: bool
+
+
 class AcademicPeriodOut(BaseModel):
     """Schema for outputting an academic period."""
 
