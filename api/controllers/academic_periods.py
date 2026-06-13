@@ -149,7 +149,6 @@ class AcademicPeriodsController:
                 user_id=current_user.uid,
                 table_name="academic_periods",
                 operation="update_status",
-                created_at=None,
             )
         )
 
