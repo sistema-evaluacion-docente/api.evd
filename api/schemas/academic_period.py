@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.pagination import Pagination
+
 
 class AcademicPeriodCreate(BaseModel):
     """Schema for creating an academic period."""
@@ -67,6 +69,7 @@ class AcademicPeriodListResponse(BaseModel):
     status: int
     message: str
     data: list[AcademicPeriodOut]
+    pagination: Pagination
     error: Optional[str] = None
     timestamp: datetime
     path: str

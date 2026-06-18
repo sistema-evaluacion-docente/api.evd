@@ -5,6 +5,7 @@ Academic periods repository
 from typing import Annotated
 
 from fastapi.params import Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.database import get_db
@@ -42,16 +43,45 @@ class AcademicPeriodsRepository:
 
         return academic_period_to_dict(period)
 
-    async def get_all(self) -> list[dict]:
-        """Get all academic periods ordered by creation date descending."""
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict:
+        """Get all academic periods with pagination and optional search filter."""
+
+        query = self.db.query(AcademicPeriodModel)
+
+        if search:
+            term = search.strip()
+            if term:
+                like_term = f"%{term}%"
+                query = query.filter(
+                    or_(
+                        AcademicPeriodModel.code.ilike(like_term),
+                        AcademicPeriodModel.name.ilike(like_term),
+                    )
+                )
+
+        total = query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
 
         periods = (
-            self.db.query(AcademicPeriodModel)
-            .order_by(AcademicPeriodModel.created_at.desc())
+            query.order_by(AcademicPeriodModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
             .all()
         )
 
-        return [academic_period_to_dict(p) for p in periods]
+        return {
+            "items": [academic_period_to_dict(p) for p in periods],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_id(self, period_id: int) -> dict | None:
         """Get an academic period by ID."""

@@ -51,10 +51,19 @@ class AcademicPeriodsController:
 
         return period
 
-    async def get_all(self) -> list[dict]:
-        """Get all academic periods."""
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict | None:
+        """Get all academic periods with pagination and optional search."""
 
-        return await self.repository.get_all()
+        try:
+            return await self.repository.get_all(search=search, page=page, limit=limit)
+        except ValueError as e:
+            print(e)
+            return None
 
     async def get_by_id(self, period_id: int) -> dict | None:
         """Get an academic period by ID."""
