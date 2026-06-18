@@ -12,10 +12,10 @@ from starlette.responses import JSONResponse
 
 from api.config import config
 from api.database import Base, engine
-from api.models import academic_period, audit, department, role, user, user_role
-from api.routes import academic_periods, audits, health, users
+from api.models import academic_period, audit, department, role, setting, setting_history, user, user_role
+from api.routes import academic_periods, audits, health, settings, users
 
-_ = (academic_period, audit, department, role, user, user_role)
+_ = (academic_period, audit, department, role, setting, setting_history, user, user_role)
 
 Base.metadata.create_all(bind=engine)
 
@@ -51,3 +51,4 @@ app.include_router(health.router)
 app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
+app.include_router(settings.router)
