@@ -9,6 +9,8 @@ from api.models.academic_period import AcademicPeriodModel
 from api.models.audit import AuditModel
 from api.models.department import DepartmentModel
 from api.models.role import RoleModel
+from api.models.setting import SettingModel
+from api.models.setting_history import SettingHistoryModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 
@@ -26,7 +28,7 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # importing models ensures they are registered in Base.metadata
-_ = (AcademicPeriodModel, UserModel, AuditModel, DepartmentModel, RoleModel, UserRoleModel)
+_ = (AcademicPeriodModel, UserModel, AuditModel, DepartmentModel, RoleModel, SettingModel, SettingHistoryModel, UserRoleModel)
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.
