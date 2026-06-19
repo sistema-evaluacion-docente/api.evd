@@ -1,14 +1,21 @@
-from logging.config import fileConfig
+﻿from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 from api.config import config as app_config
 from api.database import Base
+from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.audit import AuditModel
+from api.models.comment import CommentModel
+from api.models.course import CourseModel
 from api.models.department import DepartmentModel
+from api.models.evaluation import EvaluationModel
+from api.models.evaluation_question_score import EvaluationQuestionScoreModel
+from api.models.evaluation_score import EvaluationScoreModel
 from api.models.role import RoleModel
+from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 
@@ -26,7 +33,21 @@ if config.config_file_name is not None:
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
 # importing models ensures they are registered in Base.metadata
-_ = (AcademicPeriodModel, UserModel, AuditModel, DepartmentModel, RoleModel, UserRoleModel)
+_ = (
+    AcademicGroupModel,
+    AcademicPeriodModel,
+    AuditModel,
+    CommentModel,
+    CourseModel,
+    DepartmentModel,
+    EvaluationModel,
+    EvaluationQuestionScoreModel,
+    EvaluationScoreModel,
+    RoleModel,
+    TeacherModel,
+    UserModel,
+    UserRoleModel,
+)
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.

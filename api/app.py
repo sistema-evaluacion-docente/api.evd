@@ -12,10 +12,38 @@ from starlette.responses import JSONResponse
 
 from api.config import config
 from api.database import Base, engine
-from api.models import academic_period, audit, department, role, user, user_role
+from api.models import (
+    academic_group,
+    academic_period,
+    audit,
+    comment,
+    course,
+    department,
+    evaluation,
+    evaluation_question_score,
+    evaluation_score,
+    role,
+    teacher,
+    user,
+    user_role,
+)
 from api.routes import academic_periods, audits, health, users
 
-_ = (academic_period, audit, department, role, user, user_role)
+_ = (
+    academic_group,
+    academic_period,
+    audit,
+    comment,
+    course,
+    department,
+    evaluation,
+    evaluation_question_score,
+    evaluation_score,
+    role,
+    teacher,
+    user,
+    user_role,
+)
 
 Base.metadata.create_all(bind=engine)
 
