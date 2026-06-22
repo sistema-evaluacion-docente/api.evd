@@ -1,0 +1,87 @@
+"""
+Courses controller
+"""
+
+from fastapi.param_functions import Depends
+
+from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.repositories.courses import CoursesRepository, get_courses_repository
+from api.schemas.audit import AuditCreate
+from api.schemas.course import CourseCreate, CourseUpdate
+
+
+class CoursesController:
+    """Courses controller"""
+
+    def __init__(
+        self,
+        repository: CoursesRepository,
+        audits_repository: AuditsRepository,
+    ):
+        self.repository = repository
+        self.audits_repository = audits_repository
+
+    async def create(self, data: CourseCreate, current_user) -> dict:
+        """Create a new course, rejecting duplicate codes."""
+
+        existing = await self.repository.get_by_code(data.code)
+
+        if existing:
+            raise ValueError(
+                f"A course with code '{data.code}' already exists"
+            )
+
+        course = await self.repository.create(data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="courses",
+                operation="create",
+                created_at=None,
+            )
+        )
+
+        return course
+
+    async def get_all(self) -> list[dict]:
+        """Get all courses."""
+
+        return await self.repository.get_all()
+
+    async def get_by_id(self, course_id: int) -> dict | None:
+        """Get a course by ID."""
+
+        return await self.repository.get_by_id(course_id)
+
+    async def update(
+        self, course_id: int, data: CourseUpdate, current_user
+    ) -> dict | None:
+        """Update a course's fields."""
+
+        course = await self.repository.get_by_id(course_id)
+
+        if not course:
+            return None
+
+        updated = await self.repository.update(course_id, data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="courses",
+                operation="update",
+                created_at=None,
+            )
+        )
+
+        return updated
+
+
+def get_courses_controller(
+    repository: CoursesRepository = Depends(get_courses_repository),
+    audits_repository: AuditsRepository = Depends(get_audits_repository),
+):
+    """Get courses controller"""
+
+    return CoursesController(repository, audits_repository)
