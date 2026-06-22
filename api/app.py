@@ -27,7 +27,7 @@ from api.models import (
     user,
     user_role,
 )
-from api.routes import academic_periods, audits, courses, health, teachers, users
+from api.routes import academic_groups, academic_periods, audits, comments, courses, evaluation_question_scores, evaluation_scores, evaluations, health, teachers, users
 
 _ = (
     academic_group,
@@ -78,6 +78,11 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
 app.include_router(health.router)
 app.include_router(teachers.router)
 app.include_router(courses.router)
+app.include_router(academic_groups.router)
+app.include_router(evaluations.router)
+app.include_router(evaluation_scores.router)
+app.include_router(evaluation_question_scores.router)
+app.include_router(comments.router)
 app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
