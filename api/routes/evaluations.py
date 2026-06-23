@@ -64,6 +64,12 @@ async def upload_evaluation(
             status_code=422, detail="Could not extract department from PDF"
         )
 
+    if not parsed.get("teachers"):
+        raise HTTPException(
+            status_code=422,
+            detail="No teacher data found in PDF. Make sure it is a UFPS teacher evaluation document.",
+        )
+
     period = (
         db.query(AcademicPeriodModel)
         .filter(AcademicPeriodModel.code == parsed["period_code"])
