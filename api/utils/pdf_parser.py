@@ -16,8 +16,8 @@ import re
 import tempfile
 from decimal import Decimal, InvalidOperation
 
-import pikepdf
 import pdfplumber
+import pikepdf
 
 QUESTION_CODES = [f"{i:03d}" for i in range(1, 23)]
 
@@ -28,6 +28,7 @@ def _load_nlp():
     """Load Spanish NER model for comment anonymization. Returns None if unavailable."""
     try:
         import spacy
+
         for model in ("es_core_news_lg", "es_core_news_sm"):
             try:
                 return spacy.load(model, disable=["parser", "tagger", "lemmatizer"])
@@ -61,9 +62,7 @@ def _parse_period_code(text: str) -> str | None:
 
 def _parse_department(text: str) -> tuple[str, str] | None:
     """Extract department code and name from '52 SISTEMAS E INFORMATICA'."""
-    match = re.search(
-        r"^\s*(\d{2})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+)$", text, re.MULTILINE
-    )
+    match = re.search(r"^\s*(\d{2})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+)$", text, re.MULTILINE)
     if not match:
         return None
     return match.group(1).strip(), match.group(2).strip()
@@ -76,7 +75,8 @@ def _parse_teacher_header(text: str) -> dict | None:
     """
     match = re.search(
         r"^\s*(\d{5})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]+?)(?:\s+(TC|TP|HC|HORA\s+CATEDRA))?\s*$",
-        text, re.MULTILINE
+        text,
+        re.MULTILINE,
     )
     if not match:
         return None
@@ -122,9 +122,9 @@ def _parse_score_table(tables: list) -> tuple[list[dict], Decimal | None]:
             if not m:
                 continue
 
-            course_code = m.group(1)   # '1155304'
+            course_code = m.group(1)  # '1155304'
             group_letter = m.group(2)  # 'B'
-            section = m.group(3)       # '01'
+            section = m.group(3)  # '01'
             course_name = (row[1] or "").strip()
 
             enc_raw = (row[2] or "").strip()
@@ -133,20 +133,24 @@ def _parse_score_table(tables: list) -> tuple[list[dict], Decimal | None]:
             question_scores = {}
             for i, code in enumerate(QUESTION_CODES):
                 col = 3 + i
-                question_scores[code] = _to_decimal(row[col] or "") if col < len(row) else None
+                question_scores[code] = (
+                    _to_decimal(row[col] or "") if col < len(row) else None
+                )
 
             overall = _to_decimal(row[25] or "") if len(row) > 25 else None
 
-            groups.append({
-                "course_code": course_code,
-                "course_name": course_name,
-                "group": group_letter,
-                "section": section,
-                "respondent_count": respondent_count,
-                "overall_average": overall,
-                "question_scores": question_scores,
-                "comments": [],
-            })
+            groups.append(
+                {
+                    "course_code": course_code,
+                    "course_name": course_name,
+                    "group": group_letter,
+                    "section": section,
+                    "respondent_count": respondent_count,
+                    "overall_average": overall,
+                    "question_scores": question_scores,
+                    "comments": [],
+                }
+            )
 
     return groups, teacher_overall
 
@@ -190,7 +194,9 @@ def _extract_comments(text: str, nlp) -> dict[str, list[str]]:
             if nlp:
                 doc = nlp(cleaned)
                 for ent in reversed([e for e in doc.ents if e.label_ == "PER"]):
-                    cleaned = cleaned[: ent.start_char] + "@persona" + cleaned[ent.end_char :]
+                    cleaned = (
+                        cleaned[: ent.start_char] + "@persona" + cleaned[ent.end_char :]
+                    )
             result.setdefault(current_key, []).append(cleaned)
         buffer = ""
 
@@ -294,10 +300,12 @@ def parse_pdf(file_bytes: bytes) -> dict:
                 if not teacher:
                     continue
 
-                tables = page.extract_tables({
-                    "vertical_strategy": "lines",
-                    "horizontal_strategy": "lines",
-                })
+                tables = page.extract_tables(
+                    {
+                        "vertical_strategy": "lines",
+                        "horizontal_strategy": "lines",
+                    }
+                )
                 groups, teacher["overall_average"] = _parse_score_table(tables)
 
                 comments_by_group = _extract_comments(text, nlp)

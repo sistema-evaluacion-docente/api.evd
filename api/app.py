@@ -3,7 +3,6 @@ FastAPI EVD API
 """
 
 from datetime import datetime, timezone
-from time import time
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,13 +22,26 @@ from api.models import (
     evaluation_question_score,
     evaluation_score,
     role,
+    setting,
+    setting_history,
     teacher,
     user,
     user_role,
-    setting,
-    setting_history
 )
-from api.routes import academic_groups, academic_periods, audits, comments, courses, evaluation_question_scores, evaluation_scores, evaluations, settings, health, teachers, users
+from api.routes import (
+    academic_groups,
+    academic_periods,
+    audits,
+    comments,
+    courses,
+    evaluation_question_scores,
+    evaluation_scores,
+    evaluations,
+    health,
+    settings,
+    teachers,
+    users,
+)
 
 _ = (
     academic_group,
@@ -46,7 +58,7 @@ _ = (
     user,
     user_role,
     setting,
-    setting_history
+    setting_history,
 )
 
 Base.metadata.create_all(bind=engine)

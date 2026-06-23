@@ -144,7 +144,9 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
 
     except Exception as exc:
         db.rollback()
-        logger.error("Failed to process evaluation %d: %s", evaluation_id, exc, exc_info=True)
+        logger.error(
+            "Failed to process evaluation %d: %s", evaluation_id, exc, exc_info=True
+        )
 
         try:
             evaluation = (
