@@ -17,7 +17,7 @@ class SettingModel(Base):
     key = Column(String(255), unique=True, nullable=False)
     value = Column(Text, nullable=False)
     value_type = Column(String(50), nullable=False, default="NUMBER")
-    description = Column(String(50), nullable=True)
+    description = Column(Text, nullable=True)
     changed_by = Column(String(50), nullable=True)
 
     effective_from: Mapped[datetime.datetime] = mapped_column(

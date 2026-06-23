@@ -26,10 +26,7 @@ DEFAULT_SETTINGS: list[dict[str, str]] = [
         "value": "3.5",
         "value_type": "NUMBER",
         "description": (
-            "Promedio mínimo requerido. Docentes con overall_average "
-            "menor a este valor activan un plan de mejoramiento. "
-            "Los cambios aplican solo a evaluaciones procesadas "
-            "después de effective_from."
+            "Promedio mínimo requerido. Menor a este valor activan un plan de mejoramiento."
         ),
     },
 ]
