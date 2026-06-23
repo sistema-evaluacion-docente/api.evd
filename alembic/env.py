@@ -16,6 +16,8 @@ from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
+from api.models.setting import SettingModel
+from api.models.setting_history import SettingHistoryModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 
@@ -46,8 +48,11 @@ _ = (
     RoleModel,
     TeacherModel,
     UserModel,
+    SettingModel,
+    SettingHistoryModel,
     UserRoleModel,
 )
+
 target_metadata = Base.metadata
 
 # Use application database URL for Alembic.

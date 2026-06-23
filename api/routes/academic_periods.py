@@ -2,7 +2,7 @@
 Routes for academic period operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.academic_periods import (
     AcademicPeriodsController,
@@ -16,6 +16,7 @@ from api.schemas.academic_period import (
     AcademicPeriodStatusUpdate,
     AcademicPeriodUpdate,
 )
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
@@ -28,17 +29,31 @@ router = APIRouter(prefix="/academic-periods", tags=["Academic Periods"])
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_academic_periods(
+    search: str | None = Query(default=None, min_length=1),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
     """Endpoint to list all academic periods."""
 
-    periods = await controller.get_all()
+    periods = await controller.get_all(search=search, page=page, limit=limit)
+
+    if periods is None:
+        return ResponseSchema(
+            status=400, message="Error getting academic periods", path="/academic-periods"
+        )
 
     return ResponseSchema(
         status=200,
         message="Academic periods found",
-        data=periods,
+        data=periods["items"],
+        pagination=Pagination(
+            limit=periods["limit"],
+            total=periods["total"],
+            pages=periods["pages"],
+            page=periods["page"],
+        ),
         path="/academic-periods",
     )
 

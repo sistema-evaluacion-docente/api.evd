@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI EVD API
 """
 
@@ -26,8 +26,10 @@ from api.models import (
     teacher,
     user,
     user_role,
+    setting,
+    setting_history
 )
-from api.routes import academic_groups, academic_periods, audits, comments, courses, evaluation_question_scores, evaluation_scores, evaluations, health, teachers, users
+from api.routes import academic_groups, academic_periods, audits, comments, courses, evaluation_question_scores, evaluation_scores, evaluations, settings, health, teachers, users
 
 _ = (
     academic_group,
@@ -43,6 +45,8 @@ _ = (
     teacher,
     user,
     user_role,
+    setting,
+    setting_history
 )
 
 Base.metadata.create_all(bind=engine)
@@ -86,3 +90,4 @@ app.include_router(comments.router)
 app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
+app.include_router(settings.router)
