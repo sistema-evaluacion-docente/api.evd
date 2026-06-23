@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI EVD API
 """
 
@@ -12,10 +12,42 @@ from starlette.responses import JSONResponse
 
 from api.config import config
 from api.database import Base, engine
-from api.models import academic_period, audit, department, role, setting, setting_history, user, user_role
-from api.routes import academic_periods, audits, health, settings, users
+from api.models import (
+    academic_group,
+    academic_period,
+    audit,
+    comment,
+    course,
+    department,
+    evaluation,
+    evaluation_question_score,
+    evaluation_score,
+    role,
+    teacher,
+    user,
+    user_role,
+    setting,
+    setting_history
+)
+from api.routes import academic_groups, academic_periods, audits, comments, courses, evaluation_question_scores, evaluation_scores, evaluations, settings, health, teachers, users
 
-_ = (academic_period, audit, department, role, setting, setting_history, user, user_role)
+_ = (
+    academic_group,
+    academic_period,
+    audit,
+    comment,
+    course,
+    department,
+    evaluation,
+    evaluation_question_score,
+    evaluation_score,
+    role,
+    teacher,
+    user,
+    user_role,
+    setting,
+    setting_history
+)
 
 Base.metadata.create_all(bind=engine)
 
@@ -48,6 +80,13 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
 
 
 app.include_router(health.router)
+app.include_router(teachers.router)
+app.include_router(courses.router)
+app.include_router(academic_groups.router)
+app.include_router(evaluations.router)
+app.include_router(evaluation_scores.router)
+app.include_router(evaluation_question_scores.router)
+app.include_router(comments.router)
 app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)

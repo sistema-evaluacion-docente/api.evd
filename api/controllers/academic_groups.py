@@ -1,0 +1,92 @@
+"""
+Academic groups controller
+"""
+
+from fastapi.param_functions import Depends
+
+from api.repositories.academic_groups import (
+    AcademicGroupsRepository,
+    get_academic_groups_repository,
+)
+from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.schemas.academic_group import AcademicGroupCreate, AcademicGroupUpdate
+from api.schemas.audit import AuditCreate
+
+
+class AcademicGroupsController:
+    """Academic groups controller"""
+
+    def __init__(
+        self,
+        repository: AcademicGroupsRepository,
+        audits_repository: AuditsRepository,
+    ):
+        self.repository = repository
+        self.audits_repository = audits_repository
+
+    async def create(self, data: AcademicGroupCreate, current_user) -> dict:
+        """Create a new academic group, rejecting exact duplicates."""
+
+        existing = await self.repository.get_by_course_teacher_period(
+            data.course_id, data.teacher_id, data.academic_period_id
+        )
+
+        if existing:
+            raise ValueError(
+                "An academic group for this course, teacher and period already exists"
+            )
+
+        group = await self.repository.create(data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_groups",
+                operation="create",
+                created_at=None,
+            )
+        )
+
+        return group
+
+    async def get_all(self) -> list[dict]:
+        """Get all academic groups."""
+
+        return await self.repository.get_all()
+
+    async def get_by_id(self, group_id: int) -> dict | None:
+        """Get an academic group by ID."""
+
+        return await self.repository.get_by_id(group_id)
+
+    async def update(
+        self, group_id: int, data: AcademicGroupUpdate, current_user
+    ) -> dict | None:
+        """Update an academic group's fields."""
+
+        group = await self.repository.get_by_id(group_id)
+
+        if not group:
+            return None
+
+        updated = await self.repository.update(group_id, data)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=current_user.uid,
+                table_name="academic_groups",
+                operation="update",
+                created_at=None,
+            )
+        )
+
+        return updated
+
+
+def get_academic_groups_controller(
+    repository: AcademicGroupsRepository = Depends(get_academic_groups_repository),
+    audits_repository: AuditsRepository = Depends(get_audits_repository),
+):
+    """Get academic groups controller"""
+
+    return AcademicGroupsController(repository, audits_repository)

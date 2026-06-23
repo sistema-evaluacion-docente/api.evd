@@ -1,0 +1,63 @@
+"""
+Schemas for request and response bodies related to teachers.
+"""
+
+from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel
+
+
+class TeacherCreate(BaseModel):
+    """Schema for creating a teacher."""
+
+    institutional_code: str
+    department_id: Optional[int] = None
+    contract_type: Optional[str] = None
+    user_id: Optional[str] = None
+    active: Optional[bool] = True
+
+
+class TeacherUpdate(BaseModel):
+    """Schema for updating a teacher."""
+
+    institutional_code: Optional[str] = None
+    department_id: Optional[int] = None
+    contract_type: Optional[str] = None
+    user_id: Optional[str] = None
+    active: Optional[bool] = None
+
+
+class TeacherOut(BaseModel):
+    """Schema for outputting a teacher."""
+
+    id: int
+    institutional_code: str
+    department_id: Optional[int]
+    contract_type: Optional[str]
+    user_id: Optional[str]
+    active: Optional[bool]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TeacherDetailResponse(BaseModel):
+    """Schema for single teacher response envelope."""
+
+    status: int
+    message: str
+    data: Optional[TeacherOut] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherListResponse(BaseModel):
+    """Schema for teachers list response envelope."""
+
+    status: int
+    message: str
+    data: list[TeacherOut]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
