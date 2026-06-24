@@ -105,7 +105,8 @@ async def upload_evaluation(
     existing = await evaluations_repo.get_by_period_and_department(
         period.id, department.id
     )
-    if existing:
+
+    if existing and existing["active"]:
         raise HTTPException(
             status_code=409,
             detail=(
