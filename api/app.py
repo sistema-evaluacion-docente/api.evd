@@ -36,6 +36,7 @@ from api.routes import (
     audits,
     comments,
     courses,
+    departments,
     evaluation_question_scores,
     evaluation_scores,
     evaluations,
@@ -69,7 +70,9 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="EVD API")
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-app.mount(f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads")
+app.mount(
+    f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads"
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -99,6 +102,7 @@ async def custom_http_exception_handler(request: Request, exc: StarletteHTTPExce
 app.include_router(health.router)
 app.include_router(teachers.router)
 app.include_router(courses.router)
+app.include_router(departments.router)
 app.include_router(academic_groups.router)
 app.include_router(evaluations.router)
 app.include_router(evaluation_scores.router)
