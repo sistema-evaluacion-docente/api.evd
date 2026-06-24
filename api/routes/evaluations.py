@@ -5,13 +5,23 @@ Routes for evaluation operations.
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
-from api.controllers.evaluations import EvaluationsController, get_evaluations_controller
+from api.controllers.evaluations import (
+    EvaluationsController,
+    get_evaluations_controller,
+)
 from api.database import get_db
-from api.middlewares.auth import require_roles
+from api.middlewares.auth import get_current_user, require_roles
 from api.models.academic_period import AcademicPeriodModel
 from api.models.department import DepartmentModel
-from api.repositories.evaluations import EvaluationsRepository, get_evaluations_repository
-from api.schemas.evaluation import EvaluationDetailResponse, EvaluationListResponse
+from api.repositories.evaluations import (
+    EvaluationsRepository,
+    get_evaluations_repository,
+)
+from api.schemas.evaluation import (
+    EvaluationDetailResponse,
+    EvaluationListResponse,
+    EvaluationStatusUpdate,
+)
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
@@ -92,7 +102,9 @@ async def upload_evaluation(
             detail=f"Department '{parsed['department_code']}' is not registered in the system",
         )
 
-    existing = await evaluations_repo.get_by_period_and_department(period.id, department.id)
+    existing = await evaluations_repo.get_by_period_and_department(
+        period.id, department.id
+    )
     if existing:
         raise HTTPException(
             status_code=409,
@@ -167,4 +179,43 @@ async def get_evaluation_by_id(
         message="Evaluation found",
         data=evaluation,
         path=f"/evaluations/{evaluation_id}",
+    )
+
+
+@router.patch(
+    "/{evaluation_id}/status",
+    response_model=EvaluationDetailResponse,
+    responses={
+        400: {"model": ResponseSchema},
+        403: {"description": "Forbidden"},
+        404: {"model": ResponseSchema},
+    },
+)
+async def update_evaluation_status(
+    evaluation_id: int,
+    payload: EvaluationStatusUpdate,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Activate or deactivate an evaluation."""
+
+    evaluation = await controller.update_status(
+        evaluation_id, payload.active, current_user
+    )
+
+    if not evaluation:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation not found",
+            path=f"/evaluations/{evaluation_id}/status",
+        )
+
+    action = "activated" if payload.active else "deactivated"
+
+    return ResponseSchema(
+        status=200,
+        message=f"Evaluation {action} successfully",
+        data=evaluation,
+        path=f"/evaluations/{evaluation_id}/status",
     )

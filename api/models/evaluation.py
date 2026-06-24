@@ -4,8 +4,8 @@ Evaluation model
 
 import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -22,6 +22,9 @@ class EvaluationModel(Base):
     academic_period_id = Column(Integer, ForeignKey("academic_periods.id"), nullable=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     pdf_url = Column(String(255), nullable=True)
+
+    academic_period = relationship("AcademicPeriodModel", lazy="joined")
+    active = Column(Boolean, nullable=True, default=True)
     status = Column(String(255), nullable=True)
     count = Column(Integer, nullable=True)
 

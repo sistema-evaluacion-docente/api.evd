@@ -8,14 +8,23 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class EvaluationStatusUpdate(BaseModel):
+    """Schema for activating/deactivating an evaluation."""
+
+    active: bool
+
+
 class EvaluationOut(BaseModel):
     """Schema for outputting an evaluation."""
 
     id: int
     user_id: Optional[str]
     academic_period_id: Optional[int]
+    academic_period_name: Optional[str]
+    academic_period_code: Optional[str]
     department_id: Optional[int]
     pdf_url: Optional[str]
+    active: Optional[bool]
     status: Optional[str]
     count: Optional[int]
     created_at: datetime

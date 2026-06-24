@@ -87,6 +87,27 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
+    async def update_active_status(
+        self, evaluation_id: int, active: bool
+    ) -> dict | None:
+        """Activate or deactivate an evaluation."""
+
+        evaluation = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.id == evaluation_id)
+            .first()
+        )
+
+        if not evaluation:
+            return None
+
+        setattr(evaluation, "active", active)
+
+        self.db.commit()
+        self.db.refresh(evaluation)
+
+        return evaluation_to_dict(evaluation)
+
     async def update_status(
         self, evaluation_id: int, status: str, count: int | None = None
     ) -> dict | None:
