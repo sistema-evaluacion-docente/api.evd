@@ -2,7 +2,7 @@
 Schemas for request and response bodies related to audit logs.
 """
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel
@@ -18,7 +18,7 @@ class AuditCreate(BaseModel):
     user_id: Optional[str] = None
     table_name: str
     operation: str
-    created_at: Optional[date] = None
+    created_at: Optional[datetime] = None
 
 
 class AuditUpdate(BaseModel):
@@ -29,7 +29,7 @@ class AuditUpdate(BaseModel):
     user_id: Optional[str] = None
     table_name: Optional[str] = None
     operation: Optional[str] = None
-    created_at: Optional[date] = None
+    created_at: Optional[datetime] = None
 
 
 class AuditOut(BaseModel):
@@ -39,9 +39,11 @@ class AuditOut(BaseModel):
 
     id: int
     user_id: Optional[str]
+    user_name: Optional[str] = None
+    user_avatar: Optional[str] = None
     table_name: Optional[str]
     operation: Optional[str]
-    created_at: Optional[date]
+    created_at: Optional[datetime]
     updated_at: Optional[datetime]
 
 
