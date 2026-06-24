@@ -43,7 +43,7 @@ class UsersController:
                 data=AuditCreate(
                     user_id=current_user.uid,
                     table_name="users",
-                    operation="login",
+                    operation="LOGIN",
                     element=f"User {current_user.uid}",
                     description=f"Inicio de sesión del usuario {current_user.email}",
                     created_at=None,

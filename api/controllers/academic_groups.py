@@ -42,7 +42,7 @@ class AcademicGroupsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_groups",
-                operation="create",
+                operation="CREATE",
                 element=f"AcademicGroup {group.get('id')}",
                 description=f"Se creó el grupo académico {group.get('id')} para el curso {data.course_id}, profesor {data.teacher_id}, período {data.academic_period_id}, grupo: {data.group_name}",
                 created_at=None,
@@ -88,7 +88,7 @@ class AcademicGroupsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_groups",
-                operation="update",
+                operation="UPDATE",
                 element=f"AcademicGroup {group_id}",
                 description=desc,
                 created_at=None,

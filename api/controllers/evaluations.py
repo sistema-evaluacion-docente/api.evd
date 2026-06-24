@@ -42,7 +42,7 @@ class EvaluationsController:
 
         updated = await self.repository.update_active_status(evaluation_id, active)
 
-        operation = "activate" if active else "deactivate"
+        operation = "ACTIVATE" if active else "DEACTIVATE"
 
         await self.audits_repository.create(
             AuditCreate(

@@ -5,6 +5,7 @@ Audit repository
 from typing import Annotated
 
 from fastapi import Depends
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.database import get_db
@@ -41,13 +42,34 @@ class AuditsRepository:
 
         return audit_to_dict(audit)
 
-    async def get_all(self, page: int = 1, limit: int = 10):
+    async def get_all(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        table_name: str | None = None,
+        operation: str | None = None,
+        search: str | None = None,
+    ):
         """
         Get paginated audit logs
         """
 
         offset = (page - 1) * limit
         query = self.db.query(AuditModel)
+
+        if table_name:
+            query = query.filter(AuditModel.table_name == table_name)
+        if operation:
+            query = query.filter(AuditModel.operation == operation)
+        if search:
+            query = query.filter(
+                or_(
+                    AuditModel.element.ilike(f"%{search}%"),
+                    AuditModel.description.ilike(f"%{search}%"),
+                    AuditModel.user_id.ilike(f"%{search}%"),
+                )
+            )
+
         total = query.count()
 
         audits = query.order_by(AuditModel.id.desc()).offset(offset).limit(limit).all()

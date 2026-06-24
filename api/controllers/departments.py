@@ -36,7 +36,7 @@ class DepartmentsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="departments",
-                operation="create",
+                operation="CREATE",
                 element=f"Department {department.get('id')}",
                 description=f"Se creó el departamento {data.name} (código: {data.code}, facultad: {data.faculty})",
                 created_at=None,
@@ -76,7 +76,7 @@ class DepartmentsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="departments",
-                operation="update",
+                operation="UPDATE",
                 element=f"Department {department_id}",
                 description=desc,
                 created_at=None,

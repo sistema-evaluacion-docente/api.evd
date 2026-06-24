@@ -37,7 +37,7 @@ class TeachersController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="teachers",
-                operation="create",
+                operation="CREATE",
                 element=f"Teacher {teacher.get('id')}",
                 description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, activo: {data.active}",
                 created_at=None,
@@ -83,7 +83,7 @@ class TeachersController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="teachers",
-                operation="update",
+                operation="UPDATE",
                 element=f"Teacher {teacher_id}",
                 description=desc,
                 created_at=None,

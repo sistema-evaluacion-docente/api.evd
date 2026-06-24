@@ -22,12 +22,23 @@ router = APIRouter(prefix="/audits", tags=["Audits"])
 async def get_audits(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
+    table_name: str | None = Query(None, description="Filter by table name"),
+    operation: str | None = Query(None, description="Filter by operation"),
+    search: str | None = Query(
+        None, description="Search in element, description, user_id"
+    ),
     _: dict = Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
     """Endpoint to get paginated audit logs."""
 
-    audits = await controller.get_all(page=page, limit=limit)
+    audits = await controller.get_all(
+        page=page,
+        limit=limit,
+        table_name=table_name,
+        operation=operation,
+        search=search,
+    )
 
     return {
         "data": audits["items"],

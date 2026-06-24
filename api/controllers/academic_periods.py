@@ -44,7 +44,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_periods",
-                operation="create",
+                operation="CREATE",
                 element=f"AcademicPeriod {period.get('id')}",
                 description=f"Se creó el período académico {data.code} (nombre: {data.name}, inicio: {data.start_date}, fin: {data.end_date})",
                 created_at=None,
@@ -99,7 +99,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_periods",
-                operation="update",
+                operation="UPDATE",
                 element=f"AcademicPeriod {period_id}",
                 description=desc,
                 created_at=None,
@@ -122,7 +122,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_periods",
-                operation="activate",
+                operation="ACTIVATE",
                 element=f"AcademicPeriod {period_id}",
                 description=f"Se activó el período académico {period.get('code', '')} (estaba inactivo)",
                 created_at=None,
@@ -148,7 +148,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_periods",
-                operation="close",
+                operation="CLOSE",
                 element=f"AcademicPeriod {period_id}",
                 description=f"Se cerró el período académico {period.get('code', '')} (estaba activo)",
                 created_at=None,
@@ -176,7 +176,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_periods",
-                operation="update_status",
+                operation="UPDATE_STATUS",
                 element=f"AcademicPeriod {period_id}",
                 description=f"Se cambió el estado del período académico {period.get('code', '')} de {'activo' if period.get('active') else 'inactivo'} a {'activo' if data.active else 'inactivo'}",
             )

@@ -37,7 +37,7 @@ class CoursesController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="courses",
-                operation="create",
+                operation="CREATE",
                 element=f"Course {course.get('id')}",
                 description=f"Se creó el curso {data.code} (nombre: {data.name}, departamento: {data.department_id})",
                 created_at=None,
@@ -83,7 +83,7 @@ class CoursesController:
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="courses",
-                operation="update",
+                operation="UPDATE",
                 element=f"Course {course_id}",
                 description=desc,
                 created_at=None,

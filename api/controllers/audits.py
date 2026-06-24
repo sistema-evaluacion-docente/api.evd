@@ -26,8 +26,21 @@ class AuditsController:
     async def create(self, payload: AuditCreate):
         return await self.repository.create(payload)
 
-    async def get_all(self, page: int = 1, limit: int = 10):
-        result = await self.repository.get_all(page=page, limit=limit)
+    async def get_all(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        table_name: str | None = None,
+        operation: str | None = None,
+        search: str | None = None,
+    ):
+        result = await self.repository.get_all(
+            page=page,
+            limit=limit,
+            table_name=table_name,
+            operation=operation,
+            search=search,
+        )
         items = await self._enrich_with_users(result["items"])
         result["items"] = items
         return result
