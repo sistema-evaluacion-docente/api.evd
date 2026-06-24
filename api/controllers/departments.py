@@ -37,6 +37,8 @@ class DepartmentsController:
                 user_id=current_user.uid,
                 table_name="departments",
                 operation="create",
+                element=f"Department {department.get('id')}",
+                description=f"Se creó el departamento {data.name} (código: {data.code}, facultad: {data.faculty})",
                 created_at=None,
             )
         )
@@ -58,11 +60,25 @@ class DepartmentsController:
         if not department:
             return None
         updated = await self.repository.update(department_id, data)
+        updated = await self.repository.update(department_id, data)
+        changes = []
+        for field in ("code", "name", "faculty", "active"):
+            new_val = getattr(data, field, None)
+            if new_val is not None and new_val != department.get(field):
+                old_val = department.get(field)
+                changes.append(f"{field} cambió de {old_val} a {new_val}")
+        desc = "Se actualizó el departamento"
+        if changes:
+            desc += ": " + "; ".join(changes)
+        else:
+            desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="departments",
                 operation="update",
+                element=f"Department {department_id}",
+                description=desc,
                 created_at=None,
             )
         )

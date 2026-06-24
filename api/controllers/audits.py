@@ -7,6 +7,7 @@ from fastapi.param_functions import Depends
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate, AuditUpdate
+from api.utils.get_audit import get_audit
 
 
 class AuditsController:
@@ -33,9 +34,12 @@ class AuditsController:
 
     async def get_by_id(self, audit_id: int):
         audit = await self.repository.get_by_id(audit_id)
+
         if not audit:
             return None
+
         enriched = await self._enrich_with_users([audit])
+
         return enriched[0]
 
     async def update(self, audit_id: int, payload: AuditUpdate):
@@ -46,14 +50,20 @@ class AuditsController:
 
     async def _enrich_with_users(self, items: list[dict]) -> list[dict]:
         uids = list({item["user_id"] for item in items if item.get("user_id")})
+
         if not uids:
             return items
+
         users = await self.users_repository.get_by_uids(uids)
+
         users_map = {u["uid"]: u for u in users}
+
         for item in items:
             user = users_map.get(item.get("user_id"))
+
             item["user_name"] = user["name"] if user else None
             item["user_avatar"] = user["avatar_url"] if user else None
+
         return items
 
 

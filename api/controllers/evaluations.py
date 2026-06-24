@@ -49,6 +49,8 @@ class EvaluationsController:
                 user_id=current_user.uid,
                 table_name="evaluations",
                 operation=operation,
+                element=f"Evaluation {evaluation_id}",
+                description=f"Se {'activó' if active else 'desactivó'} la evaluación {evaluation_id} del período {evaluation.get('academic_period_code', '')}",
             )
         )
 

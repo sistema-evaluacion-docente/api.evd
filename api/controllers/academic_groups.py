@@ -43,6 +43,8 @@ class AcademicGroupsController:
                 user_id=current_user.uid,
                 table_name="academic_groups",
                 operation="create",
+                element=f"AcademicGroup {group.get('id')}",
+                description=f"Se creó el grupo académico {group.get('id')} para el curso {data.course_id}, profesor {data.teacher_id}, período {data.academic_period_id}, grupo: {data.group_name}",
                 created_at=None,
             )
         )
@@ -71,11 +73,24 @@ class AcademicGroupsController:
 
         updated = await self.repository.update(group_id, data)
 
+        changes = []
+        for field in ("course_id", "teacher_id", "academic_period_id", "group_name"):
+            new_val = getattr(data, field, None)
+            if new_val is not None and new_val != group.get(field):
+                old_val = group.get(field)
+                changes.append(f"{field} cambió de {old_val} a {new_val}")
+        desc = "Se actualizó el grupo académico #" + str(group_id)
+        if changes:
+            desc += ": " + "; ".join(changes)
+        else:
+            desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="academic_groups",
                 operation="update",
+                element=f"AcademicGroup {group_id}",
+                description=desc,
                 created_at=None,
             )
         )

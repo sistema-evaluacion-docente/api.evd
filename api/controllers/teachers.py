@@ -38,6 +38,8 @@ class TeachersController:
                 user_id=current_user.uid,
                 table_name="teachers",
                 operation="create",
+                element=f"Teacher {teacher.get('id')}",
+                description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, activo: {data.active}",
                 created_at=None,
             )
         )
@@ -66,11 +68,24 @@ class TeachersController:
 
         updated = await self.repository.update(teacher_id, data)
 
+        changes = []
+        for field in ("institutional_code", "department_id", "contract_type", "user_id", "active"):
+            new_val = getattr(data, field, None)
+            if new_val is not None and new_val != teacher.get(field):
+                old_val = teacher.get(field)
+                changes.append(f"{field} cambió de {old_val} a {new_val}")
+        desc = "Se actualizó el profesor #" + str(teacher_id)
+        if changes:
+            desc += ": " + "; ".join(changes)
+        else:
+            desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="teachers",
                 operation="update",
+                element=f"Teacher {teacher_id}",
+                description=desc,
                 created_at=None,
             )
         )

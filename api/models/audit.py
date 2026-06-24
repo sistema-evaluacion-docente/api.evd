@@ -4,7 +4,7 @@ Audit model
 
 import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, func
+from sqlalchemy import Column, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -21,6 +21,8 @@ class AuditModel(Base):
     user_id = Column(String(255), nullable=True)
     table_name = Column(String(255), nullable=True)
     operation = Column(String(255), nullable=True)
+    element = Column(String(255), nullable=True)
+    description = Column(Text, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

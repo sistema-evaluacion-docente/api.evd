@@ -38,6 +38,8 @@ class CoursesController:
                 user_id=current_user.uid,
                 table_name="courses",
                 operation="create",
+                element=f"Course {course.get('id')}",
+                description=f"Se creó el curso {data.code} (nombre: {data.name}, departamento: {data.department_id})",
                 created_at=None,
             )
         )
@@ -66,11 +68,24 @@ class CoursesController:
 
         updated = await self.repository.update(course_id, data)
 
+        changes = []
+        for field in ("name", "department_id"):
+            new_val = getattr(data, field, None)
+            if new_val is not None and new_val != course.get(field):
+                old_val = course.get(field)
+                changes.append(f"{field} cambió de {old_val} a {new_val}")
+        desc = "Se actualizó el curso #" + str(course_id)
+        if changes:
+            desc += ": " + "; ".join(changes)
+        else:
+            desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
                 user_id=current_user.uid,
                 table_name="courses",
                 operation="update",
+                element=f"Course {course_id}",
+                description=desc,
                 created_at=None,
             )
         )

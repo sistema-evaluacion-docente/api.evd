@@ -35,6 +35,8 @@ class SettingsController:
                 user_id=current_user.uid,
                 table_name="settings",
                 operation="create",
+                element=f"Setting {setting.get('id')}",
+                description=f"Se creó la configuración {data.key} con valor {data.value} (tipo: {data.value_type})",
                 created_at=None,
             )
         )
@@ -84,6 +86,8 @@ class SettingsController:
                 user_id=current_user.uid,
                 table_name="settings",
                 operation="update",
+                element=f"Setting {setting_id}",
+                description=f"Se actualizó la configuración {setting.get('key')}: valor cambió de {setting.get('value')} a {data.value}",
                 created_at=None,
             )
         )
@@ -103,6 +107,8 @@ class SettingsController:
                 user_id=current_user.uid,
                 table_name="settings",
                 operation="delete",
+                element=f"Setting {setting_id}",
+                description=f"Se eliminó la configuración {setting.get('key')} con valor {setting.get('value')}",
                 created_at=None,
             )
         )

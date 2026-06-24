@@ -18,6 +18,8 @@ class AuditCreate(BaseModel):
     user_id: Optional[str] = None
     table_name: str
     operation: str
+    element: Optional[str] = None
+    description: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -29,6 +31,8 @@ class AuditUpdate(BaseModel):
     user_id: Optional[str] = None
     table_name: Optional[str] = None
     operation: Optional[str] = None
+    element: Optional[str] = None
+    description: Optional[str] = None
     created_at: Optional[datetime] = None
 
 
@@ -43,6 +47,9 @@ class AuditOut(BaseModel):
     user_avatar: Optional[str] = None
     table_name: Optional[str]
     operation: Optional[str]
+    element: Optional[str] = None
+    element_data: Optional[dict] = None
+    description: Optional[str] = None
     created_at: Optional[datetime]
     updated_at: Optional[datetime]
 

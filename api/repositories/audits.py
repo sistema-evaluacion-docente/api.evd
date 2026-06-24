@@ -11,6 +11,7 @@ from api.database import get_db
 from api.models.audit import AuditModel
 from api.schemas.audit import AuditCreate, AuditUpdate
 from api.serializers.audits import audit_to_dict
+from api.utils.get_audit import get_audit
 
 
 class AuditsRepository:
@@ -30,6 +31,8 @@ class AuditsRepository:
             user_id=data.user_id,
             table_name=data.table_name,
             operation=data.operation,
+            element=data.element,
+            description=data.description,
         )
 
         self.db.add(audit)
@@ -67,7 +70,12 @@ class AuditsRepository:
         if not audit:
             return None
 
-        return audit_to_dict(audit)
+        element_data = await get_audit(str(audit.element), self.db)
+
+        result = audit_to_dict(audit)
+        result = {**result, "element_data": element_data}
+
+        return result
 
     async def update(self, audit_id: int, data: AuditUpdate):
         """
