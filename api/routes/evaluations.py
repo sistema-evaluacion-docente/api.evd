@@ -2,9 +2,13 @@
 Routes for evaluation operations.
 """
 
+import os
+import uuid
+
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from api.config import config
 from api.controllers.evaluations import (
     EvaluationsController,
     get_evaluations_controller,
@@ -115,11 +119,26 @@ async def upload_evaluation(
             ),
         )
 
+    eval_dir = os.path.join(
+        config.UPLOAD_DIR,
+        "evaluations",
+        parsed["period_code"],
+        parsed["department_code"],
+    )
+    os.makedirs(eval_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename or "evaluation.pdf")[1] or ".pdf"
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = os.path.join(eval_dir, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(pdf_bytes)
+
     evaluation = await evaluations_repo.create(
         user_id=current_user["uid"],
         academic_period_id=period.id,
         department_id=department.id,
-        pdf_url="",
+        pdf_url=filepath,
         status="PROCESSING",
     )
 

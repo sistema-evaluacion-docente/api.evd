@@ -2,10 +2,12 @@
 FastAPI EVD API
 """
 
+import os
 from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.responses import JSONResponse
 
@@ -65,6 +67,9 @@ Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI(title="EVD API")
+
+os.makedirs(config.UPLOAD_DIR, exist_ok=True)
+app.mount(f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

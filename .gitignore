@@ -2,6 +2,9 @@
 __pycache__/
 *.py[cod]
 
+# Ignore uploaded files
+uploads/
+
 # Ignore virtual environment directories
 venv/
 

@@ -1,6 +1,7 @@
 """Configuration settings for the application."""
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -9,6 +10,7 @@ load_dotenv()
 PORT = os.getenv("PORT", "5000")
 DATABASE_URL = os.getenv("DATABASE_URL")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 
 FIREBASE_CREDENTIALS = {
     "type": os.getenv("FIREBASE_TYPE"),
@@ -35,6 +37,8 @@ class Config:
 
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+    UPLOAD_DIR = UPLOAD_DIR
 
 
 config = Config()
