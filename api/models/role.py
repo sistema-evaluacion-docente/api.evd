@@ -3,8 +3,9 @@ Role model
 """
 
 import datetime
+from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -17,10 +18,12 @@ class RoleModel(Base):
 
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False)
-    description = Column(String(255), nullable=True)
-    active = Column(Boolean, nullable=True, default=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    name: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

@@ -3,8 +3,9 @@ Setting model
 """
 
 import datetime
+from typing import Optional
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -13,12 +14,16 @@ from api.database import Base
 class SettingModel(Base):
     __tablename__ = "settings"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    key = Column(String(255), unique=True, nullable=False)
-    value = Column(Text, nullable=False)
-    value_type = Column(String(50), nullable=False, default="NUMBER")
-    description = Column(Text, nullable=True)
-    changed_by = Column(String(50), nullable=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    key: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+    value_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="NUMBER"
+    )
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    changed_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
 
     effective_from: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

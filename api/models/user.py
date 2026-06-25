@@ -3,10 +3,10 @@ User model
 """
 
 import datetime
+from typing import Optional
 
 from sqlalchemy import (
     Boolean,
-    Column,
     DateTime,
     ForeignKey,
     Integer,
@@ -26,14 +26,22 @@ class UserModel(Base):
 
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    uid = Column(Text, nullable=True, index=True)  # firebase uid
-    email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(255), nullable=False)
-    name = Column(String(255), nullable=False)
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    active = Column(Boolean, default=True)
-    avatar_url = Column(Text, nullable=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    uid: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True, index=True
+    )  # firebase uid
+    email: Mapped[str] = mapped_column(
+        String(255), unique=True, index=True, nullable=False
+    )
+    username: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("departments.id"), nullable=True
+    )
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
