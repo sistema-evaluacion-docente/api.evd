@@ -31,6 +31,8 @@ class UserCreate(BaseModel):
     department_id: Optional[int] = None
     active: Optional[bool] = True
     avatar_url: Optional[str] = None
+    institutional_code: Optional[str] = None
+    contract_type: Optional[str] = None
     roles: list[RoleName] = Field(
         default_factory=lambda: [RoleName.DOCENTE],
         min_length=1,

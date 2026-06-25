@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.role import RoleModel
+from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 from api.schemas.user import RoleName, UserCreate, UserStatusUpdate, UserUpdate
@@ -72,6 +73,33 @@ class UsersRepository:
         for role in resolved_roles:
             self.db.add(UserRoleModel(user_id=user_id, role_id=role.id))
 
+    def _ensure_teacher(
+        self,
+        user: UserModel,
+        roles: list[str],
+        institutional_code: str | None = None,
+        contract_type: str | None = None,
+    ) -> None:
+        """Create TeacherModel if user has DOCENTE role and no teacher record exists."""
+
+        if RoleName.DOCENTE.value not in roles:
+            return
+
+        existing = (
+            self.db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
+        )
+        if existing:
+            return
+
+        teacher = TeacherModel(
+            institutional_code=institutional_code or f"DOC-{user.id}",
+            department_id=user.department_id,
+            contract_type=contract_type,
+            user_id=user.id,
+            active=user.active,
+        )
+        self.db.add(teacher)
+
     def _get_user_role_names(self, user_id: int) -> list[str]:
         """Get role names for a user."""
 
@@ -107,6 +135,7 @@ class UsersRepository:
         if existing_user:
             if normalized_roles:
                 self._replace_user_roles(existing_user.id, normalized_roles)
+                self._ensure_teacher(existing_user, normalized_roles)
                 self.db.commit()
             roles = self._get_user_role_names(existing_user.id)
             return user_to_dict(existing_user, roles=roles)
@@ -126,6 +155,13 @@ class UsersRepository:
 
         roles_to_assign = normalized_roles or [RoleName.DOCENTE.value]
         self._replace_user_roles(user.id, roles_to_assign)
+
+        self._ensure_teacher(
+            user,
+            roles_to_assign,
+            institutional_code=data.institutional_code,
+            contract_type=data.contract_type,
+        )
 
         self.db.commit()
         self.db.refresh(user)
@@ -258,9 +294,7 @@ class UsersRepository:
             roles_by_user[key].append(role_name)
 
         users_dict: dict[str, dict] = {
-            str(user.uid): user_to_dict(
-                user, roles=roles_by_user.get(user.id, [])
-            )
+            str(user.uid): user_to_dict(user, roles=roles_by_user.get(user.id, []))
             for user in users
         }
 
@@ -287,6 +321,7 @@ class UsersRepository:
         if requested_roles is not None:
             normalized_roles = self._normalize_role_names(requested_roles)
             self._replace_user_roles(user.id, normalized_roles)
+            self._ensure_teacher(user, normalized_roles)
 
         self.db.commit()
         self.db.refresh(user)
