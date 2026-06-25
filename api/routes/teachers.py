@@ -2,15 +2,76 @@
 Routes for teacher operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.response import ResponseSchema
-from api.schemas.teacher import TeacherCreate, TeacherDetailResponse, TeacherListResponse, TeacherUpdate
+from api.schemas.teacher import (
+    BulkUploadResult,
+    TeacherBulkUploadResponse,
+    TeacherCreate,
+    TeacherDetailResponse,
+    TeacherListResponse,
+    TeacherUpdate,
+)
 from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
+
+
+@router.post(
+    "/upload",
+    response_model=TeacherBulkUploadResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    status_code=201,
+)
+async def upload_teachers_excel(
+    file: UploadFile = File(...),
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Upload an Excel file to bulk-create teachers for the director's department.
+
+    The Excel must have columns: nombre, email, codigo institucional, tipo de contrato.
+    """
+
+    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo debe ser un Excel (.xlsx o .xls)",
+        )
+
+    file_bytes = await file.read()
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo está vacío",
+        )
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    try:
+        result = await controller.upload_excel(file_bytes, department_id, current_user)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    return ResponseSchema(
+        status=201,
+        message=(
+            f"Importación completada: {len(result['created'])} creados, "
+            f"{len(result['skipped'])} omitidos, {len(result['errors'])} errores"
+        ),
+        data=BulkUploadResult(**result),
+        path="/teachers/upload",
+    )
 
 
 @router.get(

@@ -61,3 +61,22 @@ class TeacherListResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class BulkUploadResult(BaseModel):
+    """Schema for bulk upload result."""
+
+    created: list[dict]
+    skipped: list[dict]
+    errors: list[dict]
+
+
+class TeacherBulkUploadResponse(BaseModel):
+    """Schema for bulk upload response envelope."""
+
+    status: int
+    message: str
+    data: BulkUploadResult
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
