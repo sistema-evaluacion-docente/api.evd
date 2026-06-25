@@ -24,7 +24,7 @@ class UserCreate(BaseModel):
     Schema for creating a user.
     """
 
-    uid: str
+    uid: Optional[str] = None
     email: str
     username: Optional[str] = None
     name: Optional[str] = None
@@ -54,7 +54,8 @@ class UserOut(BaseModel):
     Schema for outputting a user.
     """
 
-    uid: str
+    id: int
+    uid: Optional[str]
     email: str
     username: Optional[str]
     name: Optional[str]
@@ -82,7 +83,8 @@ class UserStatusUpdate(BaseModel):
 class UserRolesOut(BaseModel):
     """Schema for roles assigned to a user."""
 
-    uid: str
+    id: int
+    uid: Optional[str]
     roles: list[RoleName]
 
 

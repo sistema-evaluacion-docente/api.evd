@@ -21,7 +21,7 @@ class TeacherModel(Base):
     institutional_code = Column(String(255), nullable=False)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     contract_type = Column(String(255), nullable=True)
-    user_id = Column(Text, ForeignKey("users.uid"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     active = Column(Boolean, nullable=True, default=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(

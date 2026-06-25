@@ -26,12 +26,13 @@ class UserModel(Base):
 
     __tablename__ = "users"
 
-    uid = Column(Text, primary_key=True, index=True)  # firebase uid
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    uid = Column(Text, nullable=True, index=True)  # firebase uid
     email = Column(String(255), unique=True, index=True, nullable=False)
-    username = Column(String(255), nullable=True)
-    name = Column(String(255), nullable=True)
+    username = Column(String(255), nullable=False)
+    name = Column(String(255), nullable=False)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    active = Column(Boolean, nullable=True, default=True)
+    active = Column(Boolean, default=True)
     avatar_url = Column(Text, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(

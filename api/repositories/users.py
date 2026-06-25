@@ -62,23 +62,23 @@ class UsersRepository:
 
         return roles
 
-    def _replace_user_roles(self, user_uid: str, role_names: list[str]):
+    def _replace_user_roles(self, user_id: int, role_names: list[str]):
         """Replace all user role assignments with provided role names."""
 
         resolved_roles = self._resolve_roles(role_names)
 
-        self.db.query(UserRoleModel).filter(UserRoleModel.user_id == user_uid).delete()
+        self.db.query(UserRoleModel).filter(UserRoleModel.user_id == user_id).delete()
 
         for role in resolved_roles:
-            self.db.add(UserRoleModel(user_id=user_uid, role_id=role.id))
+            self.db.add(UserRoleModel(user_id=user_id, role_id=role.id))
 
-    def _get_user_role_names(self, user_uid: str) -> list[str]:
+    def _get_user_role_names(self, user_id: int) -> list[str]:
         """Get role names for a user."""
 
         rows = (
             self.db.query(RoleModel.name)
             .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
-            .filter(UserRoleModel.user_id == user_uid)
+            .filter(UserRoleModel.user_id == user_id)
             .all()
         )
 
@@ -89,17 +89,26 @@ class UsersRepository:
         Save user and assign roles if not exists
         """
 
-        existing_user = (
-            self.db.query(UserModel).filter(UserModel.uid == data.uid).first()
-        )
+        existing_user = None
+        if data.uid:
+            existing_user = (
+                self.db.query(UserModel).filter(UserModel.uid == data.uid).first()
+            )
+
+        if not existing_user:
+            existing_user = (
+                self.db.query(UserModel).filter(UserModel.email == data.email).first()
+            )
+            if existing_user and data.uid:
+                existing_user.uid = data.uid
 
         normalized_roles = self._normalize_role_names(data.roles)
 
         if existing_user:
             if normalized_roles:
-                self._replace_user_roles(str(existing_user.uid), normalized_roles)
+                self._replace_user_roles(existing_user.id, normalized_roles)
                 self.db.commit()
-            roles = self._get_user_role_names(str(existing_user.uid))
+            roles = self._get_user_role_names(existing_user.id)
             return user_to_dict(existing_user, roles=roles)
 
         user = UserModel(
@@ -116,12 +125,12 @@ class UsersRepository:
         self.db.flush()
 
         roles_to_assign = normalized_roles or [RoleName.DOCENTE.value]
-        self._replace_user_roles(str(user.uid), roles_to_assign)
+        self._replace_user_roles(user.id, roles_to_assign)
 
         self.db.commit()
         self.db.refresh(user)
 
-        roles = self._get_user_role_names(str(user.uid))
+        roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
     async def get_by_uid(self, uid: str):
@@ -134,7 +143,7 @@ class UsersRepository:
         if not user:
             return None
 
-        roles = self._get_user_role_names(str(user.uid))
+        roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
     async def get_by_username(self, username: str):
@@ -147,7 +156,7 @@ class UsersRepository:
         if not user:
             return None
 
-        roles = self._get_user_role_names(str(user.uid))
+        roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
     async def get_all(
@@ -195,25 +204,25 @@ class UsersRepository:
                 "pages": pages,
             }
 
-        uids = [str(user.uid) for user in users]
+        user_ids = [user.id for user in users]
 
         role_rows = (
             self.db.query(UserRoleModel.user_id, RoleModel.name)
             .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
-            .filter(UserRoleModel.user_id.in_(uids))
+            .filter(UserRoleModel.user_id.in_(user_ids))
             .all()
         )
 
-        roles_by_user: dict[str, list[str]] = {}
+        roles_by_user: dict[int, list[str]] = {}
         for user_id, role_name in role_rows:
-            key = str(user_id)
+            key = int(user_id)
             if key not in roles_by_user:
                 roles_by_user[key] = []
             roles_by_user[key].append(role_name)
 
         return {
             "items": [
-                user_to_dict(user, roles=roles_by_user.get(str(user.uid), []))
+                user_to_dict(user, roles=roles_by_user.get(user.id, []))
                 for user in users
             ],
             "total": total,
@@ -232,23 +241,25 @@ class UsersRepository:
 
         users = self.db.query(UserModel).filter(UserModel.uid.in_(uids)).all()
 
+        user_ids = [user.id for user in users]
+
         role_rows = (
             self.db.query(UserRoleModel.user_id, RoleModel.name)
             .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
-            .filter(UserRoleModel.user_id.in_(uids))
+            .filter(UserRoleModel.user_id.in_(user_ids))
             .all()
         )
 
-        roles_by_user: dict[str, list[str]] = {}
+        roles_by_user: dict[int, list[str]] = {}
         for user_id, role_name in role_rows:
-            key = str(user_id)
+            key = int(user_id)
             if key not in roles_by_user:
                 roles_by_user[key] = []
             roles_by_user[key].append(role_name)
 
         users_dict: dict[str, dict] = {
             str(user.uid): user_to_dict(
-                user, roles=roles_by_user.get(str(user.uid), [])
+                user, roles=roles_by_user.get(user.id, [])
             )
             for user in users
         }
@@ -265,9 +276,6 @@ class UsersRepository:
         if not user:
             return None
 
-        if uid != user.uid:
-            raise ValueError("Only the owner can update their profile")
-
         payload = data.model_dump(exclude_unset=True)
         requested_roles = payload.pop("roles", None)
 
@@ -278,12 +286,12 @@ class UsersRepository:
 
         if requested_roles is not None:
             normalized_roles = self._normalize_role_names(requested_roles)
-            self._replace_user_roles(str(user.uid), normalized_roles)
+            self._replace_user_roles(user.id, normalized_roles)
 
         self.db.commit()
         self.db.refresh(user)
 
-        roles = self._get_user_role_names(str(user.uid))
+        roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
     async def update_status(self, uid: str, data: UserStatusUpdate):
@@ -299,7 +307,7 @@ class UsersRepository:
         self.db.commit()
         self.db.refresh(user)
 
-        roles = self._get_user_role_names(str(user.uid))
+        roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
 

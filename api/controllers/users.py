@@ -147,6 +147,51 @@ class UsersController:
 
         return updated_user
 
+    async def create_user(self, data: UserCreate, current_user):
+        """Create a new user (admin creates directors, directors create teachers)."""
+
+        requester = await self.repository.get_by_uid(current_user.uid)
+
+        if not requester:
+            return None
+
+        requester_roles = requester.get("roles", [])
+        is_admin = "ADMIN" in requester_roles
+        is_director = "DIRECTOR DE DEPARTAMENTO" in requester_roles
+
+        target_roles = {
+            r.value if isinstance(r, RoleName) else str(r) for r in data.roles
+        }
+
+        if is_admin:
+            pass
+        elif is_director:
+            if target_roles - {"DOCENTE"}:
+                raise ValueError(
+                    "Los directores solo pueden crear usuarios con rol DOCENTE"
+                )
+        else:
+            raise ValueError("No tienes permiso para crear usuarios")
+
+        try:
+            user = await self.repository.save(data)
+        except ValueError as e:
+            print(e)
+            return None
+
+        await self.audits_repository.create(
+            data=AuditCreate(
+                user_id=current_user.uid,
+                table_name="users",
+                operation="CREATE",
+                element=f"User {user.get('id')}",
+                description=f"Creación del usuario {data.email}",
+                created_at=None,
+            )
+        )
+
+        return user
+
 
 def get_users_controller(
     users_repository=Depends(get_users_repository),
