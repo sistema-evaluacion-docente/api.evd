@@ -14,6 +14,7 @@ from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.faculty import FacultyModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
 from api.models.setting import SettingModel
@@ -45,6 +46,7 @@ _ = (
     EvaluationModel,
     EvaluationQuestionScoreModel,
     EvaluationScoreModel,
+    FacultyModel,
     RoleModel,
     TeacherModel,
     UserModel,

@@ -23,6 +23,7 @@ from api.models import (
     evaluation,
     evaluation_question_score,
     evaluation_score,
+    faculty,
     role,
     setting,
     setting_history,
@@ -40,6 +41,7 @@ from api.routes import (
     evaluation_question_scores,
     evaluation_scores,
     evaluations,
+    faculties,
     health,
     settings,
     teachers,
@@ -56,6 +58,7 @@ _ = (
     evaluation,
     evaluation_question_score,
     evaluation_score,
+    faculty,
     role,
     teacher,
     user,
@@ -111,4 +114,5 @@ app.include_router(comments.router)
 app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
+app.include_router(faculties.router)
 app.include_router(settings.router)

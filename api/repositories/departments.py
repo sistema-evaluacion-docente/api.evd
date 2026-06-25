@@ -25,7 +25,7 @@ class DepartmentsRepository:
         department = DepartmentModel(
             code=data.code,
             name=data.name,
-            faculty=data.faculty,
+            faculty_id=data.faculty_id,
         )
 
         self.db.add(department)

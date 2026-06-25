@@ -4,6 +4,7 @@ from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
+from api.models.faculty import FacultyModel
 from api.models.setting import SettingModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -11,6 +12,7 @@ from api.serializers.academic_groups import academic_group_to_dict
 from api.serializers.academic_periods import academic_period_to_dict
 from api.serializers.courses import course_to_dict
 from api.serializers.departments import department_to_dict
+from api.serializers.faculties import faculty_to_dict
 from api.serializers.settings import setting_to_dict
 from api.serializers.teachers import teacher_to_dict
 from api.serializers.users import user_to_dict
@@ -31,6 +33,9 @@ async def get_audit(element: str, db: Session):
     if table == "Department":
         r = db.query(DepartmentModel).filter(DepartmentModel.id == id).first()
         result = department_to_dict(r)
+    if table == "Faculty":
+        r = db.query(FacultyModel).filter(FacultyModel.id == id).first()
+        result = faculty_to_dict(r)
     if table == "AcademicPeriod":
         r = db.query(AcademicPeriodModel).filter(AcademicPeriodModel.id == id).first()
         result = academic_period_to_dict(r)

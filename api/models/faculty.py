@@ -1,30 +1,26 @@
 """
-Department model
+Faculty model
 """
 
 import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, func
+from sqlalchemy.orm import Mapped, mapped_column
 
-from api.models.faculty import FacultyModel
 from api.database import Base
 
 
-class DepartmentModel(Base):
+class FacultyModel(Base):
     """
-    Department model
+    Faculty model
     """
 
-    __tablename__ = "departments"
+    __tablename__ = "faculties"
 
     id = Column(Integer, primary_key=True, nullable=False)
-    code = Column(String(255), unique=True, nullable=False)
     name = Column(String(255), nullable=False)
-    faculty_id = Column(Integer, ForeignKey("faculties.id"), nullable=True)
+    code = Column(String(255), unique=True, nullable=False)
     active = Column(Boolean, nullable=True, default=True)
-
-    faculty = relationship(FacultyModel, backref="departments")
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

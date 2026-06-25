@@ -10,7 +10,7 @@ def department_to_dict(department: DepartmentModel) -> dict:
         "id": department.id,
         "code": department.code,
         "name": department.name,
-        "faculty": department.faculty,
+        "faculty_id": department.faculty_id,
         "active": department.active,
         "created_at": department.created_at,
         "updated_at": department.updated_at,

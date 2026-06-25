@@ -13,7 +13,7 @@ class DepartmentCreate(BaseModel):
 
     code: str
     name: str
-    faculty: Optional[str] = None
+    faculty_id: Optional[int] = None
 
 
 class DepartmentUpdate(BaseModel):
@@ -21,7 +21,7 @@ class DepartmentUpdate(BaseModel):
 
     code: Optional[str] = None
     name: Optional[str] = None
-    faculty: Optional[str] = None
+    faculty_id: Optional[int] = None
     active: Optional[bool] = None
 
 
@@ -31,7 +31,7 @@ class DepartmentOut(BaseModel):
     id: int
     code: str
     name: str
-    faculty: Optional[str]
+    faculty_id: Optional[int]
     active: Optional[bool]
     created_at: datetime
     updated_at: datetime

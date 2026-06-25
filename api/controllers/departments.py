@@ -38,7 +38,7 @@ class DepartmentsController:
                 table_name="departments",
                 operation="CREATE",
                 element=f"Department {department.get('id')}",
-                description=f"Se creó el departamento {data.name} (código: {data.code}, facultad: {data.faculty})",
+                description=f"Se creó el departamento {data.name} (código: {data.code}, facultad ID: {data.faculty_id})",
                 created_at=None,
             )
         )
@@ -62,7 +62,7 @@ class DepartmentsController:
         updated = await self.repository.update(department_id, data)
         updated = await self.repository.update(department_id, data)
         changes = []
-        for field in ("code", "name", "faculty", "active"):
+        for field in ("code", "name", "faculty_id", "active"):
             new_val = getattr(data, field, None)
             if new_val is not None and new_val != department.get(field):
                 old_val = department.get(field)
