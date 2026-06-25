@@ -66,7 +66,6 @@ class AuditsRepository:
                 or_(
                     AuditModel.element.ilike(f"%{search}%"),
                     AuditModel.description.ilike(f"%{search}%"),
-                    AuditModel.user_id.ilike(f"%{search}%"),
                 )
             )
 

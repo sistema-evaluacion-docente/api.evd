@@ -4,10 +4,11 @@ Audit model
 
 import datetime
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
+from api.models.user import UserModel
 
 
 class AuditModel(Base):
@@ -18,11 +19,13 @@ class AuditModel(Base):
     __tablename__ = "audit"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(String(255), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
     table_name = Column(String(255), nullable=True)
     operation = Column(String(255), nullable=True)
     element = Column(String(255), nullable=True)
     description = Column(Text, nullable=True)
+
+    user = relationship(UserModel, backref="audits")
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

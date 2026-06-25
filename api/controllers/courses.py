@@ -6,6 +6,7 @@ from fastapi.param_functions import Depends
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.courses import CoursesRepository, get_courses_repository
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.course import CourseCreate, CourseUpdate
 
@@ -17,9 +18,15 @@ class CoursesController:
         self,
         repository: CoursesRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: CourseCreate, current_user) -> dict:
         """Create a new course, rejecting duplicate codes."""
@@ -35,7 +42,7 @@ class CoursesController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="courses",
                 operation="CREATE",
                 element=f"Course {course.get('id')}",
@@ -81,7 +88,7 @@ class CoursesController:
             desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="courses",
                 operation="UPDATE",
                 element=f"Course {course_id}",
@@ -96,7 +103,8 @@ class CoursesController:
 def get_courses_controller(
     repository: CoursesRepository = Depends(get_courses_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get courses controller"""
 
-    return CoursesController(repository, audits_repository)
+    return CoursesController(repository, audits_repository, users_repository)

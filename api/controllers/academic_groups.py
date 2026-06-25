@@ -9,6 +9,7 @@ from api.repositories.academic_groups import (
     get_academic_groups_repository,
 )
 from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.academic_group import AcademicGroupCreate, AcademicGroupUpdate
 from api.schemas.audit import AuditCreate
 
@@ -20,9 +21,15 @@ class AcademicGroupsController:
         self,
         repository: AcademicGroupsRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: AcademicGroupCreate, current_user) -> dict:
         """Create a new academic group, rejecting exact duplicates."""
@@ -40,7 +47,7 @@ class AcademicGroupsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_groups",
                 operation="CREATE",
                 element=f"AcademicGroup {group.get('id')}",
@@ -86,7 +93,7 @@ class AcademicGroupsController:
             desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_groups",
                 operation="UPDATE",
                 element=f"AcademicGroup {group_id}",
@@ -101,7 +108,8 @@ class AcademicGroupsController:
 def get_academic_groups_controller(
     repository: AcademicGroupsRepository = Depends(get_academic_groups_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get academic groups controller"""
 
-    return AcademicGroupsController(repository, audits_repository)
+    return AcademicGroupsController(repository, audits_repository, users_repository)

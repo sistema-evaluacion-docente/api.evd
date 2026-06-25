@@ -9,6 +9,7 @@ from api.repositories.faculties import (
     FacultiesRepository,
     get_faculties_repository,
 )
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.faculty import FacultyCreate, FacultyUpdate
 
@@ -20,9 +21,15 @@ class FacultiesController:
         self,
         repository: FacultiesRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: FacultyCreate, current_user) -> dict:
         """Create a new faculty, rejecting duplicate codes."""
@@ -32,7 +39,7 @@ class FacultiesController:
         faculty = await self.repository.create(data)
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="faculties",
                 operation="CREATE",
                 element=f"Faculty {faculty.get('id')}",
@@ -79,7 +86,7 @@ class FacultiesController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="faculties",
                 operation="UPDATE",
                 element=f"Faculty {faculty_id}",
@@ -94,6 +101,7 @@ class FacultiesController:
 def get_faculties_controller(
     repository: FacultiesRepository = Depends(get_faculties_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get faculties controller"""
-    return FacultiesController(repository, audits_repository)
+    return FacultiesController(repository, audits_repository, users_repository)

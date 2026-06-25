@@ -9,6 +9,7 @@ from api.repositories.academic_periods import (
     get_academic_periods_repository,
 )
 from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.academic_period import (
     AcademicPeriodCreate,
     AcademicPeriodStatusUpdate,
@@ -24,9 +25,15 @@ class AcademicPeriodsController:
         self,
         repository: AcademicPeriodsRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: AcademicPeriodCreate, current_user) -> dict | None:
         """Create a new academic period."""
@@ -42,7 +49,7 @@ class AcademicPeriodsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
                 operation="CREATE",
                 element=f"AcademicPeriod {period.get('id')}",
@@ -97,7 +104,7 @@ class AcademicPeriodsController:
             desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
                 operation="UPDATE",
                 element=f"AcademicPeriod {period_id}",
@@ -120,7 +127,7 @@ class AcademicPeriodsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
                 operation="ACTIVATE",
                 element=f"AcademicPeriod {period_id}",
@@ -146,7 +153,7 @@ class AcademicPeriodsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
                 operation="CLOSE",
                 element=f"AcademicPeriod {period_id}",
@@ -174,7 +181,7 @@ class AcademicPeriodsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
                 operation="UPDATE_STATUS",
                 element=f"AcademicPeriod {period_id}",
@@ -188,7 +195,8 @@ class AcademicPeriodsController:
 def get_academic_periods_controller(
     repository: AcademicPeriodsRepository = Depends(get_academic_periods_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get academic periods controller"""
 
-    return AcademicPeriodsController(repository, audits_repository)
+    return AcademicPeriodsController(repository, audits_repository, users_repository)
