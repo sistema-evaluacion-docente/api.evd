@@ -10,6 +10,7 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import (
     RoleName,
+    UserCreate,
     UserDetailResponse,
     UserListResponse,
     UserRolesUpdate,
@@ -18,6 +19,39 @@ from api.schemas.user import (
 )
 
 router = APIRouter(prefix="/users", tags=["Users"])
+
+
+@router.post(
+    "/",
+    response_model=UserDetailResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def create_user(
+    payload: UserCreate,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """Endpoint to create a new user. ADMIN can create any role, DIRECTOR can only create DOCENTE."""
+
+    try:
+        user = await controller.create_user(payload, current_user)
+    except ValueError as e:
+        return ResponseSchema(
+            status=400, message=str(e), path="/users"
+        )
+
+    if not user:
+        return ResponseSchema(
+            status=400, message="Error creating user", path="/users"
+        )
+
+    return ResponseSchema(
+        status=201,
+        message="User created successfully",
+        data=user,
+        path="/users",
+    )
 
 
 @router.get(

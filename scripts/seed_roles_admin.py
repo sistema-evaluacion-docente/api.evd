@@ -186,13 +186,13 @@ def seed_admin(role_ids: dict[str, int]) -> None:
                 )
             )
 
-        db.query(UserRoleModel).filter(UserRoleModel.user_id == admin_uid).delete()
+        db.query(UserRoleModel).filter(UserRoleModel.user_id == admin_user.id).delete()
 
         for role_name in admin_roles:
             role_id = role_ids.get(role_name)
             if role_id is None:
                 raise SeedConfigError(f"Role not found in database: {role_name}")
-            db.add(UserRoleModel(user_id=admin_uid, role_id=role_id))
+            db.add(UserRoleModel(user_id=admin_user.id, role_id=role_id))
 
         db.commit()
     except Exception:

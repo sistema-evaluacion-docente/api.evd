@@ -3,8 +3,9 @@ Teacher model
 """
 
 import datetime
+from typing import Optional
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -17,12 +18,18 @@ class TeacherModel(Base):
 
     __tablename__ = "teachers"
 
-    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    institutional_code = Column(String(255), nullable=False)
-    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    contract_type = Column(String(255), nullable=True)
-    user_id = Column(Text, ForeignKey("users.uid"), nullable=True)
-    active = Column(Boolean, nullable=True, default=True)
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, index=True, autoincrement=True
+    )
+    institutional_code: Mapped[str] = mapped_column(String(255), nullable=False)
+    department_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("departments.id"), nullable=True
+    )
+    contract_type: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    active: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True, default=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

@@ -7,6 +7,7 @@ def user_to_dict(user: UserModel, roles: list[str] | None = None) -> dict:
     """Convert UserModel instance to dictionary."""
 
     return {
+        "id": user.id,
         "uid": user.uid,
         "email": user.email,
         "username": user.username,

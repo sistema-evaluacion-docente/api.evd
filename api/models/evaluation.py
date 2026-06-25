@@ -18,7 +18,7 @@ class EvaluationModel(Base):
     __tablename__ = "evaluations"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    user_id = Column(Text, ForeignKey("users.uid"), nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     academic_period_id = Column(Integer, ForeignKey("academic_periods.id"), nullable=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
     pdf_url = Column(String(255), nullable=True)

@@ -24,13 +24,15 @@ class UserCreate(BaseModel):
     Schema for creating a user.
     """
 
-    uid: str
+    uid: Optional[str] = None
     email: str
     username: Optional[str] = None
     name: Optional[str] = None
     department_id: Optional[int] = None
     active: Optional[bool] = True
     avatar_url: Optional[str] = None
+    institutional_code: Optional[str] = None
+    contract_type: Optional[str] = None
     roles: list[RoleName] = Field(
         default_factory=lambda: [RoleName.DOCENTE],
         min_length=1,
@@ -54,7 +56,8 @@ class UserOut(BaseModel):
     Schema for outputting a user.
     """
 
-    uid: str
+    id: int
+    uid: Optional[str]
     email: str
     username: Optional[str]
     name: Optional[str]
@@ -82,7 +85,8 @@ class UserStatusUpdate(BaseModel):
 class UserRolesOut(BaseModel):
     """Schema for roles assigned to a user."""
 
-    uid: str
+    id: int
+    uid: Optional[str]
     roles: list[RoleName]
 
 
