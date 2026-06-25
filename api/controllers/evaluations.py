@@ -6,6 +6,7 @@ from fastapi.param_functions import Depends
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.evaluations import EvaluationsRepository, get_evaluations_repository
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 
 
@@ -16,9 +17,15 @@ class EvaluationsController:
         self,
         repository: EvaluationsRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def get_all(self) -> list[dict]:
         """Get all evaluations."""
@@ -46,7 +53,7 @@ class EvaluationsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="evaluations",
                 operation=operation,
                 element=f"Evaluation {evaluation_id}",
@@ -60,7 +67,8 @@ class EvaluationsController:
 def get_evaluations_controller(
     repository: EvaluationsRepository = Depends(get_evaluations_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get evaluations controller"""
 
-    return EvaluationsController(repository, audits_repository)
+    return EvaluationsController(repository, audits_repository, users_repository)

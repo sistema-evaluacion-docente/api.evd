@@ -40,9 +40,7 @@ class TeachersRepository:
         """Get all teachers ordered by creation date descending."""
 
         teachers = (
-            self.db.query(TeacherModel)
-            .order_by(TeacherModel.created_at.desc())
-            .all()
+            self.db.query(TeacherModel).order_by(TeacherModel.created_at.desc()).all()
         )
 
         return [teacher_to_dict(t) for t in teachers]
@@ -51,9 +49,7 @@ class TeachersRepository:
         """Get a teacher by ID."""
 
         teacher = (
-            self.db.query(TeacherModel)
-            .filter(TeacherModel.id == teacher_id)
-            .first()
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
         )
 
         if not teacher:
@@ -75,13 +71,22 @@ class TeachersRepository:
 
         return teacher_to_dict(teacher)
 
+    async def get_by_institutional_codes(self, codes: list[str]) -> list[dict]:
+        """Get existing teachers by a list of institutional codes."""
+
+        teachers = (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.institutional_code.in_(codes))
+            .all()
+        )
+
+        return [teacher_to_dict(t) for t in teachers]
+
     async def update(self, teacher_id: int, data: TeacherUpdate) -> dict | None:
         """Update a teacher's fields."""
 
         teacher = (
-            self.db.query(TeacherModel)
-            .filter(TeacherModel.id == teacher_id)
-            .first()
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
         )
 
         if not teacher:

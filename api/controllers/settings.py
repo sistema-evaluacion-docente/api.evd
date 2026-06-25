@@ -9,6 +9,7 @@ from api.repositories.settings import (
     SettingsRepository,
     get_settings_repository,
 )
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.setting import SettingCreate, SettingUpdate
 
@@ -18,9 +19,15 @@ class SettingsController:
         self,
         repository: SettingsRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: SettingCreate, current_user) -> dict | None:
         existing = await self.repository.get_by_key(data.key)
@@ -32,7 +39,7 @@ class SettingsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="settings",
                 operation="CREATE",
                 element=f"Setting {setting.get('id')}",
@@ -83,7 +90,7 @@ class SettingsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="settings",
                 operation="UPDATE",
                 element=f"Setting {setting_id}",
@@ -104,7 +111,7 @@ class SettingsController:
 
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="settings",
                 operation="DELETE",
                 element=f"Setting {setting_id}",
@@ -134,5 +141,6 @@ class SettingsController:
 def get_settings_controller(
     repository: SettingsRepository = Depends(get_settings_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
-    return SettingsController(repository, audits_repository)
+    return SettingsController(repository, audits_repository, users_repository)

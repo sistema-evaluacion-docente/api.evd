@@ -41,7 +41,7 @@ class UsersController:
             # create log
             await self.audits_repository.create(
                 data=AuditCreate(
-                    user_id=current_user.uid,
+                    user_id=user["id"],
                     table_name="users",
                     operation="LOGIN",
                     element=f"User {current_user.uid}",
@@ -181,7 +181,7 @@ class UsersController:
 
         await self.audits_repository.create(
             data=AuditCreate(
-                user_id=current_user.uid,
+                user_id=requester["id"],
                 table_name="users",
                 operation="CREATE",
                 element=f"User {user.get('id')}",

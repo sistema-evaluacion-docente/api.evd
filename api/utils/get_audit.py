@@ -28,7 +28,11 @@ async def get_audit(element: str, db: Session):
     result = None
 
     if table == "User":
-        r = db.query(UserModel).filter(UserModel.id == id).first()
+        try:
+            r = db.query(UserModel).filter(UserModel.id == int(id)).first()
+        except ValueError:
+            r = db.query(UserModel).filter(UserModel.uid == id).first()
+
         result = user_to_dict(r)
     if table == "Department":
         r = db.query(DepartmentModel).filter(DepartmentModel.id == id).first()

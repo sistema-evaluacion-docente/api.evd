@@ -182,6 +182,17 @@ class UsersRepository:
         roles = self._get_user_role_names(user.id)
         return user_to_dict(user, roles=roles)
 
+    async def get_by_email(self, email: str):
+        """Get user by email."""
+
+        user = self.db.query(UserModel).filter(UserModel.email == email).first()
+
+        if not user:
+            return None
+
+        roles = self._get_user_role_names(user.id)
+        return user_to_dict(user, roles=roles)
+
     async def get_by_username(self, username: str):
         """
         Get user by username
@@ -299,6 +310,37 @@ class UsersRepository:
         }
 
         return [users_dict[uid] for uid in uids if uid in users_dict]
+
+    async def get_by_ids(self, ids: list[int]):
+        """Get multiple users by their database ids."""
+
+        if not ids:
+            return []
+
+        users = self.db.query(UserModel).filter(UserModel.id.in_(ids)).all()
+
+        user_ids = [user.id for user in users]
+
+        role_rows = (
+            self.db.query(UserRoleModel.user_id, RoleModel.name)
+            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+            .filter(UserRoleModel.user_id.in_(user_ids))
+            .all()
+        )
+
+        roles_by_user: dict[int, list[str]] = {}
+        for user_id, role_name in role_rows:
+            key = int(user_id)
+            if key not in roles_by_user:
+                roles_by_user[key] = []
+            roles_by_user[key].append(role_name)
+
+        users_dict: dict[int, dict] = {
+            user.id: user_to_dict(user, roles=roles_by_user.get(user.id, []))
+            for user in users
+        }
+
+        return [users_dict[uid] for uid in ids if uid in users_dict]
 
     async def update(self, uid: str, data: UserUpdate):
         """

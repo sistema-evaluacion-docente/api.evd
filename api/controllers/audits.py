@@ -62,14 +62,14 @@ class AuditsController:
         return await self.repository.delete(audit_id)
 
     async def _enrich_with_users(self, items: list[dict]) -> list[dict]:
-        uids = list({item["user_id"] for item in items if item.get("user_id")})
+        user_ids = [item["user_id"] for item in items if item.get("user_id")]
 
-        if not uids:
+        if not user_ids:
             return items
 
-        users = await self.users_repository.get_by_uids(uids)
+        users = await self.users_repository.get_by_ids(user_ids)
 
-        users_map = {u["uid"]: u for u in users}
+        users_map = {u["id"]: u for u in users}
 
         for item in items:
             user = users_map.get(item.get("user_id"))

@@ -9,6 +9,7 @@ from api.repositories.departments import (
     DepartmentsRepository,
     get_departments_repository,
 )
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.department import DepartmentCreate, DepartmentUpdate
 
@@ -20,9 +21,15 @@ class DepartmentsController:
         self,
         repository: DepartmentsRepository,
         audits_repository: AuditsRepository,
+        users_repository: UsersRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
+        self.users_repository = users_repository
+
+    async def _resolve_user_id(self, current_user) -> int | None:
+        user = await self.users_repository.get_by_uid(current_user.uid)
+        return user["id"] if user else None
 
     async def create(self, data: DepartmentCreate, current_user) -> dict:
         """Create a new department, rejecting duplicate codes."""
@@ -34,7 +41,7 @@ class DepartmentsController:
         department = await self.repository.create(data)
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="departments",
                 operation="CREATE",
                 element=f"Department {department.get('id')}",
@@ -60,7 +67,6 @@ class DepartmentsController:
         if not department:
             return None
         updated = await self.repository.update(department_id, data)
-        updated = await self.repository.update(department_id, data)
         changes = []
         for field in ("code", "name", "faculty_id", "active"):
             new_val = getattr(data, field, None)
@@ -74,7 +80,7 @@ class DepartmentsController:
             desc += ": No se realizaron cambios"
         await self.audits_repository.create(
             AuditCreate(
-                user_id=current_user.uid,
+                user_id=await self._resolve_user_id(current_user),
                 table_name="departments",
                 operation="UPDATE",
                 element=f"Department {department_id}",
@@ -88,6 +94,7 @@ class DepartmentsController:
 def get_departments_controller(
     repository: DepartmentsRepository = Depends(get_departments_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
+    users_repository: UsersRepository = Depends(get_users_repository),
 ):
     """Get departments controller"""
-    return DepartmentsController(repository, audits_repository)
+    return DepartmentsController(repository, audits_repository, users_repository)
