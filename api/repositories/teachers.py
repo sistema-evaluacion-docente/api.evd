@@ -8,7 +8,11 @@ from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
 from api.database import get_db
+from sqlalchemy import or_
+from sqlalchemy.orm import joinedload
+
 from api.models.teacher import TeacherModel
+from api.models.user import UserModel
 from api.schemas.teacher import TeacherCreate, TeacherUpdate
 from api.serializers.teachers import teacher_to_dict
 
@@ -27,7 +31,6 @@ class TeachersRepository:
             department_id=data.department_id,
             contract_type=data.contract_type,
             user_id=data.user_id,
-            active=data.active,
         )
 
         self.db.add(teacher)
@@ -36,14 +39,41 @@ class TeachersRepository:
 
         return teacher_to_dict(teacher)
 
-    async def get_all(self) -> list[dict]:
-        """Get all teachers ordered by creation date descending."""
+    async def get_all(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Get all teachers with optional pagination and search."""
 
-        teachers = (
-            self.db.query(TeacherModel).order_by(TeacherModel.created_at.desc()).all()
+        query = (
+            self.db.query(TeacherModel)
+            .outerjoin(TeacherModel.user)
+            .options(joinedload(TeacherModel.user))
         )
 
-        return [teacher_to_dict(t) for t in teachers]
+        if search:
+            pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    TeacherModel.institutional_code.ilike(pattern),
+                    TeacherModel.contract_type.ilike(pattern),
+                    UserModel.name.ilike(pattern),
+                    UserModel.email.ilike(pattern),
+                )
+            )
+
+        total = query.count()
+
+        teachers = (
+            query.order_by(TeacherModel.created_at.desc())
+            .offset((page - 1) * limit)
+            .limit(limit)
+            .all()
+        )
+
+        return [teacher_to_dict(t) for t in teachers], total
 
     async def get_by_id(self, teacher_id: int) -> dict | None:
         """Get a teacher by ID."""

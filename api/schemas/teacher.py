@@ -7,6 +7,7 @@ from typing import Optional
 
 from pydantic import BaseModel, field_validator
 
+from api.schemas.pagination import Pagination
 from api.schemas.user import UserOut
 
 
@@ -84,6 +85,7 @@ class TeacherListResponse(BaseModel):
     status: int
     message: str
     data: list[TeacherOut]
+    pagination: Optional[Pagination] = None
     error: Optional[str] = None
     timestamp: datetime
     path: str

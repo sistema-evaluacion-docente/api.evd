@@ -246,11 +246,19 @@ class TeachersController:
             "errors": errors,
         }
 
-    async def get_all(self) -> list[dict]:
-        """Get all teachers."""
+    async def get_all(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Get all teachers with pagination and search."""
 
-        teachers = await self.repository.get_all()
-        return await self._enrich_teachers(teachers)
+        teachers, total = await self.repository.get_all(
+            page=page, limit=limit, search=search
+        )
+
+        return await self._enrich_teachers(teachers), total
 
     async def get_by_id(self, teacher_id: int) -> dict | None:
         """Get a teacher by ID."""
