@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.user import UserOut
+
 
 class TeacherCreate(BaseModel):
     """Schema for creating a teacher."""
@@ -14,8 +16,7 @@ class TeacherCreate(BaseModel):
     institutional_code: str
     department_id: Optional[int] = None
     contract_type: Optional[str] = None
-    user_id: Optional[str] = None
-    active: Optional[bool] = True
+    user_id: Optional[int] = None
 
 
 class TeacherUpdate(BaseModel):
@@ -24,7 +25,7 @@ class TeacherUpdate(BaseModel):
     institutional_code: Optional[str] = None
     department_id: Optional[int] = None
     contract_type: Optional[str] = None
-    user_id: Optional[str] = None
+    user_id: Optional[int] = None
     active: Optional[bool] = None
 
 
@@ -35,7 +36,8 @@ class TeacherOut(BaseModel):
     institutional_code: str
     department_id: Optional[int]
     contract_type: Optional[str]
-    user_id: Optional[str]
+    user_id: Optional[int]
+    user: Optional[UserOut] = None
     active: Optional[bool]
     created_at: datetime
     updated_at: datetime

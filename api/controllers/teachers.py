@@ -31,8 +31,38 @@ class TeachersController:
     async def _resolve_user_id(self, current_user) -> int | None:
         if isinstance(current_user, dict):
             return current_user.get("id")
+
         user = await self.users_repository.get_by_uid(current_user.uid)
+
         return user["id"] if user else None
+
+    async def _enrich_teacher(self, teacher: dict) -> dict:
+        """Attach user data to a teacher dict if user_id exists."""
+
+        if teacher.get("user_id"):
+            users = await self.users_repository.get_by_ids([teacher["user_id"]])
+
+            if users:
+                teacher["user"] = users[0]
+
+        return teacher
+
+    async def _enrich_teachers(self, teachers: list[dict]) -> list[dict]:
+        """Attach user data to a list of teacher dicts."""
+
+        user_ids = [t["user_id"] for t in teachers if t.get("user_id")]
+
+        if not user_ids:
+            return teachers
+
+        users = await self.users_repository.get_by_ids(user_ids)
+        users_map = {u["id"]: u for u in users}
+
+        for teacher in teachers:
+            if teacher.get("user_id") and teacher["user_id"] in users_map:
+                teacher["user"] = users_map[teacher["user_id"]]
+
+        return teachers
 
     async def create(self, data: TeacherCreate, current_user) -> dict:
         """Create a new teacher, rejecting duplicate institutional codes."""
@@ -47,6 +77,7 @@ class TeachersController:
             )
 
         teacher = await self.repository.create(data)
+        teacher = await self._enrich_teacher(teacher)
 
         await self.audits_repository.create(
             AuditCreate(
@@ -218,12 +249,16 @@ class TeachersController:
     async def get_all(self) -> list[dict]:
         """Get all teachers."""
 
-        return await self.repository.get_all()
+        teachers = await self.repository.get_all()
+        return await self._enrich_teachers(teachers)
 
     async def get_by_id(self, teacher_id: int) -> dict | None:
         """Get a teacher by ID."""
 
-        return await self.repository.get_by_id(teacher_id)
+        teacher = await self.repository.get_by_id(teacher_id)
+        if not teacher:
+            return None
+        return await self._enrich_teacher(teacher)
 
     async def update(
         self, teacher_id: int, data: TeacherUpdate, current_user
@@ -236,6 +271,7 @@ class TeachersController:
             return None
 
         updated = await self.repository.update(teacher_id, data)
+        updated = await self._enrich_teacher(updated)
 
         changes = []
         for field in (
