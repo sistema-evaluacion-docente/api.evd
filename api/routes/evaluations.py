@@ -2,10 +2,13 @@
 Routes for evaluation operations.
 """
 
+import io
 import os
 import uuid
 
+import openpyxl
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from api.config import config
@@ -21,11 +24,13 @@ from api.repositories.evaluations import (
     EvaluationsRepository,
     get_evaluations_repository,
 )
+from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.evaluation import (
     EvaluationDetailResponse,
     EvaluationListResponse,
     EvaluationStatusUpdate,
 )
+from api.schemas.evaluation_summary import EvaluationSummaryResponse
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
@@ -52,6 +57,7 @@ async def upload_evaluation(
     ),
     db: Session = Depends(get_db),
     evaluations_repo: EvaluationsRepository = Depends(get_evaluations_repository),
+    users_repo: UsersRepository = Depends(get_users_repository),
 ):
     """Upload a teacher evaluation PDF for a department.
 
@@ -110,7 +116,7 @@ async def upload_evaluation(
         period.id, department.id
     )
 
-    if existing and existing["active"]:
+    if existing and existing["active"] and existing["status"] == "COMPLETED":
         raise HTTPException(
             status_code=409,
             detail=(
@@ -118,6 +124,9 @@ async def upload_evaluation(
                 "and this department already exists"
             ),
         )
+
+    if existing and existing["status"] in ("PROCESSING", "FAILED"):
+        await evaluations_repo.delete(existing["id"])
 
     eval_dir = os.path.join(
         config.UPLOAD_DIR,
@@ -134,8 +143,11 @@ async def upload_evaluation(
     with open(filepath, "wb") as f:
         f.write(pdf_bytes)
 
+    user_record = await users_repo.get_by_uid(current_user["uid"])
+    resolved_user_id = user_record["id"] if user_record else None
+
     evaluation = await evaluations_repo.create(
-        user_id=current_user["uid"],
+        user_id=resolved_user_id,
         academic_period_id=period.id,
         department_id=department.id,
         pdf_url=filepath,
@@ -199,6 +211,88 @@ async def get_evaluation_by_id(
         message="Evaluation found",
         data=evaluation,
         path=f"/evaluations/{evaluation_id}",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/summary",
+    response_model=EvaluationSummaryResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_evaluation_summary(
+    evaluation_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return aggregated department statistics for an evaluation: department average,
+    teacher ranking, and best/worst teacher identification."""
+
+    summary = await controller.get_summary(evaluation_id)
+
+    if not summary:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation not found",
+            path=f"/evaluations/{evaluation_id}/summary",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Summary generated successfully",
+        data=summary,
+        path=f"/evaluations/{evaluation_id}/summary",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/export",
+    responses={
+        200: {"content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}}},
+        403: {"description": "Forbidden"},
+        404: {"model": ResponseSchema},
+    },
+)
+async def export_evaluation(
+    evaluation_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Download an Excel file with the department evaluation summary."""
+
+    summary = await controller.get_summary(evaluation_id)
+
+    if not summary:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Resumen Evaluación Docente"
+
+    ws.append(["Ranking", "Nombre", "Código", "Tipo Contrato", "Grupos Evaluados", "Promedio"])
+
+    for item in summary["ranking"]:
+        ws.append([
+            item["rank"],
+            item["name"] or "",
+            item["institutional_code"],
+            item["contract_type"] or "",
+            item["group_count"],
+            item["overall_average"],
+        ])
+
+    ws.append([])
+    ws.append(["", "Promedio Departamento", "", "", "", summary["department_average"]])
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"evaluacion_{summary['period_code']}_{evaluation_id}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
