@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from sqlalchemy import or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import joinedload
 
 from api.models.teacher import TeacherModel
@@ -111,6 +112,29 @@ class TeachersRepository:
         )
 
         return [teacher_to_dict(t) for t in teachers]
+
+    async def delete(self, teacher_id: int) -> dict | None:
+        """Delete a teacher by ID."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        teacher_dict = teacher_to_dict(teacher)
+        self.db.delete(teacher)
+
+        try:
+            self.db.commit()
+        except IntegrityError:
+            self.db.rollback()
+            raise ValueError(
+                "No se puede eliminar el profesor porque tiene grupos académicos asociados"
+            )
+
+        return teacher_dict
 
     async def update(self, teacher_id: int, data: TeacherUpdate) -> dict | None:
         """Update a teacher's fields."""

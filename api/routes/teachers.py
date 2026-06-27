@@ -165,6 +165,43 @@ async def create_teacher(
     )
 
 
+@router.delete(
+    "/{teacher_id}",
+    response_model=TeacherDetailResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def delete_teacher(
+    teacher_id: int,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Endpoint to delete a teacher."""
+
+    try:
+        teacher = await controller.delete(teacher_id, current_user)
+    except ValueError as e:
+        return ResponseSchema(
+            status=400,
+            message=str(e),
+            path=f"/teachers/{teacher_id}",
+        )
+
+    if not teacher:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            path=f"/teachers/{teacher_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher deleted successfully",
+        data=teacher,
+        path=f"/teachers/{teacher_id}",
+    )
+
+
 @router.put(
     "/{teacher_id}",
     response_model=TeacherDetailResponse,
