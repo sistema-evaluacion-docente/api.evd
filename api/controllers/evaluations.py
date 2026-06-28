@@ -37,6 +37,11 @@ class EvaluationsController:
 
         return await self.repository.get_by_id(evaluation_id)
 
+    async def get_summary(self, evaluation_id: int) -> dict | None:
+        """Get aggregated statistics for an evaluation."""
+
+        return await self.repository.get_summary(evaluation_id)
+
     async def update_status(
         self, evaluation_id: int, active: bool, current_user
     ) -> dict | None:

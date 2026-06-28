@@ -18,7 +18,7 @@ class EvaluationOut(BaseModel):
     """Schema for outputting an evaluation."""
 
     id: int
-    user_id: Optional[str]
+    user_id: Optional[int]
     academic_period_id: Optional[int]
     academic_period_name: Optional[str]
     academic_period_code: Optional[str]
