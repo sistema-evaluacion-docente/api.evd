@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from api.database import get_db
+from api.models.academic_group import AcademicGroupModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.schemas.teacher import TeacherCreate, TeacherUpdate
@@ -134,14 +135,44 @@ class TeachersRepository:
 
         return teacher_dict
 
-    async def count_by_department(self, department_id: int) -> int:
-        """Count teachers by department ID."""
+    async def count_by_department(
+        self,
+        department_id: int,
+        academic_period_id: int,
+        previous_period_id: int | None = None,
+    ) -> dict:
+        """Count teachers by department for current and previous academic period."""
 
-        return (
+        current_count = (
             self.db.query(TeacherModel)
-            .filter(TeacherModel.department_id == department_id)
+            .join(AcademicGroupModel, TeacherModel.id == AcademicGroupModel.teacher_id)
+            .filter(
+                TeacherModel.department_id == department_id,
+                AcademicGroupModel.academic_period_id == academic_period_id,
+            )
+            .distinct(TeacherModel.id)
             .count()
         )
+
+        previous_count = None
+        if previous_period_id:
+            previous_count = (
+                self.db.query(TeacherModel)
+                .join(
+                    AcademicGroupModel, TeacherModel.id == AcademicGroupModel.teacher_id
+                )
+                .filter(
+                    TeacherModel.department_id == department_id,
+                    AcademicGroupModel.academic_period_id == previous_period_id,
+                )
+                .distinct(TeacherModel.id)
+                .count()
+            )
+
+        return {
+            "current_count": current_count,
+            "previous_count": previous_count,
+        }
 
     async def update(self, teacher_id: int, data: TeacherUpdate) -> dict | None:
         """Update a teacher's fields."""

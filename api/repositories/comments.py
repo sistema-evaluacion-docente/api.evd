@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.comment import CommentModel
+from api.models.evaluation import EvaluationModel
 from api.serializers.comments import comment_to_dict
 
 
@@ -46,9 +47,7 @@ class CommentsRepository:
         """Get a comment by ID."""
 
         comment = (
-            self.db.query(CommentModel)
-            .filter(CommentModel.id == comment_id)
-            .first()
+            self.db.query(CommentModel).filter(CommentModel.id == comment_id).first()
         )
 
         if not comment:
@@ -78,6 +77,41 @@ class CommentsRepository:
         )
 
         return [comment_to_dict(c) for c in comments]
+
+    async def count_by_department_and_period(
+        self,
+        department_id: int,
+        academic_period_id: int,
+        previous_period_id: int | None = None,
+    ) -> dict:
+        """Count comments by department for current and previous academic period."""
+
+        current_count = (
+            self.db.query(CommentModel)
+            .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .count()
+        )
+
+        previous_count = None
+        if previous_period_id:
+            previous_count = (
+                self.db.query(CommentModel)
+                .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
+                .filter(
+                    EvaluationModel.department_id == department_id,
+                    EvaluationModel.academic_period_id == previous_period_id,
+                )
+                .count()
+            )
+
+        return {
+            "current_count": current_count,
+            "previous_count": previous_count,
+        }
 
     async def get_by_academic_group(self, academic_groups_id: int) -> list[dict]:
         """Get all comments for a given academic group."""

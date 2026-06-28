@@ -7,6 +7,10 @@ import io
 import openpyxl
 from fastapi.param_functions import Depends
 
+from api.repositories.academic_periods import (
+    AcademicPeriodsRepository,
+    get_academic_periods_repository,
+)
 from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.teachers import TeachersRepository, get_teachers_repository
 from api.repositories.users import UsersRepository, get_users_repository
@@ -23,10 +27,12 @@ class TeachersController:
         repository: TeachersRepository,
         audits_repository: AuditsRepository,
         users_repository: UsersRepository,
+        academic_periods_repository: AcademicPeriodsRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
         self.users_repository = users_repository
+        self.academic_periods_repository = academic_periods_repository
 
     async def _resolve_user_id(self, current_user) -> int | None:
         if isinstance(current_user, dict):
@@ -291,10 +297,28 @@ class TeachersController:
 
         return deleted
 
-    async def count_by_department(self, department_id: int) -> int:
-        """Count teachers in a specific department."""
+    async def count_by_department(
+        self, department_id: int, academic_period_id: int
+    ) -> dict:
+        """Count teachers in a specific department for current and previous period."""
 
-        return await self.repository.count_by_department(department_id)
+        period = await self.academic_periods_repository.get_by_id(academic_period_id)
+
+        previous_period_id = None
+        if period:
+            prev_code = await self.academic_periods_repository.get_previous_period_code(
+                period["code"]
+            )
+            if prev_code:
+                prev_period = await self.academic_periods_repository.get_by_code(
+                    prev_code
+                )
+                if prev_period:
+                    previous_period_id = prev_period["id"]
+
+        return await self.repository.count_by_department(
+            department_id, academic_period_id, previous_period_id
+        )
 
     async def update(
         self, teacher_id: int, data: TeacherUpdate, current_user
@@ -344,7 +368,12 @@ def get_teachers_controller(
     repository: TeachersRepository = Depends(get_teachers_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
     users_repository: UsersRepository = Depends(get_users_repository),
+    academic_periods_repository: AcademicPeriodsRepository = Depends(
+        get_academic_periods_repository
+    ),
 ):
     """Get teachers controller"""
 
-    return TeachersController(repository, audits_repository, users_repository)
+    return TeachersController(
+        repository, audits_repository, users_repository, academic_periods_repository
+    )

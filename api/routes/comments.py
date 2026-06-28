@@ -2,7 +2,7 @@
 Routes for comment operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.controllers.comments import CommentsController, get_comments_controller
 from api.middlewares.auth import require_roles
@@ -11,6 +11,43 @@ from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/comments", tags=["Comments"])
+
+
+@router.get(
+    "/count",
+    response_model=ResponseSchema,
+    responses={403: {"description": "Forbidden"}},
+)
+async def count_comments_by_department_and_period(
+    academic_period_id: int = Query(..., description="Academic period ID"),
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: CommentsController = Depends(get_comments_controller),
+):
+    """Get the count of comments for the director's department and given academic period."""
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    count = await controller.count_by_department_and_period(
+        department_id, academic_period_id
+    )
+
+    return ResponseSchema(
+        status=200,
+        message="Comment count retrieved successfully",
+        data={
+            "current_count": count["current_count"],
+            "previous_count": count["previous_count"],
+            "department_id": department_id,
+            "academic_period_id": academic_period_id,
+        },
+        path="/comments/count-by-department-and-period",
+    )
 
 
 @router.get(
