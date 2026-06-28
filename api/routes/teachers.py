@@ -106,6 +106,35 @@ async def get_all_teachers(
 
 
 @router.get(
+    "/count",
+    response_model=ResponseSchema,
+    responses={403: {"description": "Forbidden"}},
+)
+async def count_teachers(
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Get the count of teachers in the director's department."""
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    count = await controller.count_by_department(department_id)
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher count retrieved successfully",
+        data={"count": count, "department_id": department_id},
+        path="/teachers/count-by-department",
+    )
+
+
+@router.get(
     "/{teacher_id}",
     response_model=TeacherDetailResponse,
     responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},

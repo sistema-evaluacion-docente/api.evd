@@ -291,6 +291,11 @@ class TeachersController:
 
         return deleted
 
+    async def count_by_department(self, department_id: int) -> int:
+        """Count teachers in a specific department."""
+
+        return await self.repository.count_by_department(department_id)
+
     async def update(
         self, teacher_id: int, data: TeacherUpdate, current_user
     ) -> dict | None:

@@ -5,13 +5,11 @@ Teachers repository
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy.orm import Session
-
-from api.database import get_db
 from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import Session, joinedload
 
+from api.database import get_db
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.schemas.teacher import TeacherCreate, TeacherUpdate
@@ -135,6 +133,15 @@ class TeachersRepository:
             )
 
         return teacher_dict
+
+    async def count_by_department(self, department_id: int) -> int:
+        """Count teachers by department ID."""
+
+        return (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.department_id == department_id)
+            .count()
+        )
 
     async def update(self, teacher_id: int, data: TeacherUpdate) -> dict | None:
         """Update a teacher's fields."""
