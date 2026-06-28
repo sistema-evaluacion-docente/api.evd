@@ -5,8 +5,9 @@ Schemas for request and response bodies related to teachers.
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
+from api.schemas.pagination import Pagination
 from api.schemas.user import UserOut
 
 
@@ -18,6 +19,18 @@ class TeacherCreate(BaseModel):
     contract_type: Optional[str] = None
     user_id: Optional[int] = None
 
+    @field_validator("institutional_code")
+    @classmethod
+    def validate_institutional_code(cls, v: str) -> str:
+        v = v.strip()
+
+        if not v.isdigit():
+            raise ValueError(
+                "institutional_code debe ser un número entero sin decimales"
+            )
+
+        return v
+
 
 class TeacherUpdate(BaseModel):
     """Schema for updating a teacher."""
@@ -27,6 +40,18 @@ class TeacherUpdate(BaseModel):
     contract_type: Optional[str] = None
     user_id: Optional[int] = None
     active: Optional[bool] = None
+
+    @field_validator("institutional_code")
+    @classmethod
+    def validate_institutional_code(cls, v: str) -> str:
+        v = v.strip()
+
+        if not v.isdigit():
+            raise ValueError(
+                "institutional_code debe ser un número entero sin decimales"
+            )
+
+        return v
 
 
 class TeacherOut(BaseModel):
@@ -60,6 +85,7 @@ class TeacherListResponse(BaseModel):
     status: int
     message: str
     data: list[TeacherOut]
+    pagination: Optional[Pagination] = None
     error: Optional[str] = None
     timestamp: datetime
     path: str

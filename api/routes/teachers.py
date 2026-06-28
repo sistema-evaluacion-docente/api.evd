@@ -2,10 +2,11 @@
 Routes for teacher operations.
 """
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 
 from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.middlewares.auth import get_current_user, require_roles
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.teacher import (
     BulkUploadResult,
@@ -80,17 +81,26 @@ async def upload_teachers_excel(
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_teachers(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        None,
+        description="Search term for institutional code, name, email or contract type",
+    ),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """Endpoint to list all teachers."""
+    """Endpoint to list all teachers with pagination and search."""
 
-    teachers = await controller.get_all()
+    teachers, total = await controller.get_all(page=page, limit=limit, search=search)
+
+    pages = (total + limit - 1) // limit if total else 0
 
     return ResponseSchema(
         status=200,
         message="Teachers found",
         data=teachers,
+        pagination=Pagination(total=total, page=page, limit=limit, pages=pages),
         path="/teachers",
     )
 
@@ -152,6 +162,43 @@ async def create_teacher(
         message="Teacher created successfully",
         data=teacher,
         path="/teachers",
+    )
+
+
+@router.delete(
+    "/{teacher_id}",
+    response_model=TeacherDetailResponse,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def delete_teacher(
+    teacher_id: int,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Endpoint to delete a teacher."""
+
+    try:
+        teacher = await controller.delete(teacher_id, current_user)
+    except ValueError as e:
+        return ResponseSchema(
+            status=400,
+            message=str(e),
+            path=f"/teachers/{teacher_id}",
+        )
+
+    if not teacher:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            path=f"/teachers/{teacher_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher deleted successfully",
+        data=teacher,
+        path=f"/teachers/{teacher_id}",
     )
 
 
