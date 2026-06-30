@@ -50,6 +50,13 @@ class EvaluationsController:
 
         return await self.repository.get_teacher_detail(evaluation_id, teacher_id)
 
+    async def get_teacher_comments(
+        self, evaluation_id: int, teacher_id: int
+    ) -> dict | None:
+        """Get comments grouped by course for a teacher in an evaluation."""
+
+        return await self.repository.get_teacher_comments(evaluation_id, teacher_id)
+
     async def get_summary(self, evaluation_id: int) -> dict | None:
         """Get aggregated statistics for an evaluation."""
 

@@ -32,6 +32,7 @@ from api.schemas.evaluation import (
 )
 from api.schemas.evaluation_summary import (
     EvaluationSummaryResponse,
+    TeacherCommentsResponse,
     TeacherEvaluationDetailResponse,
 )
 from api.schemas.response import ResponseSchema
@@ -248,6 +249,36 @@ async def get_evaluation_summary(
         message="Summary generated successfully",
         data=summary,
         path=f"/evaluations/{evaluation_id}/summary",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/teachers/{teacher_id}/comments",
+    response_model=TeacherCommentsResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_teacher_comments(
+    evaluation_id: int,
+    teacher_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return comments grouped by course for a teacher within an evaluation."""
+
+    result = await controller.get_teacher_comments(evaluation_id, teacher_id)
+
+    if not result:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation or teacher not found",
+            path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}/comments",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Comments retrieved successfully",
+        data=result,
+        path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}/comments",
     )
 
 

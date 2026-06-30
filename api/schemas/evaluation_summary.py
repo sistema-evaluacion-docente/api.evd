@@ -89,6 +89,34 @@ class TeacherEvaluationDetailResponse(BaseModel):
     path: str
 
 
+class CourseComments(BaseModel):
+    """Comments for a single course group."""
+
+    course_code: str
+    course_name: Optional[str]
+    group_name: Optional[str]
+    comments: list[str]
+
+
+class TeacherCommentsOut(BaseModel):
+    """All comments for a teacher within an evaluation, grouped by course."""
+
+    teacher_id: int
+    evaluation_id: int
+    courses: list[CourseComments]
+
+
+class TeacherCommentsResponse(BaseModel):
+    """Response envelope for teacher comments endpoint."""
+
+    status: int
+    message: str
+    data: Optional[TeacherCommentsOut] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
 class TeacherPeriodHistory(BaseModel):
     """Teacher average for a single academic period."""
 

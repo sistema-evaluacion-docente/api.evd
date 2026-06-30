@@ -167,6 +167,68 @@ class EvaluationsRepository:
             self.db.delete(evaluation)
             self.db.commit()
 
+    async def get_teacher_comments(
+        self, evaluation_id: int, teacher_id: int
+    ) -> dict | None:
+        """Return comments grouped by course for a teacher within an evaluation."""
+
+        evaluation = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.id == evaluation_id)
+            .first()
+        )
+        if not evaluation:
+            return None
+
+        teacher = (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+        if not teacher:
+            return None
+
+        from api.models.comment import CommentModel
+
+        rows = (
+            self.db.query(
+                CommentModel.original_text,
+                AcademicGroupModel.group_name,
+                CourseModel.code.label("course_code"),
+                CourseModel.name.label("course_name"),
+            )
+            .join(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .join(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
+            .filter(
+                CommentModel.evaluation_id == evaluation_id,
+                CommentModel.teacher_id == teacher_id,
+            )
+            .order_by(CourseModel.code, AcademicGroupModel.group_name)
+            .all()
+        )
+
+        grouped: dict[tuple, dict] = {}
+        for text, group_name, course_code, course_name in rows:
+            key = (course_code, group_name)
+            if key not in grouped:
+                grouped[key] = {
+                    "course_code": course_code,
+                    "course_name": course_name,
+                    "group_name": group_name,
+                    "comments": [],
+                }
+            if text:
+                grouped[key]["comments"].append(text)
+
+        return {
+            "teacher_id": teacher_id,
+            "evaluation_id": evaluation_id,
+            "courses": list(grouped.values()),
+        }
+
     async def get_teacher_detail(
         self, evaluation_id: int, teacher_id: int
     ) -> dict | None:
