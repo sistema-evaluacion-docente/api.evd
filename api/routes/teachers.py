@@ -15,6 +15,7 @@ from api.schemas.teacher import (
     TeacherListResponse,
     TeacherUpdate,
 )
+from api.schemas.evaluation_summary import TeacherHistoryResponse
 from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
@@ -92,6 +93,35 @@ async def get_all_teachers(
         message="Teachers found",
         data=teachers,
         path="/teachers",
+    )
+
+
+@router.get(
+    "/{teacher_id}/history",
+    response_model=TeacherHistoryResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_teacher_history(
+    teacher_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Return the historical average score of a teacher across all evaluated periods."""
+
+    history = await controller.get_history(teacher_id)
+
+    if not history:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            path=f"/teachers/{teacher_id}/history",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher history retrieved successfully",
+        data=history,
+        path=f"/teachers/{teacher_id}/history",
     )
 
 
