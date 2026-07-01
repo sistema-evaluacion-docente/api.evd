@@ -11,6 +11,7 @@ from api.middlewares.auth import require_roles
 from api.schemas.response import ResponseSchema
 from api.schemas.stats import (
     DepartmentAverageWithPreviousResponse,
+    GradeDistributionResponse,
     StatsListResponse,
     TeacherPerformanceResponse,
 )
@@ -26,7 +27,8 @@ router = APIRouter(prefix="/stats", tags=["Stats"])
 )
 async def get_department_averages_by_period(
     department_id: Annotated[int | None, Query()] = None,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """Endpoint to get global department averages by academic period."""
@@ -44,12 +46,14 @@ async def get_department_averages_by_period(
 @router.get(
     "/department-average",
     response_model=DepartmentAverageWithPreviousResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+    responses={403: {"description": "Forbidden"},
+               404: {"description": "Not found"}},
 )
 async def get_department_average_with_previous(
     department_id: Annotated[int, Query(..., description="Department ID")],
     academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """Endpoint to get department average for a period with previous period comparison."""
@@ -83,7 +87,8 @@ async def get_department_average_with_previous(
 )
 async def get_teacher_performance_ranking(
     academic_period_id: Annotated[int | None, Query()] = None,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """Endpoint to get top 5 and bottom 5 teachers by overall average score."""
@@ -102,4 +107,36 @@ async def get_teacher_performance_ranking(
         message=message,
         data=ranking,
         path="/stats/teacher-performance",
+    )
+
+
+@router.get(
+    "/grade-distribution",
+    response_model=GradeDistributionResponse,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_grade_distribution(
+    academic_period_id: Annotated[int | None, Query()] = None,
+    department_id: Annotated[int | None, Query()] = None,
+    bin_size: Annotated[float, Query(description="Histogram bin size")] = 0.5,
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get grade distribution histogram for teachers."""
+
+    distribution = await controller.get_grade_distribution(
+        academic_period_id, department_id, bin_size
+    )
+
+    message = "Grade distribution retrieved"
+
+    if academic_period_id:
+        message = f"Grade distribution for period {academic_period_id} retrieved"
+
+    return ResponseSchema(
+        status=200,
+        message=message,
+        data=distribution,
+        path="/stats/grade-distribution",
     )

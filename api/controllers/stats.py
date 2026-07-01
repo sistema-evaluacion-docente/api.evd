@@ -36,6 +36,18 @@ class StatsController:
 
         return await self.repository.get_teacher_performance_ranking(academic_period_id)
 
+    async def get_grade_distribution(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        bin_size: float = 0.5,
+    ) -> dict:
+        """Get grade distribution histogram for teachers."""
+
+        return await self.repository.get_grade_distribution(
+            academic_period_id, department_id, bin_size
+        )
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),

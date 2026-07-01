@@ -87,6 +87,36 @@ class DepartmentAverageWithPreviousResponse(BaseModel):
     path: str
 
 
+class GradeDistributionBin(BaseModel):
+    """Single bin in the grade distribution histogram."""
+
+    range_label: str
+    min_score: float
+    max_score: float
+    teacher_count: int
+
+
+class GradeDistribution(BaseModel):
+    """Grade distribution histogram data."""
+
+    academic_period_id: int | None
+    academic_period_code: str | None
+    academic_period_name: str | None
+    department_id: int | None
+    bins: list[GradeDistributionBin]
+
+
+class GradeDistributionResponse(BaseModel):
+    """Schema for grade distribution response envelope."""
+
+    status: int
+    message: str
+    data: GradeDistribution
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
 class StatsListResponse(BaseModel):
     """Schema for statistics list response envelope."""
 

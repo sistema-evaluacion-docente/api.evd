@@ -42,7 +42,8 @@ class StatsRepository:
                 AcademicPeriodModel.id.label("academic_period_id"),
                 AcademicPeriodModel.code.label("academic_period_code"),
                 AcademicPeriodModel.name.label("academic_period_name"),
-                func.avg(EvaluationScoreModel.overall_average).label("global_average"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "global_average"),
                 func.sum(EvaluationScoreModel.respondent_count).label(
                     "total_respondents"
                 ),
@@ -127,7 +128,8 @@ class StatsRepository:
                     func.sum(EvaluationScoreModel.respondent_count).label(
                         "total_respondents"
                     ),
-                    func.count(EvaluationScoreModel.id).label("evaluation_count"),
+                    func.count(EvaluationScoreModel.id).label(
+                        "evaluation_count"),
                 )
                 .join(
                     EvaluationModel,
@@ -189,7 +191,8 @@ class StatsRepository:
             )
 
             if prev_period:
-                previous_stats = get_stats_for_period(department_id, prev_period.id)
+                previous_stats = get_stats_for_period(
+                    department_id, prev_period.id)
 
         return {
             **current_stats,
@@ -252,7 +255,8 @@ class StatsRepository:
                 UserModel.avatar_url,
                 TeacherModel.contract_type,
                 func.count(EvaluationScoreModel.id).label("group_count"),
-                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "overall_average"),
             )
             .join(
                 AcademicGroupModel,
@@ -320,6 +324,113 @@ class StatsRepository:
             **(period_info or {}),
             "top_5": top_5,
             "bottom_5": bottom_5,
+        }
+
+    async def get_grade_distribution(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        bin_size: float = 0.5,
+    ) -> dict:
+        """
+        Get grade distribution histogram for teachers.
+
+        Calculates each teacher's overall average and groups them into bins.
+        """
+
+        base_query = (
+            self.db.query(
+                TeacherModel.id.label("teacher_id"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "overall_average"),
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.teacher_id == TeacherModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .group_by(TeacherModel.id)
+        )
+
+        if academic_period_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == academic_period_id
+            )
+
+        if department_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        teacher_averages = base_query.all()
+
+        period_info = None
+
+        if academic_period_id is not None:
+            period = (
+                self.db.query(AcademicPeriodModel)
+                .filter(AcademicPeriodModel.id == academic_period_id)
+                .first()
+            )
+
+            if period:
+                period_info = {
+                    "academic_period_id": period.id,
+                    "academic_period_code": period.code,
+                    "academic_period_name": period.name,
+                }
+
+        if not teacher_averages:
+            return {
+                **(period_info or {}),
+                "department_id": department_id,
+                "bins": [],
+            }
+
+        min_possible = 1.0
+        max_possible = 5.0
+
+        bins = []
+        current = min_possible
+
+        while current < max_possible:
+            bin_max = min(current + bin_size, max_possible)
+
+            bins.append({
+                "range_label": f"{current:.1f}-{bin_max:.1f}",
+                "min_score": current,
+                "max_score": bin_max,
+                "teacher_count": 0,
+            })
+
+            current = bin_max
+
+        for row in teacher_averages:
+            avg = float(row.overall_average) if row.overall_average else None
+
+            if avg is None:
+                continue
+
+            for b in bins:
+                if b["min_score"] <= avg < b["max_score"]:
+                    b["teacher_count"] += 1
+                    break
+
+                if avg == max_possible and b["max_score"] == max_possible:
+                    b["teacher_count"] += 1
+                    break
+
+        return {
+            **(period_info or {}),
+            "department_id": department_id,
+            "bins": bins,
         }
 
 
