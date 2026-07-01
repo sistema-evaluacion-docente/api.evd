@@ -246,11 +246,19 @@ class TeachersController:
             "errors": errors,
         }
 
-    async def get_all(self) -> list[dict]:
-        """Get all teachers."""
+    async def get_all(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> tuple[list[dict], int]:
+        """Get all teachers with pagination and search."""
 
-        teachers = await self.repository.get_all()
-        return await self._enrich_teachers(teachers)
+        teachers, total = await self.repository.get_all(
+            page=page, limit=limit, search=search
+        )
+
+        return await self._enrich_teachers(teachers), total
 
     async def get_history(self, teacher_id: int) -> dict | None:
         """Get teacher's historical averages across all periods."""
@@ -264,6 +272,29 @@ class TeachersController:
         if not teacher:
             return None
         return await self._enrich_teacher(teacher)
+
+    async def delete(self, teacher_id: int, current_user) -> dict | None:
+        """Delete a teacher by ID."""
+
+        teacher = await self.repository.get_by_id(teacher_id)
+
+        if not teacher:
+            return None
+
+        deleted = await self.repository.delete(teacher_id)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=await self._resolve_user_id(current_user),
+                table_name="teachers",
+                operation="DELETE",
+                element=f"Teacher {teacher_id}",
+                description=f"Se eliminó el profesor con código {teacher.get('institutional_code')}",
+                created_at=None,
+            )
+        )
+
+        return deleted
 
     async def update(
         self, teacher_id: int, data: TeacherUpdate, current_user
