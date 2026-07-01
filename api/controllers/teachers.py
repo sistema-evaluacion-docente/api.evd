@@ -266,6 +266,11 @@ class TeachersController:
 
         return await self._enrich_teachers(teachers), total
 
+    async def get_history(self, teacher_id: int) -> dict | None:
+        """Get teacher's historical averages across all periods."""
+
+        return await self.repository.get_history(teacher_id)
+
     async def get_by_id(self, teacher_id: int) -> dict | None:
         """Get a teacher by ID."""
 

@@ -7,7 +7,7 @@ import os
 import uuid
 
 import openpyxl
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,11 @@ from api.schemas.evaluation import (
     EvaluationListResponse,
     EvaluationStatusUpdate,
 )
-from api.schemas.evaluation_summary import EvaluationSummaryResponse
+from api.schemas.evaluation_summary import (
+    EvaluationSummaryResponse,
+    TeacherCommentsResponse,
+    TeacherEvaluationDetailResponse,
+)
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
@@ -170,12 +174,16 @@ async def upload_evaluation(
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_evaluations(
+    period_id: int | None = Query(None, description="Filter by academic period ID"),
+    department_id: int | None = Query(None, description="Filter by department ID"),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to list all evaluations."""
+    """Endpoint to list all evaluations with optional filters."""
 
-    evaluations = await controller.get_all()
+    evaluations = await controller.get_all(
+        period_id=period_id, department_id=department_id
+    )
 
     return ResponseSchema(
         status=200,
@@ -241,6 +249,66 @@ async def get_evaluation_summary(
         message="Summary generated successfully",
         data=summary,
         path=f"/evaluations/{evaluation_id}/summary",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/teachers/{teacher_id}/comments",
+    response_model=TeacherCommentsResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_teacher_comments(
+    evaluation_id: int,
+    teacher_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return comments grouped by course for a teacher within an evaluation."""
+
+    result = await controller.get_teacher_comments(evaluation_id, teacher_id)
+
+    if not result:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation or teacher not found",
+            path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}/comments",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Comments retrieved successfully",
+        data=result,
+        path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}/comments",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/teachers/{teacher_id}",
+    response_model=TeacherEvaluationDetailResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_teacher_evaluation_detail(
+    evaluation_id: int,
+    teacher_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return per-course and per-dimension scores for a teacher within an evaluation."""
+
+    detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
+
+    if not detail:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation or teacher not found",
+            path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher evaluation detail retrieved successfully",
+        data=detail,
+        path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}",
     )
 
 

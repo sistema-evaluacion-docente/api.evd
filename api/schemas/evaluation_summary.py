@@ -42,3 +42,106 @@ class EvaluationSummaryResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class DimensionScore(BaseModel):
+    """Average score for one evaluation dimension."""
+
+    dimension: str
+    average: Optional[float]
+
+
+class CourseGroupScore(BaseModel):
+    """Scores for a single academic group (one course, one group letter)."""
+
+    course_code: str
+    course_name: Optional[str]
+    group_name: Optional[str]
+    respondent_count: int
+    overall_average: Optional[float]
+    dimensions: list[DimensionScore]
+
+
+class TeacherEvaluationDetail(BaseModel):
+    """Full detail of a teacher within a specific evaluation."""
+
+    teacher_id: int
+    institutional_code: str
+    name: Optional[str]
+    contract_type: Optional[str]
+    evaluation_id: int
+    period_code: Optional[str]
+    period_name: Optional[str]
+    overall_average: Optional[float]
+    group_count: int
+    courses: list[CourseGroupScore]
+    dimensions: list[DimensionScore]
+
+
+class TeacherEvaluationDetailResponse(BaseModel):
+    """Response envelope for the teacher detail endpoint."""
+
+    status: int
+    message: str
+    data: Optional[TeacherEvaluationDetail] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
+class CourseComments(BaseModel):
+    """Comments for a single course group."""
+
+    course_code: str
+    course_name: Optional[str]
+    group_name: Optional[str]
+    comments: list[str]
+
+
+class TeacherCommentsOut(BaseModel):
+    """All comments for a teacher within an evaluation, grouped by course."""
+
+    teacher_id: int
+    evaluation_id: int
+    courses: list[CourseComments]
+
+
+class TeacherCommentsResponse(BaseModel):
+    """Response envelope for teacher comments endpoint."""
+
+    status: int
+    message: str
+    data: Optional[TeacherCommentsOut] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherPeriodHistory(BaseModel):
+    """Teacher average for a single academic period."""
+
+    evaluation_id: int
+    period_code: str
+    period_name: Optional[str]
+    overall_average: Optional[float]
+    group_count: int
+
+
+class TeacherHistoryOut(BaseModel):
+    """Full historical record of a teacher across all periods."""
+
+    teacher_id: int
+    institutional_code: str
+    name: Optional[str]
+    history: list[TeacherPeriodHistory]
+
+
+class TeacherHistoryResponse(BaseModel):
+    """Response envelope for the teacher history endpoint."""
+
+    status: int
+    message: str
+    data: Optional[TeacherHistoryOut] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str

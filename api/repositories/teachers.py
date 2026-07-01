@@ -5,12 +5,15 @@ Teachers repository
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
+from api.models.academic_period import AcademicPeriodModel
+from api.models.evaluation import EvaluationModel
+from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.schemas.teacher import TeacherCreate, TeacherUpdate
@@ -193,6 +196,72 @@ class TeachersRepository:
         self.db.refresh(teacher)
 
         return teacher_to_dict(teacher)
+
+
+    async def get_history(self, teacher_id: int) -> dict | None:
+        """Return the teacher's average score for each academic period."""
+
+        teacher = (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+        if not teacher:
+            return None
+
+        teacher_user = (
+            self.db.query(UserModel).filter(UserModel.id == teacher.user_id).first()
+            if teacher.user_id
+            else None
+        )
+
+        rows = (
+            self.db.query(
+                EvaluationModel.id.label("evaluation_id"),
+                AcademicPeriodModel.code.label("period_code"),
+                AcademicPeriodModel.name.label("period_name"),
+                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
+                func.count(EvaluationScoreModel.id).label("group_count"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                AcademicPeriodModel,
+                EvaluationModel.academic_period_id == AcademicPeriodModel.id,
+            )
+            .filter(AcademicGroupModel.teacher_id == teacher_id)
+            .group_by(
+                EvaluationModel.id,
+                AcademicPeriodModel.code,
+                AcademicPeriodModel.name,
+            )
+            .order_by(AcademicPeriodModel.code.asc())
+            .all()
+        )
+
+        return {
+            "teacher_id": teacher_id,
+            "institutional_code": teacher.institutional_code,
+            "name": teacher_user.name if teacher_user else None,
+            "history": [
+                {
+                    "evaluation_id": row.evaluation_id,
+                    "period_code": row.period_code,
+                    "period_name": row.period_name,
+                    "overall_average": (
+                        float(row.avg_score) if row.avg_score else None
+                    ),
+                    "group_count": row.group_count,
+                }
+                for row in rows
+            ],
+        }
 
 
 def get_teachers_repository(db: Annotated[Session, Depends(get_db)]):

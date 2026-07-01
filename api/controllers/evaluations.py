@@ -27,15 +27,35 @@ class EvaluationsController:
         user = await self.users_repository.get_by_uid(current_user.uid)
         return user["id"] if user else None
 
-    async def get_all(self) -> list[dict]:
-        """Get all evaluations."""
+    async def get_all(
+        self,
+        period_id: int | None = None,
+        department_id: int | None = None,
+    ) -> list[dict]:
+        """Get all evaluations with optional filters."""
 
-        return await self.repository.get_all()
+        return await self.repository.get_all(
+            period_id=period_id, department_id=department_id
+        )
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:
         """Get an evaluation by ID."""
 
         return await self.repository.get_by_id(evaluation_id)
+
+    async def get_teacher_detail(
+        self, evaluation_id: int, teacher_id: int
+    ) -> dict | None:
+        """Get per-course and per-dimension detail for a teacher in an evaluation."""
+
+        return await self.repository.get_teacher_detail(evaluation_id, teacher_id)
+
+    async def get_teacher_comments(
+        self, evaluation_id: int, teacher_id: int
+    ) -> dict | None:
+        """Get comments grouped by course for a teacher in an evaluation."""
+
+        return await self.repository.get_teacher_comments(evaluation_id, teacher_id)
 
     async def get_summary(self, evaluation_id: int) -> dict | None:
         """Get aggregated statistics for an evaluation."""

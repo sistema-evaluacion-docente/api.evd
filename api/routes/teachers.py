@@ -16,6 +16,7 @@ from api.schemas.teacher import (
     TeacherListResponse,
     TeacherUpdate,
 )
+from api.schemas.evaluation_summary import TeacherHistoryResponse
 from api.schemas.user import RoleName
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
@@ -24,7 +25,8 @@ router = APIRouter(prefix="/teachers", tags=["Teachers"])
 @router.post(
     "/upload",
     response_model=TeacherBulkUploadResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
     status_code=201,
 )
 async def upload_teachers_excel(
@@ -87,7 +89,8 @@ async def get_all_teachers(
         None,
         description="Search term for institutional code, name, email or contract type",
     ),
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Endpoint to list all teachers with pagination and search."""
@@ -100,7 +103,8 @@ async def get_all_teachers(
         status=200,
         message="Teachers found",
         data=teachers,
-        pagination=Pagination(total=total, page=page, limit=limit, pages=pages),
+        pagination=Pagination(total=total, page=page,
+                              limit=limit, pages=pages),
         path="/teachers",
     )
 
@@ -141,13 +145,46 @@ async def count_teachers(
 
 
 @router.get(
+    "/{teacher_id}/history",
+    response_model=TeacherHistoryResponse,
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
+)
+async def get_teacher_history(
+    teacher_id: int,
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Return the historical average score of a teacher across all evaluated periods."""
+
+    history = await controller.get_history(teacher_id)
+
+    if not history:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            path=f"/teachers/{teacher_id}/history",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher history retrieved successfully",
+        data=history,
+        path=f"/teachers/{teacher_id}/history"
+    )
+
+
+@router.get(
     "/{teacher_id}",
     response_model=TeacherDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_teacher_by_id(
     teacher_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Endpoint to get a teacher by ID."""
@@ -172,7 +209,8 @@ async def get_teacher_by_id(
 @router.post(
     "/",
     response_model=TeacherDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
     status_code=201,
 )
 async def create_teacher(
@@ -203,7 +241,8 @@ async def create_teacher(
 @router.delete(
     "/{teacher_id}",
     response_model=TeacherDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
 )
 async def delete_teacher(
     teacher_id: int,
@@ -240,7 +279,8 @@ async def delete_teacher(
 @router.put(
     "/{teacher_id}",
     response_model=TeacherDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
 )
 async def update_teacher(
     teacher_id: int,
