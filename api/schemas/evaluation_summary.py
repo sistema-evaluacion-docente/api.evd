@@ -136,6 +136,30 @@ class TeacherHistoryOut(BaseModel):
     history: list[TeacherPeriodHistory]
 
 
+class TeacherPeriodEvaluation(BaseModel):
+    """Teacher evaluation summary for a single academic period."""
+
+    teacher_id: int
+    avatar_url: Optional[str]
+    institutional_code: str
+    name: Optional[str]
+    contract_type: Optional[str]
+    department_name: Optional[str]
+    group_count: int
+    overall_average: Optional[float]
+
+
+class TeacherPeriodEvaluationsResponse(BaseModel):
+    """Response envelope for the period teacher evaluations endpoint."""
+
+    status: int
+    message: str
+    data: Optional[list[TeacherPeriodEvaluation]] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
 class TeacherHistoryResponse(BaseModel):
     """Response envelope for the teacher history endpoint."""
 

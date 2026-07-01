@@ -34,7 +34,9 @@ from api.schemas.evaluation_summary import (
     EvaluationSummaryResponse,
     TeacherCommentsResponse,
     TeacherEvaluationDetailResponse,
+    TeacherPeriodEvaluationsResponse,
 )
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
@@ -60,7 +62,8 @@ async def upload_evaluation(
         require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])
     ),
     db: Session = Depends(get_db),
-    evaluations_repo: EvaluationsRepository = Depends(get_evaluations_repository),
+    evaluations_repo: EvaluationsRepository = Depends(
+        get_evaluations_repository),
     users_repo: UsersRepository = Depends(get_users_repository),
 ):
     """Upload a teacher evaluation PDF for a department.
@@ -77,7 +80,8 @@ async def upload_evaluation(
     try:
         parsed = parse_pdf(pdf_bytes)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Could not parse PDF: {exc}")
+        raise HTTPException(
+            status_code=400, detail=f"Could not parse PDF: {exc}")
 
     if not parsed.get("period_code"):
         raise HTTPException(
@@ -174,9 +178,12 @@ async def upload_evaluation(
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_evaluations(
-    period_id: int | None = Query(None, description="Filter by academic period ID"),
-    department_id: int | None = Query(None, description="Filter by department ID"),
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    period_id: int | None = Query(
+        None, description="Filter by academic period ID"),
+    department_id: int | None = Query(
+        None, description="Filter by department ID"),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Endpoint to list all evaluations with optional filters."""
@@ -196,11 +203,13 @@ async def get_all_evaluations(
 @router.get(
     "/{evaluation_id}",
     response_model=EvaluationDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_evaluation_by_id(
     evaluation_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Endpoint to get an evaluation by ID."""
@@ -223,13 +232,56 @@ async def get_evaluation_by_id(
 
 
 @router.get(
+    "/period/{period_id}/teachers",
+    response_model=TeacherPeriodEvaluationsResponse,
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
+)
+async def get_teachers_by_period(
+    period_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        None, description="Search by teacher name or email"),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return all teachers with their average evaluation scores for a given academic period."""
+
+    result = await controller.get_teachers_by_period(period_id, page=page, limit=limit, search=search)
+
+    if not result:
+        return ResponseSchema(
+            status=404,
+            message="Academic period not found or no evaluations exist for this period",
+            path=f"/evaluations/period/{period_id}/teachers",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher evaluations retrieved successfully",
+        data=result["teachers"],
+        pagination=Pagination(
+            total=result["teacher_count"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
+        path=f"/evaluations/period/{period_id}/teachers",
+    )
+
+
+@router.get(
     "/{evaluation_id}/summary",
     response_model=EvaluationSummaryResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_evaluation_summary(
     evaluation_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return aggregated department statistics for an evaluation: department average,
@@ -255,12 +307,14 @@ async def get_evaluation_summary(
 @router.get(
     "/{evaluation_id}/teachers/{teacher_id}/comments",
     response_model=TeacherCommentsResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_teacher_comments(
     evaluation_id: int,
     teacher_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return comments grouped by course for a teacher within an evaluation."""
@@ -285,12 +339,14 @@ async def get_teacher_comments(
 @router.get(
     "/{evaluation_id}/teachers/{teacher_id}",
     response_model=TeacherEvaluationDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_teacher_evaluation_detail(
     evaluation_id: int,
     teacher_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation."""
@@ -322,7 +378,8 @@ async def get_teacher_evaluation_detail(
 )
 async def export_evaluation(
     evaluation_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Download an Excel file with the department evaluation summary."""
@@ -336,7 +393,8 @@ async def export_evaluation(
     ws = wb.active
     ws.title = "Resumen Evaluación Docente"
 
-    ws.append(["Ranking", "Nombre", "Código", "Tipo Contrato", "Grupos Evaluados", "Promedio"])
+    ws.append(["Ranking", "Nombre", "Código", "Tipo Contrato",
+              "Grupos Evaluados", "Promedio"])
 
     for item in summary["ranking"]:
         ws.append([
@@ -349,7 +407,8 @@ async def export_evaluation(
         ])
 
     ws.append([])
-    ws.append(["", "Promedio Departamento", "", "", "", summary["department_average"]])
+    ws.append(["", "Promedio Departamento", "", "",
+              "", summary["department_average"]])
 
     buffer = io.BytesIO()
     wb.save(buffer)
