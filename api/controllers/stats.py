@@ -20,6 +20,22 @@ class StatsController:
 
         return await self.repository.get_department_averages_by_period(department_id)
 
+    async def get_department_average_with_previous(
+        self, department_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get department average for a period with previous period comparison."""
+
+        return await self.repository.get_department_average_with_previous(
+            department_id, academic_period_id
+        )
+
+    async def get_teacher_performance_ranking(
+        self, academic_period_id: int | None = None
+    ) -> dict:
+        """Get top 5 and bottom 5 teachers by overall average score."""
+
+        return await self.repository.get_teacher_performance_ranking(academic_period_id)
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),
