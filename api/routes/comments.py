@@ -20,6 +20,10 @@ router = APIRouter(prefix="/comments", tags=["Comments"])
 )
 async def count_comments_by_department_and_period(
     academic_period_id: int = Query(..., description="Academic period ID"),
+    risk_level: int | None = Query(None, description="Filter by risk level"),
+    pedagogical_category_id: int | None = Query(
+        None, description="Filter by pedagogical category ID"),
+    teacher_id: int | None = Query(None, description="Filter by teacher ID"),
     current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
@@ -34,7 +38,11 @@ async def count_comments_by_department_and_period(
         )
 
     count = await controller.count_by_department_and_period(
-        department_id, academic_period_id
+        department_id,
+        academic_period_id,
+        risk_level,
+        pedagogical_category_id,
+        teacher_id,
     )
 
     return ResponseSchema(
@@ -53,11 +61,13 @@ async def count_comments_by_department_and_period(
 @router.get(
     "/{comment_id}",
     response_model=CommentDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_comment_by_id(
     comment_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
     """Endpoint to get a comment by ID."""
@@ -86,7 +96,8 @@ async def get_comment_by_id(
 )
 async def get_comments_by_evaluation(
     evaluation_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
     """Endpoint to list all comments for a given evaluation."""
@@ -108,7 +119,8 @@ async def get_comments_by_evaluation(
 )
 async def get_comments_by_teacher(
     teacher_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
     """Endpoint to list all comments for a given teacher."""
@@ -130,7 +142,8 @@ async def get_comments_by_teacher(
 )
 async def get_comments_by_academic_group(
     academic_groups_id: int,
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
     """Endpoint to list all comments for a given academic group."""

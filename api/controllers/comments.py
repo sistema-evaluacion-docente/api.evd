@@ -38,26 +38,39 @@ class CommentsController:
         return await self.repository.get_by_teacher(teacher_id)
 
     async def count_by_department_and_period(
-        self, department_id: int, academic_period_id: int
+        self,
+        department_id: int,
+        academic_period_id: int,
+        risk_level: int | None = None,
+        pedagogical_category_id: int | None = None,
+        teacher_id: int | None = None,
     ) -> dict:
         """Count comments by department for current and previous academic period."""
 
         period = await self.academic_periods_repository.get_by_id(academic_period_id)
 
         previous_period_id = None
+
         if period:
             prev_code = await self.academic_periods_repository.get_previous_period_code(
                 period["code"]
             )
+
             if prev_code:
                 prev_period = await self.academic_periods_repository.get_by_code(
                     prev_code
                 )
+
                 if prev_period:
                     previous_period_id = prev_period["id"]
 
         return await self.repository.count_by_department_and_period(
-            department_id, academic_period_id, previous_period_id
+            department_id,
+            academic_period_id,
+            previous_period_id,
+            risk_level,
+            pedagogical_category_id,
+            teacher_id,
         )
 
     async def get_by_academic_group(self, academic_groups_id: int) -> list[dict]:

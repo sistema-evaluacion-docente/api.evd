@@ -47,7 +47,8 @@ class CommentsRepository:
         """Get a comment by ID."""
 
         comment = (
-            self.db.query(CommentModel).filter(CommentModel.id == comment_id).first()
+            self.db.query(CommentModel).filter(
+                CommentModel.id == comment_id).first()
         )
 
         if not comment:
@@ -83,28 +84,50 @@ class CommentsRepository:
         department_id: int,
         academic_period_id: int,
         previous_period_id: int | None = None,
+        risk_level: int | None = None,
+        pedagogical_category_id: int | None = None,
+        teacher_id: int | None = None,
     ) -> dict:
         """Count comments by department for current and previous academic period."""
+
+        base_filters = [
+            EvaluationModel.department_id == department_id,
+            EvaluationModel.academic_period_id == academic_period_id,
+        ]
+
+        if risk_level is not None:
+            base_filters.append(CommentModel.risk_level == risk_level)
+        if pedagogical_category_id is not None:
+            base_filters.append(
+                CommentModel.pedagogical_category_id == pedagogical_category_id)
+        if teacher_id is not None:
+            base_filters.append(CommentModel.teacher_id == teacher_id)
 
         current_count = (
             self.db.query(CommentModel)
             .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
-            .filter(
-                EvaluationModel.department_id == department_id,
-                EvaluationModel.academic_period_id == academic_period_id,
-            )
+            .filter(*base_filters)
             .count()
         )
 
         previous_count = None
         if previous_period_id:
+            prev_filters = [
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id == previous_period_id,
+            ]
+            if risk_level is not None:
+                prev_filters.append(CommentModel.risk_level == risk_level)
+            if pedagogical_category_id is not None:
+                prev_filters.append(
+                    CommentModel.pedagogical_category_id == pedagogical_category_id)
+            if teacher_id is not None:
+                prev_filters.append(CommentModel.teacher_id == teacher_id)
+
             previous_count = (
                 self.db.query(CommentModel)
                 .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
-                .filter(
-                    EvaluationModel.department_id == department_id,
-                    EvaluationModel.academic_period_id == previous_period_id,
-                )
+                .filter(*prev_filters)
                 .count()
             )
 
