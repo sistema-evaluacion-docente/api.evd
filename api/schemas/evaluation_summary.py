@@ -8,6 +8,24 @@ from typing import Optional
 from pydantic import BaseModel
 
 
+class QuestionItem(BaseModel):
+    """A single evaluation question with its dimension."""
+
+    code: str
+    text: str
+    dimension: str
+
+
+class QuestionCatalogResponse(BaseModel):
+    """Response envelope for the questions catalog endpoint."""
+
+    status: int
+    message: str
+    data: list[QuestionItem]
+    timestamp: datetime
+    path: str
+
+
 class TeacherRankItem(BaseModel):
     """One teacher entry in the department ranking."""
 
@@ -44,11 +62,21 @@ class EvaluationSummaryResponse(BaseModel):
     path: str
 
 
+class QuestionScore(BaseModel):
+    """Individual question score within a dimension."""
+
+    id: Optional[int] = None
+    code: str
+    text: str
+    score: Optional[float]
+
+
 class DimensionScore(BaseModel):
     """Average score for one evaluation dimension."""
 
     dimension: str
     average: Optional[float]
+    questions: list[QuestionScore] = []
 
 
 class CourseGroupScore(BaseModel):

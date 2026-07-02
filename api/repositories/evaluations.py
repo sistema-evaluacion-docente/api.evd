@@ -18,13 +18,9 @@ from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.serializers.evaluations import evaluation_to_dict
+from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
 
-DIMENSION_MAP = {
-    "Desarrollo del Conocimiento": ["001", "002", "003", "004", "005", "006"],
-    "Desempeño Docente": ["007", "008", "009", "010", "011", "012", "013", "014"],
-    "Procesos de Evaluación": ["015", "016", "017", "018"],
-    "Integración Interpersonal": ["019", "020", "021", "022"],
-}
+QUESTION_TEXT: dict[str, str] = {q["code"]: q["text"] for q in QUESTIONS}
 
 
 class EvaluationsRepository:
@@ -290,16 +286,27 @@ class EvaluationsRepository:
                 .all()
             )
 
-            group_q: dict[str, float] = {
-                qs.question_code: float(qs.score) for qs in q_scores
+            group_q: dict[str, dict] = {
+                qs.question_code: {"id": qs.id, "score": float(qs.score)}
+                for qs in q_scores
             }
 
-            for code, score in group_q.items():
-                accumulated.setdefault(code, []).append(score)
+            for code, data in group_q.items():
+                accumulated.setdefault(code, []).append(data["score"])
 
             group_dims = []
             for dim_name, codes in DIMENSION_MAP.items():
-                dim_scores = [group_q[c] for c in codes if c in group_q]
+                dim_scores = [group_q[c]["score"] for c in codes if c in group_q]
+                questions = [
+                    {
+                        "id": group_q[c]["id"],
+                        "code": c,
+                        "text": QUESTION_TEXT.get(c, c),
+                        "score": group_q[c]["score"],
+                    }
+                    for c in codes
+                    if c in group_q
+                ]
                 group_dims.append(
                     {
                         "dimension": dim_name,
@@ -308,6 +315,7 @@ class EvaluationsRepository:
                             if dim_scores
                             else None
                         ),
+                        "questions": questions,
                     }
                 )
 
@@ -328,9 +336,20 @@ class EvaluationsRepository:
 
         overall_dims = []
         for dim_name, codes in DIMENSION_MAP.items():
-            dim_scores = [
-                s for c in codes for s in accumulated.get(c, [])
-            ]
+            dim_scores = [s for c in codes for s in accumulated.get(c, [])]
+            questions = []
+            for code in codes:
+                code_scores = accumulated.get(code, [])
+                if code_scores:
+                    questions.append(
+                        {
+                            "code": code,
+                            "text": QUESTION_TEXT.get(code, code),
+                            "score": round(
+                                sum(code_scores) / len(code_scores), 2
+                            ),
+                        }
+                    )
             overall_dims.append(
                 {
                     "dimension": dim_name,
@@ -339,6 +358,7 @@ class EvaluationsRepository:
                         if dim_scores
                         else None
                     ),
+                    "questions": questions,
                 }
             )
 
