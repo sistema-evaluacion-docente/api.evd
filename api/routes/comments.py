@@ -2,11 +2,12 @@
 Routes for comment operations.
 """
 
+from api.schemas.pagination import Pagination
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.controllers.comments import CommentsController, get_comments_controller
 from api.middlewares.auth import require_roles
-from api.schemas.comment import CommentDetailResponse, CommentListResponse
+from api.schemas.comment import CommentDetailResponse, CommentListResponse, CommentPeriodListResponse
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
@@ -155,4 +156,57 @@ async def get_comments_by_academic_group(
         message="Comments found",
         data=comments,
         path=f"/comments/by-academic-group/{academic_groups_id}",
+    )
+
+
+@router.get(
+    "/by-period/{period_id}",
+    response_model=CommentPeriodListResponse,
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
+)
+async def get_comments_by_period(
+    period_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        None, description="Search by teacher name or email"),
+    risk_level: int | None = Query(None, description="Filter by risk level"),
+    pedagogical_category_id: int | None = Query(
+        None, description="Filter by pedagogical category ID"),
+    teacher_id: int | None = Query(None, description="Filter by teacher ID"),
+    _=Depends(require_roles(
+        [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: CommentsController = Depends(get_comments_controller),
+):
+    """Get comments for a specific academic period with pagination and optional filters."""
+
+    result = await controller.get_by_period(
+        period_id,
+        page=page,
+        limit=limit,
+        search=search,
+        risk_level=risk_level,
+        pedagogical_category_id=pedagogical_category_id,
+        teacher_id=teacher_id,
+    )
+
+    if not result:
+        return ResponseSchema(
+            status=404,
+            message="Academic period not found or no comments exist for this period",
+            path=f"/comments/by-period/{period_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Comments retrieved successfully",
+        data=result["comments"],
+        pagination=Pagination(
+            total=result["comment_count"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
+        path=f"/comments/by-period/{period_id}",
     )

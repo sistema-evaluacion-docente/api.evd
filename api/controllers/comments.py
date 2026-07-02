@@ -78,6 +78,28 @@ class CommentsController:
 
         return await self.repository.get_by_academic_group(academic_groups_id)
 
+    async def get_by_period(
+        self,
+        academic_period_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        risk_level: int | None = None,
+        pedagogical_category_id: int | None = None,
+        teacher_id: int | None = None,
+    ) -> dict | None:
+        """Get comments for a specific academic period with pagination and optional filters."""
+
+        return await self.repository.get_by_period(
+            academic_period_id,
+            page=page,
+            limit=limit,
+            search=search,
+            risk_level=risk_level,
+            pedagogical_category_id=pedagogical_category_id,
+            teacher_id=teacher_id,
+        )
+
 
 def get_comments_controller(
     repository: CommentsRepository = Depends(get_comments_repository),

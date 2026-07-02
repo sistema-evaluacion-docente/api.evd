@@ -147,6 +147,80 @@ class CommentsRepository:
 
         return [comment_to_dict(c) for c in comments]
 
+    async def get_by_period(
+        self,
+        academic_period_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        risk_level: int | None = None,
+        pedagogical_category_id: int | None = None,
+        teacher_id: int | None = None,
+    ) -> dict | None:
+        """Get comments for a specific academic period with pagination and optional filters."""
+
+        from api.models.academic_period import AcademicPeriodModel
+        from api.models.teacher import TeacherModel
+        from api.models.user import UserModel
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        if not period:
+            return None
+
+        base_query = (
+            self.db.query(CommentModel)
+            .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+        )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.outerjoin(
+                TeacherModel, CommentModel.teacher_id == TeacherModel.id
+            ).outerjoin(UserModel, TeacherModel.user_id == UserModel.id).filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+            )
+
+        if risk_level is not None:
+            base_query = base_query.filter(
+                CommentModel.risk_level == risk_level)
+
+        if pedagogical_category_id is not None:
+            base_query = base_query.filter(
+                CommentModel.pedagogical_category_id == pedagogical_category_id
+            )
+
+        if teacher_id is not None:
+            base_query = base_query.filter(
+                CommentModel.teacher_id == teacher_id)
+
+        total = base_query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        comments = (
+            base_query.order_by(CommentModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "period_id": academic_period_id,
+            "period_code": period.code,
+            "period_name": period.name,
+            "comment_count": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+            "comments": [comment_to_dict(c) for c in comments],
+        }
+
 
 def get_comments_repository(db: Annotated[Session, Depends(get_db)]):
     """Get comments repository"""
