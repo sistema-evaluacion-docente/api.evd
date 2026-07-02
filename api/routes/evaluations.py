@@ -8,6 +8,8 @@ import uuid
 
 import openpyxl
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+from openpyxl.utils import get_column_letter
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -32,9 +34,11 @@ from api.schemas.evaluation import (
 )
 from api.schemas.evaluation_summary import (
     EvaluationSummaryResponse,
+    QuestionCatalogResponse,
     TeacherCommentsResponse,
     TeacherEvaluationDetailResponse,
 )
+from api.utils.dimensions import QUESTIONS
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
@@ -169,6 +173,23 @@ async def upload_evaluation(
 
 
 @router.get(
+    "/questions",
+    response_model=QuestionCatalogResponse,
+)
+async def get_question_catalog(
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+):
+    """Return the full catalog of evaluation questions with their code, text, and dimension."""
+
+    return ResponseSchema(
+        status=200,
+        message="Question catalog retrieved successfully",
+        data=QUESTIONS,
+        path="/evaluations/questions",
+    )
+
+
+@router.get(
     "/",
     response_model=EvaluationListResponse,
     responses={403: {"description": "Forbidden"}},
@@ -279,6 +300,244 @@ async def get_teacher_comments(
         message="Comments retrieved successfully",
         data=result,
         path=f"/evaluations/{evaluation_id}/teachers/{teacher_id}/comments",
+    )
+
+
+@router.get(
+    "/{evaluation_id}/teachers/{teacher_id}/export",
+    responses={
+        200: {"content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}}},
+        403: {"description": "Forbidden"},
+        404: {"model": ResponseSchema},
+    },
+)
+async def export_teacher_evaluation(
+    evaluation_id: int,
+    teacher_id: int,
+    include_comments: bool = Query(False, description="Include student comments"),
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Download an Excel report for a teacher's evaluation detail."""
+
+    detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail="Evaluation or teacher not found")
+
+    comments_by_course: dict[str, list[str]] = {}
+    if include_comments:
+        comments_data = await controller.get_teacher_comments(evaluation_id, teacher_id)
+        if comments_data:
+            for c in comments_data["courses"]:
+                key = f"{c['course_code']} - {c['course_name'] or ''}"
+                comments_by_course[key] = c["comments"]
+
+    # ── Paleta de colores ──────────────────────────────────────────────
+    C_PRIMARY   = "1A3A6B"   # azul oscuro — títulos principales
+    C_SECONDARY = "2E6DB4"   # azul medio — cabeceras de sección
+    C_DIM_HDR   = "D6E4F7"   # azul muy claro — cabecera de tabla dimensión
+    C_ROW_ALT   = "F4F8FF"   # gris azulado — filas alternas
+    C_GREEN     = "1B5E20"   # verde oscuro — score alto
+    C_ORANGE    = "E65100"   # naranja — score medio
+    C_RED       = "B71C1C"   # rojo — score bajo
+    C_WHITE     = "FFFFFF"
+
+    def score_color(score):
+        if score is None:
+            return "888888"
+        if score >= 4.5:
+            return C_GREEN
+        if score >= 4.0:
+            return "2E7D32"
+        if score >= 3.5:
+            return C_ORANGE
+        return C_RED
+
+    def fill(hex_color):
+        return PatternFill("solid", fgColor=hex_color)
+
+    def bold_font(size=11, color="000000", white=False):
+        return Font(bold=True, size=size, color=C_WHITE if white else color)
+
+    def thin_border():
+        s = Side(style="thin", color="BBBBBB")
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    def center():
+        return Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    def left():
+        return Alignment(horizontal="left", vertical="center", wrap_text=True)
+
+    def style_title_row(ws, row, text, ncols=4):
+        ws.merge_cells(
+            start_row=row, start_column=1, end_row=row, end_column=ncols
+        )
+        cell = ws.cell(row=row, column=1, value=text)
+        cell.font = Font(bold=True, size=14, color=C_WHITE)
+        cell.fill = fill(C_PRIMARY)
+        cell.alignment = center()
+
+    def style_section_header(ws, row, text, ncols=4):
+        ws.merge_cells(
+            start_row=row, start_column=1, end_row=row, end_column=ncols
+        )
+        cell = ws.cell(row=row, column=1, value=text)
+        cell.font = Font(bold=True, size=11, color=C_WHITE)
+        cell.fill = fill(C_SECONDARY)
+        cell.alignment = left()
+
+    def style_table_header(ws, row, cols):
+        for col_idx, text in enumerate(cols, start=1):
+            cell = ws.cell(row=row, column=col_idx, value=text)
+            cell.font = bold_font(white=True)
+            cell.fill = fill(C_SECONDARY)
+            cell.alignment = center()
+            cell.border = thin_border()
+
+    def style_data_row(ws, row, values, alternate=False):
+        bg = C_ROW_ALT if alternate else C_WHITE
+        for col_idx, val in enumerate(values, start=1):
+            cell = ws.cell(row=row, column=col_idx, value=val)
+            cell.fill = fill(bg)
+            cell.alignment = left()
+            cell.border = thin_border()
+
+    # ── Libro ─────────────────────────────────────────────────────────
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Reporte Docente"
+
+    # Anchos de columna
+    ws.column_dimensions["A"].width = 12
+    ws.column_dimensions["B"].width = 52
+    ws.column_dimensions["C"].width = 14
+    ws.column_dimensions["D"].width = 14
+
+    r = 1  # puntero de fila
+
+    # ── Título principal ───────────────────────────────────────────────
+    style_title_row(ws, r, "REPORTE DE EVALUACIÓN DOCENTE — UFPS")
+    ws.row_dimensions[r].height = 28
+    r += 1
+    r += 1  # fila en blanco
+
+    # ── Info del docente ───────────────────────────────────────────────
+    style_section_header(ws, r, "INFORMACIÓN DEL DOCENTE")
+    r += 1
+
+    info_rows = [
+        ("Nombre", detail["name"] or "—"),
+        ("Código", detail["institutional_code"]),
+        ("Tipo contrato", detail["contract_type"] or "—"),
+        ("Período", detail["period_code"] or "—"),
+    ]
+    for label, value in info_rows:
+        lc = ws.cell(row=r, column=1, value=label)
+        lc.font = bold_font()
+        lc.fill = fill(C_DIM_HDR)
+        lc.border = thin_border()
+        lc.alignment = left()
+        vc = ws.cell(row=r, column=2, value=value)
+        vc.border = thin_border()
+        vc.alignment = left()
+        ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
+        r += 1
+
+    avg = detail["overall_average"]
+    lc = ws.cell(row=r, column=1, value="Promedio global")
+    lc.font = bold_font()
+    lc.fill = fill(C_DIM_HDR)
+    lc.border = thin_border()
+    lc.alignment = left()
+    vc = ws.cell(row=r, column=2, value=f"{avg} / 5.0" if avg else "—")
+    vc.font = Font(bold=True, color=score_color(avg))
+    vc.border = thin_border()
+    vc.alignment = left()
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
+    r += 1
+    r += 1
+
+    # ── Resumen por dimensión ──────────────────────────────────────────
+    style_section_header(ws, r, "RESUMEN POR DIMENSIÓN")
+    r += 1
+    style_table_header(ws, r, ["Dimensión", "Promedio", "", ""])
+    r += 1
+    for i, dim in enumerate(detail["dimensions"]):
+        dim_avg = dim["average"]
+        style_data_row(ws, r, [dim["dimension"], f"{dim_avg} / 5.0" if dim_avg else "—", "", ""], alternate=i % 2 == 1)
+        ws.cell(row=r, column=2).font = Font(bold=True, color=score_color(dim_avg))
+        r += 1
+    r += 1
+
+    # ── Fortalezas y oportunidades ─────────────────────────────────────
+    sorted_dims = sorted(
+        [d for d in detail["dimensions"] if d["average"] is not None],
+        key=lambda d: d["average"],
+        reverse=True,
+    )
+    style_section_header(ws, r, "FORTALEZAS — Top 2 dimensiones")
+    r += 1
+    style_table_header(ws, r, ["Dimensión", "Promedio", "", ""])
+    r += 1
+    for dim in sorted_dims[:2]:
+        style_data_row(ws, r, [dim["dimension"], f"{dim['average']} / 5.0", "", ""])
+        ws.cell(row=r, column=2).font = Font(bold=True, color=C_GREEN)
+        r += 1
+    r += 1
+
+    style_section_header(ws, r, "OPORTUNIDADES DE MEJORA — Top 2 dimensiones")
+    r += 1
+    style_table_header(ws, r, ["Dimensión", "Promedio", "", ""])
+    r += 1
+    for dim in sorted_dims[-2:]:
+        style_data_row(ws, r, [dim["dimension"], f"{dim['average']} / 5.0", "", ""])
+        ws.cell(row=r, column=2).font = Font(bold=True, color=C_RED)
+        r += 1
+    r += 1
+
+    # ── Matriz de 22 ítems ─────────────────────────────────────────────
+    style_title_row(ws, r, "MATRIZ DE EVALUACIÓN — 22 ÍTEMS")
+    r += 1
+
+    for dim in detail["dimensions"]:
+        r += 1
+        style_section_header(ws, r, f"{dim['dimension'].upper()}   |   Promedio: {dim['average']} / 5.0")
+        r += 1
+        style_table_header(ws, r, ["Código", "Descripción", "Promedio", ""])
+        r += 1
+        for i, q in enumerate(dim.get("questions", [])):
+            style_data_row(ws, r, [q["code"], q["text"], f"{q['score']} / 5.0", ""], alternate=i % 2 == 1)
+            ws.cell(row=r, column=3).font = Font(bold=True, color=score_color(q["score"]))
+            ws.cell(row=r, column=3).alignment = center()
+            r += 1
+
+    # ── Comentarios (opcional) ─────────────────────────────────────────
+    if include_comments and comments_by_course:
+        r += 1
+        style_title_row(ws, r, "COMENTARIOS DE ESTUDIANTES")
+        r += 1
+        for course_label, comments in comments_by_course.items():
+            r += 1
+            style_section_header(ws, r, course_label)
+            r += 1
+            for comment in comments:
+                cell = ws.cell(row=r, column=1, value=comment)
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+                ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
+                ws.row_dimensions[r].height = 40
+                r += 1
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    filename = f"reporte_{detail['institutional_code']}_{detail['period_code']}_{evaluation_id}.xlsx"
+
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
     )
 
 
