@@ -88,16 +88,18 @@ class UsersRepository:
         existing = (
             self.db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
         )
+
         if existing:
             return
 
         teacher = TeacherModel(
-            institutional_code=institutional_code or f"DOC-{user.id}",
+            institutional_code=institutional_code or str(user.id),
             department_id=user.department_id,
             contract_type=contract_type,
             user_id=user.id,
             active=user.active,
         )
+
         self.db.add(teacher)
 
     def _get_user_role_names(self, user_id: int) -> list[str]:
@@ -118,6 +120,7 @@ class UsersRepository:
         """
 
         existing_user = None
+
         if data.uid:
             existing_user = (
                 self.db.query(UserModel).filter(UserModel.uid == data.uid).first()
@@ -127,6 +130,7 @@ class UsersRepository:
             existing_user = (
                 self.db.query(UserModel).filter(UserModel.email == data.email).first()
             )
+
             if existing_user and data.uid:
                 existing_user.uid = data.uid
 
@@ -137,7 +141,9 @@ class UsersRepository:
                 self._replace_user_roles(existing_user.id, normalized_roles)
                 self._ensure_teacher(existing_user, normalized_roles)
                 self.db.commit()
+
             roles = self._get_user_role_names(existing_user.id)
+
             return user_to_dict(existing_user, roles=roles)
 
         user = UserModel(

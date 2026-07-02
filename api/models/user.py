@@ -14,7 +14,7 @@ from sqlalchemy import (
     Text,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -42,6 +42,10 @@ class UserModel(Base):
     )
     active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    teacher: Mapped[Optional["TeacherModel"]] = relationship(
+        "TeacherModel", back_populates="user", uselist=False
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
