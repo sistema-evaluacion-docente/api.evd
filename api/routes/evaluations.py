@@ -7,7 +7,15 @@ import os
 import uuid
 
 import openpyxl
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    UploadFile,
+)
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from fastapi.responses import StreamingResponse
@@ -37,12 +45,15 @@ from api.schemas.evaluation_summary import (
     QuestionCatalogResponse,
     TeacherCommentsResponse,
     TeacherEvaluationDetailResponse,
+    TeacherPeriodEvaluationsResponse,
 )
+from api.schemas.pagination import Pagination
 from api.utils.dimensions import QUESTIONS
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
 from api.utils.pdf_parser import parse_pdf
+from api.utils.file_validation import validate_file_size
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
@@ -73,10 +84,19 @@ async def upload_evaluation(
     processes scores and comments in the background. Returns 202 with the
     evaluation record while processing continues.
     """
+
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
     pdf_bytes = await file.read()
+
+    validate_file_size(pdf_bytes)
+
+    if not pdf_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo está vacío",
+        )
 
     try:
         parsed = parse_pdf(pdf_bytes)
@@ -85,17 +105,17 @@ async def upload_evaluation(
 
     if not parsed.get("period_code"):
         raise HTTPException(
-            status_code=422, detail="Could not extract academic period from PDF"
+            status_code=422, detail="No se pudo extraer el periodo académico del PDF"
         )
     if not parsed.get("department_code"):
         raise HTTPException(
-            status_code=422, detail="Could not extract department from PDF"
+            status_code=422, detail="No se pudo extraer el departamento del PDF"
         )
 
     if not parsed.get("teachers"):
         raise HTTPException(
             status_code=422,
-            detail="No teacher data found in PDF. Make sure it is a UFPS teacher evaluation document.",
+            detail="No se encontraron datos del docente en el PDF. Asegúrese de que se trate de un documento de evaluación docente de la UFPS.",
         )
 
     period = (
@@ -106,7 +126,7 @@ async def upload_evaluation(
     if not period:
         raise HTTPException(
             status_code=422,
-            detail=f"Academic period '{parsed['period_code']}' is not registered in the system",
+            detail=f"Periodo académico '{parsed['period_code']}' no está registrado en el sistema",
         )
 
     department = (
@@ -117,7 +137,7 @@ async def upload_evaluation(
     if not department:
         raise HTTPException(
             status_code=422,
-            detail=f"Department '{parsed['department_code']}' is not registered in the system",
+            detail=f"Departamento '{parsed['department_code']}' no está registrado en el sistema",
         )
 
     existing = await evaluations_repo.get_by_period_and_department(
@@ -128,8 +148,8 @@ async def upload_evaluation(
         raise HTTPException(
             status_code=409,
             detail=(
-                f"An evaluation for period '{parsed['period_code']}' "
-                "and this department already exists"
+                f"Una evaluación para el periodo '{parsed['period_code']}' "
+                f"y este departamento ya existe"
             ),
         )
 
@@ -166,7 +186,7 @@ async def upload_evaluation(
 
     return ResponseSchema(
         status=202,
-        message="Evaluation upload started. Processing in background.",
+        message="Carga de evaluación iniciada. Procesando en segundo plano.",
         data=evaluation,
         path="/evaluations/upload",
     )
@@ -244,6 +264,46 @@ async def get_evaluation_by_id(
 
 
 @router.get(
+    "/period/{period_id}/teachers",
+    response_model=TeacherPeriodEvaluationsResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_teachers_by_period(
+    period_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search by teacher name or email"),
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return all teachers with their average evaluation scores for a given academic period."""
+
+    result = await controller.get_teachers_by_period(
+        period_id, page=page, limit=limit, search=search
+    )
+
+    if not result:
+        return ResponseSchema(
+            status=404,
+            message="Academic period not found or no evaluations exist for this period",
+            path=f"/evaluations/period/{period_id}/teachers",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher evaluations retrieved successfully",
+        data=result["teachers"],
+        pagination=Pagination(
+            total=result["teacher_count"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
+        path=f"/evaluations/period/{period_id}/teachers",
+    )
+
+
+@router.get(
     "/{evaluation_id}/summary",
     response_model=EvaluationSummaryResponse,
     responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
@@ -306,7 +366,11 @@ async def get_teacher_comments(
 @router.get(
     "/{evaluation_id}/teachers/{teacher_id}/export",
     responses={
-        200: {"content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}}},
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            }
+        },
         403: {"description": "Forbidden"},
         404: {"model": ResponseSchema},
     },
@@ -333,14 +397,14 @@ async def export_teacher_evaluation(
                 comments_by_course[key] = c["comments"]
 
     # ── Paleta de colores ──────────────────────────────────────────────
-    C_PRIMARY   = "1A3A6B"   # azul oscuro — títulos principales
-    C_SECONDARY = "2E6DB4"   # azul medio — cabeceras de sección
-    C_DIM_HDR   = "D6E4F7"   # azul muy claro — cabecera de tabla dimensión
-    C_ROW_ALT   = "F4F8FF"   # gris azulado — filas alternas
-    C_GREEN     = "1B5E20"   # verde oscuro — score alto
-    C_ORANGE    = "E65100"   # naranja — score medio
-    C_RED       = "B71C1C"   # rojo — score bajo
-    C_WHITE     = "FFFFFF"
+    C_PRIMARY = "1A3A6B"  # azul oscuro — títulos principales
+    C_SECONDARY = "2E6DB4"  # azul medio — cabeceras de sección
+    C_DIM_HDR = "D6E4F7"  # azul muy claro — cabecera de tabla dimensión
+    C_ROW_ALT = "F4F8FF"  # gris azulado — filas alternas
+    C_GREEN = "1B5E20"  # verde oscuro — score alto
+    C_ORANGE = "E65100"  # naranja — score medio
+    C_RED = "B71C1C"  # rojo — score bajo
+    C_WHITE = "FFFFFF"
 
     def score_color(score):
         if score is None:
@@ -370,18 +434,14 @@ async def export_teacher_evaluation(
         return Alignment(horizontal="left", vertical="center", wrap_text=True)
 
     def style_title_row(ws, row, text, ncols=4):
-        ws.merge_cells(
-            start_row=row, start_column=1, end_row=row, end_column=ncols
-        )
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
         cell = ws.cell(row=row, column=1, value=text)
         cell.font = Font(bold=True, size=14, color=C_WHITE)
         cell.fill = fill(C_PRIMARY)
         cell.alignment = center()
 
     def style_section_header(ws, row, text, ncols=4):
-        ws.merge_cells(
-            start_row=row, start_column=1, end_row=row, end_column=ncols
-        )
+        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=ncols)
         cell = ws.cell(row=row, column=1, value=text)
         cell.font = Font(bold=True, size=11, color=C_WHITE)
         cell.fill = fill(C_SECONDARY)
@@ -465,7 +525,12 @@ async def export_teacher_evaluation(
     r += 1
     for i, dim in enumerate(detail["dimensions"]):
         dim_avg = dim["average"]
-        style_data_row(ws, r, [dim["dimension"], f"{dim_avg} / 5.0" if dim_avg else "—", "", ""], alternate=i % 2 == 1)
+        style_data_row(
+            ws,
+            r,
+            [dim["dimension"], f"{dim_avg} / 5.0" if dim_avg else "—", "", ""],
+            alternate=i % 2 == 1,
+        )
         ws.cell(row=r, column=2).font = Font(bold=True, color=score_color(dim_avg))
         r += 1
     r += 1
@@ -502,13 +567,22 @@ async def export_teacher_evaluation(
 
     for dim in detail["dimensions"]:
         r += 1
-        style_section_header(ws, r, f"{dim['dimension'].upper()}   |   Promedio: {dim['average']} / 5.0")
+        style_section_header(
+            ws, r, f"{dim['dimension'].upper()}   |   Promedio: {dim['average']} / 5.0"
+        )
         r += 1
         style_table_header(ws, r, ["Código", "Descripción", "Promedio", ""])
         r += 1
         for i, q in enumerate(dim.get("questions", [])):
-            style_data_row(ws, r, [q["code"], q["text"], f"{q['score']} / 5.0", ""], alternate=i % 2 == 1)
-            ws.cell(row=r, column=3).font = Font(bold=True, color=score_color(q["score"]))
+            style_data_row(
+                ws,
+                r,
+                [q["code"], q["text"], f"{q['score']} / 5.0", ""],
+                alternate=i % 2 == 1,
+            )
+            ws.cell(row=r, column=3).font = Font(
+                bold=True, color=score_color(q["score"])
+            )
             ws.cell(row=r, column=3).alignment = center()
             r += 1
 
@@ -574,7 +648,11 @@ async def get_teacher_evaluation_detail(
 @router.get(
     "/{evaluation_id}/export",
     responses={
-        200: {"content": {"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}}},
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            }
+        },
         403: {"description": "Forbidden"},
         404: {"model": ResponseSchema},
     },
@@ -595,17 +673,21 @@ async def export_evaluation(
     ws = wb.active
     ws.title = "Resumen Evaluación Docente"
 
-    ws.append(["Ranking", "Nombre", "Código", "Tipo Contrato", "Grupos Evaluados", "Promedio"])
+    ws.append(
+        ["Ranking", "Nombre", "Código", "Tipo Contrato", "Grupos Evaluados", "Promedio"]
+    )
 
     for item in summary["ranking"]:
-        ws.append([
-            item["rank"],
-            item["name"] or "",
-            item["institutional_code"],
-            item["contract_type"] or "",
-            item["group_count"],
-            item["overall_average"],
-        ])
+        ws.append(
+            [
+                item["rank"],
+                item["name"] or "",
+                item["institutional_code"],
+                item["contract_type"] or "",
+                item["group_count"],
+                item["overall_average"],
+            ]
+        )
 
     ws.append([])
     ws.append(["", "Promedio Departamento", "", "", "", summary["department_average"]])

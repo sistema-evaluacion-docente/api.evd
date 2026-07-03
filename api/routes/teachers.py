@@ -18,6 +18,7 @@ from api.schemas.teacher import (
 )
 from api.schemas.evaluation_summary import TeacherHistoryResponse
 from api.schemas.user import RoleName
+from api.utils.file_validation import validate_file_size
 
 router = APIRouter(prefix="/teachers", tags=["Teachers"])
 
@@ -45,6 +46,8 @@ async def upload_teachers_excel(
         )
 
     file_bytes = await file.read()
+
+    validate_file_size(file_bytes)
 
     if not file_bytes:
         raise HTTPException(
@@ -103,6 +106,41 @@ async def get_all_teachers(
         data=teachers,
         pagination=Pagination(total=total, page=page, limit=limit, pages=pages),
         path="/teachers",
+    )
+
+
+@router.get(
+    "/count",
+    response_model=ResponseSchema,
+    responses={403: {"description": "Forbidden"}},
+)
+async def count_teachers(
+    academic_period_id: int = Query(..., description="Academic period ID"),
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Get the count of teachers in the director's department for current and previous period."""
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    count = await controller.count_by_department(department_id, academic_period_id)
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher count retrieved successfully",
+        data={
+            "current_count": count["current_count"],
+            "previous_count": count["previous_count"],
+            "department_id": department_id,
+            "academic_period_id": academic_period_id,
+        },
+        path="/teachers/count",
     )
 
 

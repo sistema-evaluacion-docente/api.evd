@@ -65,6 +65,7 @@ class UserOut(BaseModel):
     active: Optional[bool]
     avatar_url: Optional[str]
     roles: list[RoleName]
+    teacher_id: Optional[int] = None
 
     created_at: datetime
     updated_at: datetime

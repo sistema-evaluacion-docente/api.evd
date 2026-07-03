@@ -97,6 +97,26 @@ class AcademicPeriodsRepository:
 
         return academic_period_to_dict(period)
 
+    async def get_previous_period_code(self, code: str) -> str | None:
+        """Get the previous academic period code from a code like '2025-2'."""
+
+        parts = code.split("-")
+
+        if len(parts) != 2:
+            return None
+
+        year = int(parts[0])
+        semester = int(parts[1])
+
+        if semester == 1:
+            prev_year = year - 1
+            prev_semester = 2
+        else:
+            prev_year = year
+            prev_semester = semester - 1
+
+        return f"{prev_year}-{prev_semester}"
+
     async def get_by_code(self, code: str) -> dict | None:
         """Get an academic period by code."""
 

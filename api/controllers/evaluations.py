@@ -62,6 +62,15 @@ class EvaluationsController:
 
         return await self.repository.get_summary(evaluation_id)
 
+    async def get_teachers_by_period(
+        self, academic_period_id: int, page: int = 1, limit: int = 10, search: str | None = None
+    ) -> dict | None:
+        """Get all teachers with their average evaluation scores for a given academic period."""
+
+        return await self.repository.get_teachers_by_period(
+            academic_period_id, page=page, limit=limit, search=search
+        )
+
     async def update_status(
         self, evaluation_id: int, active: bool, current_user
     ) -> dict | None:

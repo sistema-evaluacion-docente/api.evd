@@ -11,6 +11,7 @@ PORT = os.getenv("PORT", "5000")
 DATABASE_URL = os.getenv("DATABASE_URL")
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
 
 FIREBASE_CREDENTIALS = {
     "type": os.getenv("FIREBASE_TYPE"),
@@ -39,6 +40,7 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     UPLOAD_DIR = UPLOAD_DIR
+    MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_MB
 
 
 config = Config()

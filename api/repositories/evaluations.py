@@ -64,9 +64,11 @@ class EvaluationsRepository:
         query = self.db.query(EvaluationModel)
 
         if period_id is not None:
-            query = query.filter(EvaluationModel.academic_period_id == period_id)
+            query = query.filter(
+                EvaluationModel.academic_period_id == period_id)
         if department_id is not None:
-            query = query.filter(EvaluationModel.department_id == department_id)
+            query = query.filter(
+                EvaluationModel.department_id == department_id)
 
         evaluations = query.order_by(EvaluationModel.created_at.desc()).all()
 
@@ -247,13 +249,15 @@ class EvaluationsRepository:
             return None
 
         teacher_user = (
-            self.db.query(UserModel).filter(UserModel.id == teacher.user_id).first()
+            self.db.query(UserModel).filter(
+                UserModel.id == teacher.user_id).first()
             if teacher.user_id
             else None
         )
 
         score_rows = (
-            self.db.query(EvaluationScoreModel, AcademicGroupModel, CourseModel)
+            self.db.query(EvaluationScoreModel,
+                          AcademicGroupModel, CourseModel)
             .join(
                 AcademicGroupModel,
                 EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
@@ -358,8 +362,10 @@ class EvaluationsRepository:
                 }
             )
 
-        all_avgs = [c["overall_average"] for c in courses if c["overall_average"] is not None]
-        overall_avg = round(sum(all_avgs) / len(all_avgs), 2) if all_avgs else None
+        all_avgs = [c["overall_average"]
+                    for c in courses if c["overall_average"] is not None]
+        overall_avg = round(sum(all_avgs) / len(all_avgs),
+                            2) if all_avgs else None
 
         return {
             "teacher_id": teacher_id,
@@ -373,6 +379,98 @@ class EvaluationsRepository:
             "group_count": len(courses),
             "courses": courses,
             "dimensions": overall_dims,
+        }
+
+    async def get_teachers_by_period(
+        self, academic_period_id: int, page: int = 1, limit: int = 10, search: str | None = None
+    ) -> dict | None:
+        """Return all teachers with their average evaluation scores for a given academic period."""
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        if not period:
+            return None
+
+        from api.models.department import DepartmentModel
+
+        base_query = (
+            self.db.query(
+                TeacherModel.id,
+                TeacherModel.institutional_code,
+                TeacherModel.contract_type,
+                UserModel.name,
+                UserModel.avatar_url,
+                DepartmentModel.name.label("department_name"),
+                func.count(EvaluationScoreModel.id).label("group_count"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "teacher_avg"),
+            )
+            .join(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(TeacherModel, AcademicGroupModel.teacher_id == TeacherModel.id)
+            .join(UserModel, TeacherModel.user_id == UserModel.id)
+            .join(DepartmentModel, TeacherModel.department_id == DepartmentModel.id)
+            .join(EvaluationModel, EvaluationScoreModel.evaluation_id == EvaluationModel.id)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+        )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+            )
+
+        base_query = base_query.group_by(
+            TeacherModel.id,
+            TeacherModel.institutional_code,
+            TeacherModel.contract_type,
+            UserModel.name,
+            UserModel.avatar_url,
+            DepartmentModel.name,
+        )
+
+        total = base_query.count()
+
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        rows = (
+            base_query.order_by(
+                func.avg(EvaluationScoreModel.overall_average).desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        teachers = [
+            {
+                "teacher_id": row.id,
+                "avatar_url": row.avatar_url if hasattr(row, "avatar_url") else None,
+                "institutional_code": row.institutional_code,
+                "name": row.name,
+                "contract_type": row.contract_type,
+                "department_name": row.department_name,
+                "group_count": row.group_count,
+                "overall_average": float(row.teacher_avg) if row.teacher_avg else None,
+            }
+            for row in rows
+        ]
+
+        return {
+            "period_id": academic_period_id,
+            "period_code": period.code,
+            "period_name": period.name,
+            "teacher_count": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+            "teachers": teachers,
         }
 
     async def get_summary(self, evaluation_id: int) -> dict | None:
@@ -394,7 +492,8 @@ class EvaluationsRepository:
                 TeacherModel.contract_type,
                 UserModel.name,
                 func.count(EvaluationScoreModel.id).label("group_count"),
-                func.avg(EvaluationScoreModel.overall_average).label("teacher_avg"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "teacher_avg"),
             )
             .join(
                 AcademicGroupModel,

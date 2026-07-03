@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.pagination import Pagination
+
 
 class CommentOut(BaseModel):
     """Schema for outputting a comment."""
@@ -42,3 +44,15 @@ class CommentListResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class CommentPeriodListResponse(BaseModel):
+    """Schema for paginated comments list response envelope."""
+
+    status: int
+    message: str
+    data: list[CommentOut]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+    pagination: Pagination
