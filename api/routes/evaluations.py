@@ -53,6 +53,7 @@ from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.evaluation_processor import process_evaluation
 from api.utils.pdf_parser import parse_pdf
+from api.utils.file_validation import validate_file_size
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
@@ -83,10 +84,19 @@ async def upload_evaluation(
     processes scores and comments in the background. Returns 202 with the
     evaluation record while processing continues.
     """
+
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="File must be a PDF")
 
     pdf_bytes = await file.read()
+
+    validate_file_size(pdf_bytes)
+
+    if not pdf_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo está vacío",
+        )
 
     try:
         parsed = parse_pdf(pdf_bytes)
@@ -95,17 +105,17 @@ async def upload_evaluation(
 
     if not parsed.get("period_code"):
         raise HTTPException(
-            status_code=422, detail="Could not extract academic period from PDF"
+            status_code=422, detail="No se pudo extraer el periodo académico del PDF"
         )
     if not parsed.get("department_code"):
         raise HTTPException(
-            status_code=422, detail="Could not extract department from PDF"
+            status_code=422, detail="No se pudo extraer el departamento del PDF"
         )
 
     if not parsed.get("teachers"):
         raise HTTPException(
             status_code=422,
-            detail="No teacher data found in PDF. Make sure it is a UFPS teacher evaluation document.",
+            detail="No se encontraron datos del docente en el PDF. Asegúrese de que se trate de un documento de evaluación docente de la UFPS.",
         )
 
     period = (
@@ -116,7 +126,7 @@ async def upload_evaluation(
     if not period:
         raise HTTPException(
             status_code=422,
-            detail=f"Academic period '{parsed['period_code']}' is not registered in the system",
+            detail=f"Periodo académico '{parsed['period_code']}' no está registrado en el sistema",
         )
 
     department = (
@@ -127,7 +137,7 @@ async def upload_evaluation(
     if not department:
         raise HTTPException(
             status_code=422,
-            detail=f"Department '{parsed['department_code']}' is not registered in the system",
+            detail=f"Departamento '{parsed['department_code']}' no está registrado en el sistema",
         )
 
     existing = await evaluations_repo.get_by_period_and_department(
@@ -138,8 +148,8 @@ async def upload_evaluation(
         raise HTTPException(
             status_code=409,
             detail=(
-                f"An evaluation for period '{parsed['period_code']}' "
-                "and this department already exists"
+                f"Una evaluación para el periodo '{parsed['period_code']}' "
+                f"y este departamento ya existe"
             ),
         )
 
@@ -176,7 +186,7 @@ async def upload_evaluation(
 
     return ResponseSchema(
         status=202,
-        message="Evaluation upload started. Processing in background.",
+        message="Carga de evaluación iniciada. Procesando en segundo plano.",
         data=evaluation,
         path="/evaluations/upload",
     )
