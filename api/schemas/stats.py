@@ -87,6 +87,72 @@ class DepartmentAverageWithPreviousResponse(BaseModel):
     path: str
 
 
+class TeacherAverageWithPrevious(BaseModel):
+    """Teacher average for a period with comparison to previous period."""
+
+    teacher_id: int
+    academic_period_id: int
+    academic_period_code: str
+    academic_period_name: str | None
+    overall_average: float | None
+    group_count: int
+    previous_academic_period_id: int | None
+    previous_academic_period_code: str | None
+    previous_academic_period_name: str | None
+    previous_overall_average: float | None
+    previous_group_count: int | None
+
+
+class TeacherAverageWithPreviousResponse(BaseModel):
+    """Schema for teacher average with previous period response envelope."""
+
+    status: int
+    message: str
+    data: TeacherAverageWithPrevious
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherHistoryEntry(BaseModel):
+    """Teacher average for a single academic period."""
+
+    period_code: str
+    period_name: str | None
+    overall_average: float | None
+
+
+class TeacherHistoryResponse(BaseModel):
+    """Schema for teacher history response envelope."""
+
+    status: int
+    message: str
+    data: list[TeacherHistoryEntry]
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherCourseItem(BaseModel):
+    """Single course entry with average score for a teacher."""
+
+    course_code: str
+    course_name: str | None
+    group_name: str | None
+    overall_average: float | None
+
+
+class TeacherCoursesResponse(BaseModel):
+    """Schema for teacher courses response envelope."""
+
+    status: int
+    message: str
+    data: list[TeacherCourseItem]
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
 class GradeDistributionBin(BaseModel):
     """Single bin in the grade distribution histogram."""
 

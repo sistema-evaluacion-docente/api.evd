@@ -48,6 +48,29 @@ class StatsController:
             academic_period_id, department_id, bin_size
         )
 
+    async def get_teacher_average_with_previous(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teacher average for a period with previous period comparison."""
+
+        return await self.repository.get_teacher_average_with_previous(
+            teacher_id, academic_period_id
+        )
+
+    async def get_teacher_history(self, teacher_id: int) -> list[dict] | None:
+        """Get teacher's historical averages across all periods."""
+
+        return await self.repository.get_teacher_history(teacher_id)
+
+    async def get_teacher_courses_by_period(
+        self, teacher_id: int, academic_period_id: int
+    ) -> list[dict] | None:
+        """Get teacher's courses with averages for a given academic period."""
+
+        return await self.repository.get_teacher_courses_by_period(
+            teacher_id, academic_period_id
+        )
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),

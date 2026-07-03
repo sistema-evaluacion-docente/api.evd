@@ -16,6 +16,7 @@ def user_to_dict(user: UserModel, roles: list[str] | None = None) -> dict:
         "active": user.active,
         "avatar_url": user.avatar_url,
         "roles": roles or [],
+        "teacher_id": user.teacher.id if user.teacher else None,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
