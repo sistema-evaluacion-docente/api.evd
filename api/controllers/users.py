@@ -39,16 +39,16 @@ class UsersController:
                 )
 
             # create log
-            await self.audits_repository.create(
-                data=AuditCreate(
-                    user_id=user["id"],
-                    table_name="users",
-                    operation="LOGIN",
-                    element=f"User {current_user.uid}",
-                    description=f"Inicio de sesión del usuario {current_user.email}",
-                    created_at=None,
-                )
-            )
+            # await self.audits_repository.create(
+            #     data=AuditCreate(
+            #         user_id=user["id"],
+            #         table_name="users",
+            #         operation="LOGIN",
+            #         element=f"User {current_user.uid}",
+            #         description=f"Inicio de sesión del usuario {current_user.email}",
+            #         created_at=None,
+            #     )
+            # )
 
             return user
         except Exception as e:

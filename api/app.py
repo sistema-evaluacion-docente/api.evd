@@ -34,6 +34,7 @@ from api.models import (
 from api.routes import (
     academic_groups,
     academic_periods,
+    admin_dashboard,
     audits,
     comments,
     courses,
@@ -118,3 +119,4 @@ app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
+app.include_router(admin_dashboard.router)
