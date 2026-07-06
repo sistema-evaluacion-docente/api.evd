@@ -56,6 +56,17 @@ class TeacherPerformanceResponse(BaseModel):
     path: str
 
 
+class TeacherRankingListResponse(BaseModel):
+    """Schema for paginated teacher ranking response envelope."""
+
+    status: int
+    message: str
+    data: list[TeacherRankItem]
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
 class DepartmentAverageWithPrevious(BaseModel):
     """Department average for a period with comparison to previous period."""
 

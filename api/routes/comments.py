@@ -171,6 +171,42 @@ async def get_comments_by_evaluation(
 
 
 @router.get(
+    "/by-evaluation/{evaluation_id}/paginated",
+    response_model=CommentPeriodListResponse,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_comments_by_evaluation_paginated(
+    evaluation_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search by teacher name, email or course"),
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: CommentsController = Depends(get_comments_controller),
+):
+    """Get comments for a given evaluation with pagination and search."""
+
+    result = await controller.get_by_evaluation_paginated(
+        evaluation_id,
+        page=page,
+        limit=limit,
+        search=search,
+    )
+
+    return ResponseSchema(
+        status=200,
+        message="Comments retrieved successfully",
+        data=result["comments"],
+        pagination=Pagination(
+            total=result["total"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
+        path=f"/comments/by-evaluation/{evaluation_id}/paginated",
+    )
+
+
+@router.get(
     "/by-teacher/{teacher_id}",
     response_model=CommentListResponse,
     responses={403: {"description": "Forbidden"}},

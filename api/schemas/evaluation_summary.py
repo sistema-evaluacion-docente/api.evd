@@ -197,3 +197,23 @@ class TeacherHistoryResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class DimensionAverageItem(BaseModel):
+    """Average score for one evaluation dimension at the evaluation level."""
+
+    dimension: str
+    average: Optional[float]
+    question_count: int
+    questions: list[QuestionScore] = []
+
+
+class DimensionAveragesOut(BaseModel):
+    """Response envelope for the dimension averages endpoint."""
+
+    status: int
+    message: str
+    data: list[DimensionAverageItem]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str

@@ -8,8 +8,12 @@ from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
 from api.database import get_db
+from api.models.academic_group import AcademicGroupModel
 from api.models.comment import CommentModel
+from api.models.course import CourseModel
 from api.models.evaluation import EvaluationModel
+from api.models.teacher import TeacherModel
+from api.models.user import UserModel
 from api.serializers.comments import comment_to_dict
 
 
@@ -57,15 +61,118 @@ class CommentsRepository:
         return comment_to_dict(comment)
 
     async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
-        """Get all comments for a given evaluation."""
+        """Get all comments for a given evaluation with teacher and course info."""
 
-        comments = (
-            self.db.query(CommentModel)
+        results = (
+            self.db.query(
+                CommentModel,
+                AcademicGroupModel.group_name,
+                UserModel.name.label("teacher_name"),
+                UserModel.avatar_url.label("teacher_avatar_url"),
+                CourseModel.name.label("course_name"),
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .outerjoin(
+                TeacherModel,
+                CommentModel.teacher_id == TeacherModel.id,
+            )
+            .outerjoin(
+                UserModel,
+                TeacherModel.user_id == UserModel.id,
+            )
+            .outerjoin(
+                CourseModel,
+                AcademicGroupModel.course_id == CourseModel.id,
+            )
             .filter(CommentModel.evaluation_id == evaluation_id)
             .all()
         )
 
-        return [comment_to_dict(c) for c in comments]
+        return [
+            comment_to_dict(
+                comment,
+                group_name=group_name,
+                teacher_name=teacher_name,
+                teacher_avatar_url=teacher_avatar_url,
+                course_name=course_name,
+            )
+            for comment, group_name, teacher_name, teacher_avatar_url, course_name in results
+        ]
+
+    async def get_by_evaluation_paginated(
+        self,
+        evaluation_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> dict:
+        """Get comments for a given evaluation with pagination and search."""
+
+        base_query = (
+            self.db.query(
+                CommentModel,
+                AcademicGroupModel.group_name,
+                UserModel.name.label("teacher_name"),
+                UserModel.avatar_url.label("teacher_avatar_url"),
+                CourseModel.name.label("course_name"),
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .outerjoin(
+                TeacherModel,
+                CommentModel.teacher_id == TeacherModel.id,
+            )
+            .outerjoin(
+                UserModel,
+                TeacherModel.user_id == UserModel.id,
+            )
+            .outerjoin(
+                CourseModel,
+                AcademicGroupModel.course_id == CourseModel.id,
+            )
+            .filter(CommentModel.evaluation_id == evaluation_id)
+        )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+                | (CourseModel.name.ilike(search_pattern))
+            )
+
+        total = base_query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        results = (
+            base_query.order_by(CommentModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "comments": [
+                comment_to_dict(
+                    comment,
+                    group_name=group_name,
+                    teacher_name=teacher_name,
+                    teacher_avatar_url=teacher_avatar_url,
+                    course_name=course_name,
+                )
+                for comment, group_name, teacher_name, teacher_avatar_url, course_name in results
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_teacher(self, teacher_id: int) -> list[dict]:
         """Get all comments for a given teacher across all evaluations."""

@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, Query
 
 from api.controllers.stats import StatsController, get_stats_controller
 from api.middlewares.auth import get_current_user, require_roles
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.stats import (
     DepartmentAverageWithPreviousResponse,
@@ -17,6 +18,7 @@ from api.schemas.stats import (
     TeacherCoursesResponse,
     TeacherHistoryResponse,
     TeacherPerformanceResponse,
+    TeacherRankingListResponse,
 )
 from api.schemas.user import RoleName
 
@@ -204,6 +206,50 @@ async def get_teacher_performance_ranking(
         message=message,
         data=ranking,
         path="/stats/teacher-performance",
+    )
+
+
+@router.get(
+    "/teacher-ranking",
+    response_model=TeacherRankingListResponse,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_teacher_ranking(
+    academic_period_id: Annotated[int | None, Query()] = None,
+    department_id: Annotated[int | None, Query()] = None,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        None, description="Search by teacher name, email or institutional code"
+    ),
+    sort: str = Query(
+        "desc", description="Sort order: 'asc' for lowest average first, 'desc' for highest average first"
+    ),
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get paginated teacher ranking by overall average score."""
+
+    result = await controller.get_teacher_ranking_paginated(
+        academic_period_id=academic_period_id,
+        department_id=department_id,
+        page=page,
+        limit=limit,
+        search=search,
+        sort=sort,
+    )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher ranking retrieved successfully",
+        data=result["teachers"],
+        pagination=Pagination(
+            total=result["total"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
+        path="/stats/teacher-ranking",
     )
 
 

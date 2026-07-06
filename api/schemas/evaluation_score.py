@@ -15,6 +15,7 @@ class EvaluationScoreOut(BaseModel):
     id: int
     evaluation_id: int
     academic_group_id: int
+    group_name: Optional[str] = None
     respondent_count: int
     overall_average: Optional[Decimal]
     created_at: datetime
