@@ -43,6 +43,11 @@ class EvaluationsController:
 
         return await self.repository.get_by_id(evaluation_id)
 
+    async def get_by_period(self, period_id: int) -> dict | None:
+        """Get an evaluation by academic period ID."""
+
+        return await self.repository.get_by_period_id(period_id)
+
     async def get_teacher_detail(
         self, evaluation_id: int, teacher_id: int
     ) -> dict | None:

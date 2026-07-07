@@ -236,6 +236,35 @@ async def get_all_evaluations(
 
 
 @router.get(
+    "/by-period/{period_id}",
+    response_model=EvaluationDetailResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+)
+async def get_evaluation_by_period(
+    period_id: int,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Endpoint to get an evaluation by academic period ID."""
+
+    evaluation = await controller.get_by_period(period_id)
+
+    if not evaluation:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation not found for the given period",
+            path=f"/evaluations/by-period/{period_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Evaluation found",
+        data=evaluation,
+        path=f"/evaluations/by-period/{period_id}",
+    )
+
+
+@router.get(
     "/{evaluation_id}",
     response_model=EvaluationDetailResponse,
     responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
