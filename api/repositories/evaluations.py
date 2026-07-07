@@ -88,6 +88,20 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
+    async def get_by_period_id(self, academic_period_id: int) -> dict | None:
+        """Get an evaluation by academic period ID."""
+
+        evaluation = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .first()
+        )
+
+        if not evaluation:
+            return None
+
+        return evaluation_to_dict(evaluation)
+
     async def get_by_period_and_department(
         self, academic_period_id: int, department_id: int
     ) -> dict | None:
