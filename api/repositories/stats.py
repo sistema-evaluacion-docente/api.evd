@@ -13,9 +13,11 @@ from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
+from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
 
 
 class StatsRepository:
@@ -638,6 +640,141 @@ class StatsRepository:
             }
             for row in rows
         ]
+
+
+    async def get_teacher_vs_department(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """
+        Compare a teacher's per-question and per-dimension averages against
+        the department averages for a given academic period.
+        """
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+        if not teacher:
+            return None
+
+        department_id = teacher.department_id
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        period_code = period.code if period else None
+
+        department = (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+        department_name = department.name if department else None
+
+        # Teacher per-question averages
+        teacher_rows = (
+            self.db.query(
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(EvaluationQuestionScoreModel.question_code)
+            .all()
+        )
+        teacher_by_code: dict[str, float] = {
+            row.question_code: round(float(row.avg_score), 2) for row in teacher_rows
+        }
+
+        # Department per-question averages
+        dept_rows = (
+            self.db.query(
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(EvaluationQuestionScoreModel.question_code)
+            .all()
+        )
+        dept_by_code: dict[str, float] = {
+            row.question_code: round(float(row.avg_score), 2) for row in dept_rows
+        }
+
+        question_text = {q["code"]: q["text"] for q in QUESTIONS}
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            questions = []
+            for code in codes:
+                questions.append(
+                    {
+                        "code": code,
+                        "text": question_text.get(code, code),
+                        "teacher_average": teacher_by_code.get(code),
+                        "department_average": dept_by_code.get(code),
+                    }
+                )
+
+            teacher_dim = [teacher_by_code[c] for c in codes if c in teacher_by_code]
+            dept_dim = [dept_by_code[c] for c in codes if c in dept_by_code]
+
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "teacher_average": (
+                        round(sum(teacher_dim) / len(teacher_dim), 2)
+                        if teacher_dim
+                        else None
+                    ),
+                    "department_average": (
+                        round(sum(dept_dim) / len(dept_dim), 2) if dept_dim else None
+                    ),
+                    "questions": questions,
+                }
+            )
+
+        all_dept_scores = list(dept_by_code.values())
+        dept_overall = (
+            round(sum(all_dept_scores) / len(all_dept_scores), 2)
+            if all_dept_scores
+            else None
+        )
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "academic_period_code": period_code,
+            "department_id": department_id,
+            "department_name": department_name,
+            "department_overall_average": dept_overall,
+            "dimensions": dimensions,
+        }
 
 
 def get_stats_repository(db: Annotated[Session, Depends(get_db)]):

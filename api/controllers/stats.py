@@ -71,6 +71,15 @@ class StatsController:
             teacher_id, academic_period_id
         )
 
+    async def get_teacher_vs_department(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Compare teacher averages per dimension and question against the department."""
+
+        return await self.repository.get_teacher_vs_department(
+            teacher_id, academic_period_id
+        )
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),

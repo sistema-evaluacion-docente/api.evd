@@ -34,6 +34,8 @@ from api.repositories.evaluations import (
     EvaluationsRepository,
     get_evaluations_repository,
 )
+from api.models.evaluation import EvaluationModel as EvaluationORM
+from api.repositories.stats import StatsRepository, get_stats_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.evaluation import (
     EvaluationDetailResponse,
@@ -381,12 +383,35 @@ async def export_teacher_evaluation(
     include_comments: bool = Query(False, description="Include student comments"),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
+    db: Session = Depends(get_db),
+    stats_repo: StatsRepository = Depends(get_stats_repository),
 ):
     """Download an Excel report for a teacher's evaluation detail."""
 
     detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
     if not detail:
         raise HTTPException(status_code=404, detail="Evaluation or teacher not found")
+
+    # Fetch teacher-vs-department comparison data
+    comparison = None
+    eval_record = db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+    if eval_record:
+        comparison = await stats_repo.get_teacher_vs_department(
+            teacher_id, eval_record.academic_period_id
+        )
+
+    dept_by_dim: dict[str, float | None] = {}
+    dept_by_code: dict[str, float | None] = {}
+    dept_name: str | None = None
+    dept_overall: float | None = None
+
+    if comparison:
+        dept_name = comparison.get("department_name")
+        dept_overall = comparison.get("department_overall_average")
+        for dim in comparison["dimensions"]:
+            dept_by_dim[dim["dimension"]] = dim["department_average"]
+            for q in dim["questions"]:
+                dept_by_code[q["code"]] = q["department_average"]
 
     comments_by_course: dict[str, list[str]] = {}
     if include_comments:
@@ -505,7 +530,7 @@ async def export_teacher_evaluation(
         r += 1
 
     avg = detail["overall_average"]
-    lc = ws.cell(row=r, column=1, value="Promedio global")
+    lc = ws.cell(row=r, column=1, value="Promedio docente")
     lc.font = bold_font()
     lc.fill = fill(C_DIM_HDR)
     lc.border = thin_border()
@@ -516,22 +541,57 @@ async def export_teacher_evaluation(
     vc.alignment = left()
     ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
     r += 1
+
+    lc = ws.cell(row=r, column=1, value="Promedio departamento")
+    lc.font = bold_font()
+    lc.fill = fill(C_DIM_HDR)
+    lc.border = thin_border()
+    lc.alignment = left()
+    dept_avg_label = f"{dept_overall} / 5.0" if dept_overall else "N/D"
+    if dept_name:
+        dept_avg_label = f"{dept_overall} / 5.0  ({dept_name})" if dept_overall else f"N/D  ({dept_name})"
+    vc = ws.cell(row=r, column=2, value=dept_avg_label)
+    vc.font = Font(bold=True, color=score_color(dept_overall))
+    vc.border = thin_border()
+    vc.alignment = left()
+    ws.merge_cells(start_row=r, start_column=2, end_row=r, end_column=4)
+    r += 1
     r += 1
 
     # ── Resumen por dimensión ──────────────────────────────────────────
     style_section_header(ws, r, "RESUMEN POR DIMENSIÓN")
     r += 1
-    style_table_header(ws, r, ["Dimensión", "Promedio", "", ""])
+    style_table_header(ws, r, ["Dimensión", "Docente", "Departamento", "Diferencia"])
     r += 1
     for i, dim in enumerate(detail["dimensions"]):
         dim_avg = dim["average"]
+        dept_dim_avg = dept_by_dim.get(dim["dimension"])
+        diff = (
+            round(dim_avg - dept_dim_avg, 2)
+            if dim_avg is not None and dept_dim_avg is not None
+            else None
+        )
+        diff_str = (
+            f"+{diff}" if diff is not None and diff > 0
+            else str(diff) if diff is not None
+            else "N/D"
+        )
         style_data_row(
             ws,
             r,
-            [dim["dimension"], f"{dim_avg} / 5.0" if dim_avg else "—", "", ""],
+            [
+                dim["dimension"],
+                f"{dim_avg} / 5.0" if dim_avg is not None else "—",
+                f"{dept_dim_avg} / 5.0" if dept_dim_avg is not None else "N/D",
+                diff_str,
+            ],
             alternate=i % 2 == 1,
         )
         ws.cell(row=r, column=2).font = Font(bold=True, color=score_color(dim_avg))
+        ws.cell(row=r, column=3).font = Font(bold=True, color=score_color(dept_dim_avg))
+        ws.cell(row=r, column=4).font = Font(
+            bold=True, color=C_GREEN if (diff or 0) >= 0 else C_RED
+        )
         r += 1
     r += 1
 
@@ -571,19 +631,29 @@ async def export_teacher_evaluation(
             ws, r, f"{dim['dimension'].upper()}   |   Promedio: {dim['average']} / 5.0"
         )
         r += 1
-        style_table_header(ws, r, ["Código", "Descripción", "Promedio", ""])
+        style_table_header(ws, r, ["Código", "Descripción", "Docente", "Departamento"])
         r += 1
         for i, q in enumerate(dim.get("questions", [])):
+            dept_q_avg = dept_by_code.get(q["code"])
             style_data_row(
                 ws,
                 r,
-                [q["code"], q["text"], f"{q['score']} / 5.0", ""],
+                [
+                    q["code"],
+                    q["text"],
+                    f"{q['score']} / 5.0" if q["score"] is not None else "—",
+                    f"{dept_q_avg} / 5.0" if dept_q_avg is not None else "N/D",
+                ],
                 alternate=i % 2 == 1,
             )
             ws.cell(row=r, column=3).font = Font(
                 bold=True, color=score_color(q["score"])
             )
             ws.cell(row=r, column=3).alignment = center()
+            ws.cell(row=r, column=4).font = Font(
+                bold=True, color=score_color(dept_q_avg)
+            )
+            ws.cell(row=r, column=4).alignment = center()
             r += 1
 
     # ── Comentarios (opcional) ─────────────────────────────────────────
