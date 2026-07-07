@@ -322,6 +322,142 @@ class StatsRepository:
             "bottom_5": bottom_5,
         }
 
+    async def get_teacher_ranking_paginated(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        sort: str = "desc",
+    ) -> dict:
+        """
+        Get paginated teacher ranking by overall average score with search.
+        """
+
+        base_query = (
+            self.db.query(
+                TeacherModel.id.label("teacher_id"),
+                TeacherModel.institutional_code,
+                UserModel.name,
+                UserModel.email,
+                UserModel.avatar_url,
+                TeacherModel.contract_type,
+                func.count(EvaluationScoreModel.id).label("group_count"),
+                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.teacher_id == TeacherModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+        )
+
+        if academic_period_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == academic_period_id
+            )
+
+        if department_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+                | (TeacherModel.institutional_code.ilike(search_pattern))
+            )
+
+        count_query = (
+            self.db.query(func.count(func.distinct(TeacherModel.id)))
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.teacher_id == TeacherModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+        )
+
+        if academic_period_id is not None:
+            count_query = count_query.filter(
+                EvaluationModel.academic_period_id == academic_period_id
+            )
+
+        if department_id is not None:
+            count_query = count_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        if search:
+            search_pattern = f"%{search}%"
+            count_query = count_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+                | (TeacherModel.institutional_code.ilike(search_pattern))
+            )
+
+        total = count_query.scalar() or 0
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        results = (
+            base_query.group_by(
+                TeacherModel.id,
+                TeacherModel.institutional_code,
+                UserModel.name,
+                UserModel.email,
+                UserModel.avatar_url,
+                TeacherModel.contract_type,
+            )
+            .order_by(
+                func.avg(EvaluationScoreModel.overall_average).desc()
+                if sort == "desc"
+                else func.avg(EvaluationScoreModel.overall_average).asc()
+            )
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "teachers": [
+                {
+                    "teacher_id": row.teacher_id,
+                    "institutional_code": row.institutional_code,
+                    "name": row.name,
+                    "avatar_url": row.avatar_url,
+                    "contract_type": row.contract_type,
+                    "group_count": row.group_count,
+                    "overall_average": (
+                        float(row.overall_average) if row.overall_average else None
+                    ),
+                }
+                for row in results
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
+
     async def get_grade_distribution(
         self,
         academic_period_id: int | None = None,

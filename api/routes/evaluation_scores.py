@@ -2,7 +2,7 @@
 Routes for evaluation score operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.evaluation_scores import (
     EvaluationScoresController,
@@ -13,6 +13,7 @@ from api.schemas.evaluation_score import (
     EvaluationScoreDetailResponse,
     EvaluationScoreListResponse,
 )
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
@@ -76,16 +77,30 @@ async def get_evaluation_score_by_id(
 )
 async def get_scores_by_evaluation(
     evaluation_id: int,
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(None, description="Search by group name"),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationScoresController = Depends(get_evaluation_scores_controller),
 ):
-    """Endpoint to list all scores for a given evaluation."""
+    """Endpoint to list all scores for a given evaluation with pagination and search."""
 
-    scores = await controller.get_by_evaluation(evaluation_id)
+    result = await controller.get_by_evaluation_paginated(
+        evaluation_id,
+        page=page,
+        limit=limit,
+        search=search,
+    )
 
     return ResponseSchema(
         status=200,
         message="Evaluation scores found",
-        data=scores,
+        data=result["scores"],
+        pagination=Pagination(
+            total=result["total"],
+            page=page,
+            limit=limit,
+            pages=result["pages"],
+        ),
         path=f"/evaluation-scores/by-evaluation/{evaluation_id}",
     )

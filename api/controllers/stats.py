@@ -36,6 +36,26 @@ class StatsController:
 
         return await self.repository.get_teacher_performance_ranking(academic_period_id)
 
+    async def get_teacher_ranking_paginated(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        sort: str = "desc",
+    ) -> dict:
+        """Get paginated teacher ranking by overall average score with search."""
+
+        return await self.repository.get_teacher_ranking_paginated(
+            academic_period_id=academic_period_id,
+            department_id=department_id,
+            page=page,
+            limit=limit,
+            search=search,
+            sort=sort,
+        )
+
     async def get_grade_distribution(
         self,
         academic_period_id: int | None = None,
