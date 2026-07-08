@@ -11,10 +11,13 @@ from sqlalchemy.orm import Session
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.comment import CommentModel
+from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.faculty import FacultyModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
@@ -322,6 +325,142 @@ class StatsRepository:
             **(period_info or {}),
             "top_5": top_5,
             "bottom_5": bottom_5,
+        }
+
+    async def get_teacher_ranking_paginated(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        sort: str = "desc",
+    ) -> dict:
+        """
+        Get paginated teacher ranking by overall average score with search.
+        """
+
+        base_query = (
+            self.db.query(
+                TeacherModel.id.label("teacher_id"),
+                TeacherModel.institutional_code,
+                UserModel.name,
+                UserModel.email,
+                UserModel.avatar_url,
+                TeacherModel.contract_type,
+                func.count(EvaluationScoreModel.id).label("group_count"),
+                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.teacher_id == TeacherModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+        )
+
+        if academic_period_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == academic_period_id
+            )
+
+        if department_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+                | (TeacherModel.institutional_code.ilike(search_pattern))
+            )
+
+        count_query = (
+            self.db.query(func.count(func.distinct(TeacherModel.id)))
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.teacher_id == TeacherModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+        )
+
+        if academic_period_id is not None:
+            count_query = count_query.filter(
+                EvaluationModel.academic_period_id == academic_period_id
+            )
+
+        if department_id is not None:
+            count_query = count_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        if search:
+            search_pattern = f"%{search}%"
+            count_query = count_query.filter(
+                (UserModel.name.ilike(search_pattern))
+                | (UserModel.email.ilike(search_pattern))
+                | (TeacherModel.institutional_code.ilike(search_pattern))
+            )
+
+        total = count_query.scalar() or 0
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        results = (
+            base_query.group_by(
+                TeacherModel.id,
+                TeacherModel.institutional_code,
+                UserModel.name,
+                UserModel.email,
+                UserModel.avatar_url,
+                TeacherModel.contract_type,
+            )
+            .order_by(
+                func.avg(EvaluationScoreModel.overall_average).desc()
+                if sort == "desc"
+                else func.avg(EvaluationScoreModel.overall_average).asc()
+            )
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "teachers": [
+                {
+                    "teacher_id": row.teacher_id,
+                    "institutional_code": row.institutional_code,
+                    "name": row.name,
+                    "avatar_url": row.avatar_url,
+                    "contract_type": row.contract_type,
+                    "group_count": row.group_count,
+                    "overall_average": (
+                        float(row.overall_average) if row.overall_average else None
+                    ),
+                }
+                for row in results
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
         }
 
     async def get_grade_distribution(
@@ -640,6 +779,137 @@ class StatsRepository:
             }
             for row in rows
         ]
+
+    async def get_teacher_comments_by_subject(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Return comments grouped by course/subject for a teacher in a period."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        rows = (
+            self.db.query(
+                CourseModel.code.label("course_code"),
+                CourseModel.name.label("course_name"),
+                FacultyModel.name.label("faculty_name"),
+                func.count(CommentModel.id).label("comment_count"),
+            )
+            .join(
+                EvaluationModel,
+                CommentModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .join(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
+            .join(
+                DepartmentModel,
+                CourseModel.department_id == DepartmentModel.id,
+            )
+            .outerjoin(
+                FacultyModel,
+                DepartmentModel.faculty_id == FacultyModel.id,
+            )
+            .filter(
+                CommentModel.teacher_id == teacher_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(
+                CourseModel.id,
+                CourseModel.code,
+                CourseModel.name,
+                FacultyModel.name,
+            )
+            .order_by(func.count(CommentModel.id).desc())
+            .all()
+        )
+
+        subjects = [
+            {
+                "course_code": row.course_code,
+                "course_name": row.course_name,
+                "faculty_name": row.faculty_name,
+                "comment_count": row.comment_count,
+            }
+            for row in rows
+        ]
+
+        total_comments = sum(s["comment_count"] for s in subjects)
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "total_comments": total_comments,
+            "subjects": subjects,
+        }
+
+    async def get_teacher_dimension_averages(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Return dimension-level averages for a teacher in a period."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        eval_scores = (
+            self.db.query(EvaluationScoreModel)
+            .join(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .all()
+        )
+
+        accumulated: dict[str, list[float]] = {}
+
+        for eval_score in eval_scores:
+            q_scores = (
+                self.db.query(EvaluationQuestionScoreModel)
+                .filter(
+                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
+                )
+                .all()
+            )
+
+            for qs in q_scores:
+                accumulated.setdefault(qs.question_code, []).append(float(qs.score))
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            dim_scores = [s for c in codes for s in accumulated.get(c, [])]
+            avg = round(sum(dim_scores) / len(dim_scores), 2) if dim_scores else None
+            percentage = round(avg * 20, 2) if avg is not None else None
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "average": avg,
+                    "percentage": percentage,
+                }
+            )
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "dimensions": dimensions,
+        }
 
 
     async def get_teacher_vs_department(

@@ -9,6 +9,7 @@ from fastapi.params import Depends
 from sqlalchemy.orm import Session
 
 from api.database import get_db
+from api.models.academic_group import AcademicGroupModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.serializers.evaluation_scores import evaluation_score_to_dict
 
@@ -67,15 +68,72 @@ class EvaluationScoresRepository:
         return evaluation_score_to_dict(score)
 
     async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
-        """Get all scores for a given evaluation."""
+        """Get all scores for a given evaluation, including group_name."""
 
-        scores = (
-            self.db.query(EvaluationScoreModel)
+        results = (
+            self.db.query(
+                EvaluationScoreModel, AcademicGroupModel.group_name
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
             .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
             .all()
         )
 
-        return [evaluation_score_to_dict(s) for s in scores]
+        return [
+            evaluation_score_to_dict(score, group_name)
+            for score, group_name in results
+        ]
+
+    async def get_by_evaluation_paginated(
+        self,
+        evaluation_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> dict:
+        """Get scores for a given evaluation with pagination and search."""
+
+        base_query = (
+            self.db.query(
+                EvaluationScoreModel, AcademicGroupModel.group_name
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+        )
+
+        if search:
+            search_pattern = f"%{search}%"
+            base_query = base_query.filter(
+                AcademicGroupModel.group_name.ilike(search_pattern)
+            )
+
+        total = base_query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
+
+        results = (
+            base_query.order_by(EvaluationScoreModel.id.asc())
+            .offset(offset)
+            .limit(limit)
+            .all()
+        )
+
+        return {
+            "scores": [
+                evaluation_score_to_dict(score, group_name)
+                for score, group_name in results
+            ],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_evaluation_and_group(
         self, evaluation_id: int, academic_group_id: int

@@ -88,6 +88,20 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
+    async def get_by_period_id(self, academic_period_id: int) -> dict | None:
+        """Get an evaluation by academic period ID."""
+
+        evaluation = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .first()
+        )
+
+        if not evaluation:
+            return None
+
+        return evaluation_to_dict(evaluation)
+
     async def get_by_period_and_department(
         self, academic_period_id: int, department_id: int
     ) -> dict | None:
@@ -543,6 +557,79 @@ class EvaluationsRepository:
             "worst_teacher": ranking[-1] if ranking else None,
             "ranking": ranking,
         }
+
+    async def get_dimension_averages(
+        self, evaluation_id: int
+    ) -> list[dict] | None:
+        """Return dimension-level averages aggregated across all groups for an evaluation."""
+
+        evaluation = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.id == evaluation_id)
+            .first()
+        )
+
+        if not evaluation:
+            return None
+
+        score_rows = (
+            self.db.query(EvaluationScoreModel)
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+            .all()
+        )
+
+        if not score_rows:
+            return []
+
+        accumulated: dict[str, list[float]] = {}
+
+        for eval_score in score_rows:
+            q_scores = (
+                self.db.query(EvaluationQuestionScoreModel)
+                .filter(
+                    EvaluationQuestionScoreModel.evaluation_score_id
+                    == eval_score.id
+                )
+                .all()
+            )
+
+            for qs in q_scores:
+                accumulated.setdefault(qs.question_code, []).append(
+                    float(qs.score)
+                )
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            dim_scores = [
+                s for c in codes for s in accumulated.get(c, [])
+            ]
+            questions = []
+            for code in codes:
+                code_scores = accumulated.get(code, [])
+                if code_scores:
+                    questions.append(
+                        {
+                            "code": code,
+                            "text": QUESTION_TEXT.get(code, code),
+                            "score": round(
+                                sum(code_scores) / len(code_scores), 2
+                            ),
+                        }
+                    )
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "average": (
+                        round(sum(dim_scores) / len(dim_scores), 2)
+                        if dim_scores
+                        else None
+                    ),
+                    "question_count": len(codes),
+                    "questions": questions,
+                }
+            )
+
+        return dimensions
 
 
 def get_evaluations_repository(db: Annotated[Session, Depends(get_db)]):

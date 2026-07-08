@@ -56,6 +56,17 @@ class TeacherPerformanceResponse(BaseModel):
     path: str
 
 
+class TeacherRankingListResponse(BaseModel):
+    """Schema for paginated teacher ranking response envelope."""
+
+    status: int
+    message: str
+    data: list[TeacherRankItem]
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
 class DepartmentAverageWithPrevious(BaseModel):
     """Department average for a period with comparison to previous period."""
 
@@ -178,6 +189,62 @@ class GradeDistributionResponse(BaseModel):
     status: int
     message: str
     data: GradeDistribution
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherCommentSubjectItem(BaseModel):
+    """Comment count for a single course/subject."""
+
+    course_code: str
+    course_name: str | None
+    faculty_name: str | None
+    comment_count: int
+
+
+class TeacherCommentsBySubjectData(BaseModel):
+    """Teacher comments grouped by subject for a period."""
+
+    teacher_id: int
+    academic_period_id: int
+    total_comments: int
+    subjects: list[TeacherCommentSubjectItem]
+
+
+class TeacherCommentsBySubjectResponse(BaseModel):
+    """Schema for teacher comments by subject response envelope."""
+
+    status: int
+    message: str
+    data: TeacherCommentsBySubjectData
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class TeacherDimensionAverageItem(BaseModel):
+    """Average score for a single evaluation dimension."""
+
+    dimension: str
+    average: float | None
+    percentage: float | None
+
+
+class TeacherDimensionAveragesData(BaseModel):
+    """Teacher dimension averages for a period."""
+
+    teacher_id: int
+    academic_period_id: int
+    dimensions: list[TeacherDimensionAverageItem]
+
+
+class TeacherDimensionAveragesResponse(BaseModel):
+    """Schema for teacher dimension averages response envelope."""
+
+    status: int
+    message: str
+    data: TeacherDimensionAveragesData
     error: str | None = None
     timestamp: datetime
     path: str

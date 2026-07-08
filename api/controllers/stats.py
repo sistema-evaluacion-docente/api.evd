@@ -36,6 +36,26 @@ class StatsController:
 
         return await self.repository.get_teacher_performance_ranking(academic_period_id)
 
+    async def get_teacher_ranking_paginated(
+        self,
+        academic_period_id: int | None = None,
+        department_id: int | None = None,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+        sort: str = "desc",
+    ) -> dict:
+        """Get paginated teacher ranking by overall average score with search."""
+
+        return await self.repository.get_teacher_ranking_paginated(
+            academic_period_id=academic_period_id,
+            department_id=department_id,
+            page=page,
+            limit=limit,
+            search=search,
+            sort=sort,
+        )
+
     async def get_grade_distribution(
         self,
         academic_period_id: int | None = None,
@@ -71,6 +91,24 @@ class StatsController:
             teacher_id, academic_period_id
         )
 
+    async def get_teacher_comments_by_subject(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teacher comments grouped by subject for a period."""
+
+        return await self.repository.get_teacher_comments_by_subject(
+            teacher_id, academic_period_id
+        )
+
+    async def get_teacher_dimension_averages(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teacher dimension averages for a period."""
+
+        return await self.repository.get_teacher_dimension_averages(
+            teacher_id, academic_period_id
+        )
+    
     async def get_teacher_vs_department(
         self, teacher_id: int, academic_period_id: int
     ) -> dict | None:

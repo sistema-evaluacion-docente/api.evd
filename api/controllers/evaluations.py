@@ -43,6 +43,11 @@ class EvaluationsController:
 
         return await self.repository.get_by_id(evaluation_id)
 
+    async def get_by_period(self, period_id: int) -> dict | None:
+        """Get an evaluation by academic period ID."""
+
+        return await self.repository.get_by_period_id(period_id)
+
     async def get_teacher_detail(
         self, evaluation_id: int, teacher_id: int
     ) -> dict | None:
@@ -61,6 +66,13 @@ class EvaluationsController:
         """Get aggregated statistics for an evaluation."""
 
         return await self.repository.get_summary(evaluation_id)
+
+    async def get_dimension_averages(
+        self, evaluation_id: int
+    ) -> list[dict] | None:
+        """Get dimension-level averages for an evaluation."""
+
+        return await self.repository.get_dimension_averages(evaluation_id)
 
     async def get_teachers_by_period(
         self, academic_period_id: int, page: int = 1, limit: int = 10, search: str | None = None

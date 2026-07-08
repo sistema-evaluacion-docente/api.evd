@@ -32,6 +32,22 @@ class CommentsController:
 
         return await self.repository.get_by_evaluation(evaluation_id)
 
+    async def get_by_evaluation_paginated(
+        self,
+        evaluation_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
+    ) -> dict:
+        """Get comments for a given evaluation with pagination and search."""
+
+        return await self.repository.get_by_evaluation_paginated(
+            evaluation_id,
+            page=page,
+            limit=limit,
+            search=search,
+        )
+
     async def get_by_teacher(self, teacher_id: int) -> list[dict]:
         """Get all comments for a given teacher."""
 
