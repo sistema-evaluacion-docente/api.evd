@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from api.config import config
 
 
-def validate_file_size(file_bytes: bytes) -> None:
+def validate_file_size(file_bytes: bytes, limit: int) -> None:
     """Validate that the file does not exceed the configured maximum size.
 
     Reads the length of the provided byte string and compares it against
@@ -14,19 +14,20 @@ def validate_file_size(file_bytes: bytes) -> None:
 
     Args:
         file_bytes: Raw content of the uploaded file.
+        limit: Maximum allowed file size in MB.
 
     Raises:
         HTTPException: If the file size exceeds the configured limit.
     """
 
-    max_size = config.MAX_UPLOAD_SIZE_MB * 1024 * 1024
+    if limit is None:
+        limit = config.MAX_UPLOAD_SIZE_MB
+
+    max_size = limit * 1024 * 1024
 
     if len(file_bytes) > max_size:
 
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"El archivo excede el tamaño máximo de "
-                f"{config.MAX_UPLOAD_SIZE_MB}MB"
-            ),
+            detail=(f"El archivo excede el tamaño máximo de " f"{limit}MB"),
         )
