@@ -49,7 +49,8 @@ async def upload_teachers_excel(
 
     file_bytes = await file.read()
 
-    validate_file_size(file_bytes)
+    # Validate file size (limit set to 5MB for this endpoint)
+    validate_file_size(file_bytes, 5)
 
     if not file_bytes:
         raise HTTPException(
