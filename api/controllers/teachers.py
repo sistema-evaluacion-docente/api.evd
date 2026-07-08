@@ -2,6 +2,7 @@
 Teachers controller
 """
 
+import csv
 import io
 
 import openpyxl
@@ -99,20 +100,22 @@ class TeachersController:
         return teacher
 
     async def upload_excel(
-        self, file_bytes: bytes, department_id: int, current_user
+        self, file_bytes: bytes, filename: str, department_id: int, current_user
     ) -> dict:
-        """Parse an Excel file and bulk-create teachers for the given department."""
+        """Parse an Excel or CSV file and bulk-create teachers for the given department."""
 
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True)
-        ws = wb.active
+        is_csv = filename.lower().endswith(".csv")
 
-        if not ws:
-            raise ValueError("El archivo Excel está vacío o no tiene hojas")
+        if is_csv:
+            rows = self._parse_csv(file_bytes)
+        else:
+            rows = self._parse_excel(file_bytes)
 
-        rows = list(ws.iter_rows(values_only=True))
         if len(rows) < 2:
+            file_type = "CSV" if is_csv else "Excel"
+
             raise ValueError(
-                "El archivo Excel debe contener al menos un encabezado y una fila de datos"
+                f"El archivo {file_type} debe contener al menos un encabezado y una fila de datos"
             )
 
         header = [str(c).strip().lower() if c else "" for c in rows[0]]
@@ -123,7 +126,7 @@ class TeachersController:
             missing = expected - actual
 
             raise ValueError(
-                f"Faltan columnas requeridas en el Excel: {', '.join(sorted(missing))}"
+                f"Faltan columnas requeridas en el archivo: {', '.join(sorted(missing))}"
             )
 
         col_idx = {name: i for i, name in enumerate(header)}
@@ -207,9 +210,17 @@ class TeachersController:
                     contract_type=row["tipo_contrato"],
                 )
 
-                user = await self.users_repository.save(user_data)
+                await self.users_repository.save(user_data)
 
-                created.append(user)
+                created.append(
+                    {
+                        "nombre": row["nombre"],
+                        "email": row["email"],
+                        "codigo_institucional": row["codigo_institucional"],
+                        "tipo_contrato": row["tipo_contrato"],
+                    }
+                )
+
                 existing_codes.add(row["codigo_institucional"])
 
             except ValueError as e:
@@ -367,6 +378,22 @@ class TeachersController:
         )
 
         return updated
+
+    def _parse_excel(self, file_bytes: bytes) -> list[tuple]:
+        """Parse Excel file and return rows as list of tuples."""
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True)
+        ws = wb.active
+
+        if not ws:
+            raise ValueError("El archivo Excel está vacío o no tiene hojas")
+
+        return list(ws.iter_rows(values_only=True))
+
+    def _parse_csv(self, file_bytes: bytes) -> list[tuple]:
+        """Parse CSV file and return rows as list of tuples."""
+        text = file_bytes.decode("utf-8-sig")
+        reader = csv.reader(io.StringIO(text))
+        return [tuple(row) for row in reader]
 
 
 def get_teachers_controller(

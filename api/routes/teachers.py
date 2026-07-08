@@ -34,15 +34,17 @@ async def upload_teachers_excel(
     current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """Upload an Excel file to bulk-create teachers for the director's department.
+    """Upload an Excel or CSV file to bulk-create teachers for the director's department.
 
-    The Excel must have columns: nombre, email, codigo institucional, tipo de contrato.
+    The file must have columns: nombre, email, codigo institucional, tipo de contrato.
     """
 
-    if not file.filename or not file.filename.lower().endswith((".xlsx", ".xls")):
+    if not file.filename or not file.filename.lower().endswith(
+        (".xlsx", ".xls", ".csv")
+    ):
         raise HTTPException(
             status_code=400,
-            detail="El archivo debe ser un Excel (.xlsx o .xls)",
+            detail="El archivo debe ser un Excel (.xlsx, .xls) o CSV (.csv)",
         )
 
     file_bytes = await file.read()
@@ -64,7 +66,9 @@ async def upload_teachers_excel(
         )
 
     try:
-        result = await controller.upload_excel(file_bytes, department_id, current_user)
+        result = await controller.upload_excel(
+            file_bytes, file.filename, department_id, current_user
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
