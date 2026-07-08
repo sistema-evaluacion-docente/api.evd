@@ -259,3 +259,44 @@ class StatsListResponse(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class QuestionComparison(BaseModel):
+    """Per-question scores for teacher vs department comparison."""
+
+    code: str
+    text: str
+    teacher_average: float | None
+    department_average: float | None
+
+
+class DimensionComparison(BaseModel):
+    """Per-dimension averages for teacher vs department comparison."""
+
+    dimension: str
+    teacher_average: float | None
+    department_average: float | None
+    questions: list[QuestionComparison]
+
+
+class TeacherDepartmentComparison(BaseModel):
+    """Full teacher vs department comparison for an academic period."""
+
+    teacher_id: int
+    academic_period_id: int
+    academic_period_code: str | None
+    department_id: int | None
+    department_name: str | None
+    department_overall_average: float | None
+    dimensions: list[DimensionComparison]
+
+
+class TeacherDepartmentComparisonResponse(BaseModel):
+    """Response envelope for teacher vs department comparison."""
+
+    status: int
+    message: str
+    data: TeacherDepartmentComparison | None = None
+    error: str | None = None
+    timestamp: datetime
+    path: str

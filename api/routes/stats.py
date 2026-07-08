@@ -17,6 +17,7 @@ from api.schemas.stats import (
     TeacherAverageWithPreviousResponse,
     TeacherCommentsBySubjectResponse,
     TeacherCoursesResponse,
+    TeacherDepartmentComparisonResponse,
     TeacherDimensionAveragesResponse,
     TeacherHistoryResponse,
     TeacherPerformanceResponse,
@@ -274,6 +275,37 @@ async def get_teacher_performance_ranking(
         message=message,
         data=ranking,
         path="/stats/teacher-performance",
+    )
+
+
+@router.get(
+    "/teacher-vs-department",
+    response_model=TeacherDepartmentComparisonResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_teacher_vs_department(
+    teacher_id: Annotated[int, Query(..., description="Teacher ID")],
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    _=Depends(get_current_user),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Compare a teacher's per-dimension and per-question averages against the department average."""
+
+    result = await controller.get_teacher_vs_department(teacher_id, academic_period_id)
+
+    if result is None:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            data=None,
+            path="/stats/teacher-vs-department",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher vs department comparison retrieved successfully",
+        data=result,
+        path="/stats/teacher-vs-department",
     )
 
 
