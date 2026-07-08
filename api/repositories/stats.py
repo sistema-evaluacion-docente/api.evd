@@ -11,11 +11,16 @@ from sqlalchemy.orm import Session
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.comment import CommentModel
+from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
+from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.faculty import FacultyModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.utils.dimensions import DIMENSION_MAP
 
 
 class StatsRepository:
@@ -774,6 +779,137 @@ class StatsRepository:
             }
             for row in rows
         ]
+
+    async def get_teacher_comments_by_subject(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Return comments grouped by course/subject for a teacher in a period."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        rows = (
+            self.db.query(
+                CourseModel.code.label("course_code"),
+                CourseModel.name.label("course_name"),
+                FacultyModel.name.label("faculty_name"),
+                func.count(CommentModel.id).label("comment_count"),
+            )
+            .join(
+                EvaluationModel,
+                CommentModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .join(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
+            .join(
+                DepartmentModel,
+                CourseModel.department_id == DepartmentModel.id,
+            )
+            .outerjoin(
+                FacultyModel,
+                DepartmentModel.faculty_id == FacultyModel.id,
+            )
+            .filter(
+                CommentModel.teacher_id == teacher_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(
+                CourseModel.id,
+                CourseModel.code,
+                CourseModel.name,
+                FacultyModel.name,
+            )
+            .order_by(func.count(CommentModel.id).desc())
+            .all()
+        )
+
+        subjects = [
+            {
+                "course_code": row.course_code,
+                "course_name": row.course_name,
+                "faculty_name": row.faculty_name,
+                "comment_count": row.comment_count,
+            }
+            for row in rows
+        ]
+
+        total_comments = sum(s["comment_count"] for s in subjects)
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "total_comments": total_comments,
+            "subjects": subjects,
+        }
+
+    async def get_teacher_dimension_averages(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Return dimension-level averages for a teacher in a period."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        eval_scores = (
+            self.db.query(EvaluationScoreModel)
+            .join(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .all()
+        )
+
+        accumulated: dict[str, list[float]] = {}
+
+        for eval_score in eval_scores:
+            q_scores = (
+                self.db.query(EvaluationQuestionScoreModel)
+                .filter(
+                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
+                )
+                .all()
+            )
+
+            for qs in q_scores:
+                accumulated.setdefault(qs.question_code, []).append(float(qs.score))
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            dim_scores = [s for c in codes for s in accumulated.get(c, [])]
+            avg = round(sum(dim_scores) / len(dim_scores), 2) if dim_scores else None
+            percentage = round(avg * 20, 2) if avg is not None else None
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "average": avg,
+                    "percentage": percentage,
+                }
+            )
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "dimensions": dimensions,
+        }
 
 
 def get_stats_repository(db: Annotated[Session, Depends(get_db)]):

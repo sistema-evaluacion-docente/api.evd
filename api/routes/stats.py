@@ -15,7 +15,9 @@ from api.schemas.stats import (
     GradeDistributionResponse,
     StatsListResponse,
     TeacherAverageWithPreviousResponse,
+    TeacherCommentsBySubjectResponse,
     TeacherCoursesResponse,
+    TeacherDimensionAveragesResponse,
     TeacherHistoryResponse,
     TeacherPerformanceResponse,
     TeacherRankingListResponse,
@@ -181,6 +183,72 @@ async def get_teacher_courses(
 
 
 @router.get(
+    "/teacher-comments-by-subject",
+    response_model=TeacherCommentsBySubjectResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_teacher_comments_by_subject(
+    teacher_id: Annotated[int, Query(..., description="Teacher ID")],
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    _=Depends(get_current_user),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get teacher comments grouped by subject for a period."""
+
+    result = await controller.get_teacher_comments_by_subject(
+        teacher_id, academic_period_id
+    )
+
+    if result is None:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            data=None,
+            path="/stats/teacher-comments-by-subject",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher comments by subject retrieved successfully",
+        data=result,
+        path="/stats/teacher-comments-by-subject",
+    )
+
+
+@router.get(
+    "/teacher-dimension-averages",
+    response_model=TeacherDimensionAveragesResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_teacher_dimension_averages(
+    teacher_id: Annotated[int, Query(..., description="Teacher ID")],
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    _=Depends(get_current_user),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get teacher dimension averages for a period."""
+
+    result = await controller.get_teacher_dimension_averages(
+        teacher_id, academic_period_id
+    )
+
+    if result is None:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            data=None,
+            path="/stats/teacher-dimension-averages",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher dimension averages retrieved successfully",
+        data=result,
+        path="/stats/teacher-dimension-averages",
+    )
+
+
+@router.get(
     "/teacher-performance",
     response_model=TeacherPerformanceResponse,
     responses={403: {"description": "Forbidden"}},
@@ -223,7 +291,8 @@ async def get_teacher_ranking(
         None, description="Search by teacher name, email or institutional code"
     ),
     sort: str = Query(
-        "desc", description="Sort order: 'asc' for lowest average first, 'desc' for highest average first"
+        "desc",
+        description="Sort order: 'asc' for lowest average first, 'desc' for highest average first",
     ),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: StatsController = Depends(get_stats_controller),

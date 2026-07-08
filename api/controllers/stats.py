@@ -91,6 +91,24 @@ class StatsController:
             teacher_id, academic_period_id
         )
 
+    async def get_teacher_comments_by_subject(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teacher comments grouped by subject for a period."""
+
+        return await self.repository.get_teacher_comments_by_subject(
+            teacher_id, academic_period_id
+        )
+
+    async def get_teacher_dimension_averages(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teacher dimension averages for a period."""
+
+        return await self.repository.get_teacher_dimension_averages(
+            teacher_id, academic_period_id
+        )
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),
