@@ -2,6 +2,8 @@
 Audit controller
 """
 
+from datetime import date
+
 from fastapi.param_functions import Depends
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
@@ -33,6 +35,8 @@ class AuditsController:
         table_name: str | None = None,
         operation: str | None = None,
         search: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ):
         result = await self.repository.get_all(
             page=page,
@@ -40,6 +44,8 @@ class AuditsController:
             table_name=table_name,
             operation=operation,
             search=search,
+            start_date=start_date,
+            end_date=end_date,
         )
         items = await self._enrich_with_users(result["items"])
         result["items"] = items

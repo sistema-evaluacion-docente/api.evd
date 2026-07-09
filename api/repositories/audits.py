@@ -2,6 +2,7 @@
 Audit repository
 """
 
+from datetime import date, datetime, time, timezone
 from typing import Annotated
 
 from fastapi import Depends
@@ -49,6 +50,8 @@ class AuditsRepository:
         table_name: str | None = None,
         operation: str | None = None,
         search: str | None = None,
+        start_date: date | None = None,
+        end_date: date | None = None,
     ):
         """
         Get paginated audit logs
@@ -68,6 +71,12 @@ class AuditsRepository:
                     AuditModel.description.ilike(f"%{search}%"),
                 )
             )
+        if start_date:
+            start_datetime = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
+            query = query.filter(AuditModel.created_at >= start_datetime)
+        if end_date:
+            end_datetime = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
+            query = query.filter(AuditModel.created_at <= end_datetime)
 
         total = query.count()
 

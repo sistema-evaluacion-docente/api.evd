@@ -2,7 +2,7 @@
 Routes for audit log operations.
 """
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, Query
 
@@ -27,6 +27,8 @@ async def get_audits(
     search: str | None = Query(
         None, description="Search in element, description, user_id"
     ),
+    start_date: date | None = Query(None, description="Filter logs from this date"),
+    end_date: date | None = Query(None, description="Filter logs until this date"),
     _: dict = Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
@@ -38,6 +40,8 @@ async def get_audits(
         table_name=table_name,
         operation=operation,
         search=search,
+        start_date=start_date,
+        end_date=end_date,
     )
 
     return {
