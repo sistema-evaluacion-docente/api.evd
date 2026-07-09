@@ -250,6 +250,34 @@ class TeacherDimensionAveragesResponse(BaseModel):
     path: str
 
 
+class TeacherMatrixCourseItem(BaseModel):
+    """Single course row in the teacher evaluation matrix."""
+
+    course_name: str
+    question_averages: dict[str, float]
+    overall_average: float
+
+
+class TeacherMatrixData(BaseModel):
+    """Full matrix data for a teacher: per-course question averages + column averages."""
+
+    teacher_id: int
+    evaluation_id: int
+    courses: list[TeacherMatrixCourseItem]
+    column_averages: dict[str, float]
+
+
+class TeacherMatrixResponse(BaseModel):
+    """Schema for teacher matrix response envelope."""
+
+    status: int
+    message: str
+    data: TeacherMatrixData
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
 class StatsListResponse(BaseModel):
     """Schema for statistics list response envelope."""
 

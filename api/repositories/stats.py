@@ -911,6 +911,93 @@ class StatsRepository:
             "dimensions": dimensions,
         }
 
+    async def get_teacher_matrix(
+        self, teacher_id: int, evaluation_id: int
+    ) -> dict | None:
+        """Return per-course per-question averages matrix for a teacher in an evaluation."""
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+
+        if not teacher:
+            return None
+
+        rows = (
+            self.db.query(
+                CourseModel.name.label("course_name"),
+                AcademicGroupModel.group_name,
+                EvaluationQuestionScoreModel.question_code,
+                EvaluationQuestionScoreModel.score,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
+            .join(
+                EvaluationQuestionScoreModel,
+                EvaluationQuestionScoreModel.evaluation_score_id
+                == EvaluationScoreModel.id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                EvaluationScoreModel.evaluation_id == evaluation_id,
+            )
+            .all()
+        )
+
+        course_data: dict[str, dict[str, list[float]]] = {}
+
+        for row in rows:
+            key = f"{row.course_name} ({row.group_name})"
+            if key not in course_data:
+                course_data[key] = {}
+            if row.question_code not in course_data[key]:
+                course_data[key][row.question_code] = []
+            course_data[key][row.question_code].append(float(row.score))
+
+        courses = []
+        all_question_avgs: dict[str, list[float]] = {}
+
+        for course_name, questions in course_data.items():
+            question_averages = {}
+            total = 0.0
+            count = 0
+
+            for q_code in sorted(questions.keys()):
+                scores = questions[q_code]
+                avg = round(sum(scores) / len(scores), 2)
+                question_averages[q_code] = avg
+                all_question_avgs.setdefault(q_code, []).append(avg)
+                total += avg
+                count += 1
+
+            overall = round(total / count, 2) if count > 0 else 0.0
+
+            courses.append(
+                {
+                    "course_name": course_name,
+                    "question_averages": question_averages,
+                    "overall_average": overall,
+                }
+            )
+
+        column_averages = {}
+        for q_code, avgs in sorted(all_question_avgs.items()):
+            column_averages[q_code] = round(sum(avgs) / len(avgs), 2)
+
+        return {
+            "teacher_id": teacher_id,
+            "evaluation_id": evaluation_id,
+            "courses": courses,
+            "column_averages": column_averages,
+        }
+
 
 def get_stats_repository(db: Annotated[Session, Depends(get_db)]):
     """Get stats repository"""
