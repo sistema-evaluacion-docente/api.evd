@@ -118,6 +118,13 @@ class StatsController:
             teacher_id, academic_period_id
         )
 
+    async def get_teacher_matrix(
+        self, teacher_id: int, evaluation_id: int
+    ) -> dict | None:
+        """Get teacher evaluation matrix (per-course per-question averages)."""
+
+        return await self.repository.get_teacher_matrix(teacher_id, evaluation_id)
+
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),

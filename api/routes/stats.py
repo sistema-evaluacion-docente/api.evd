@@ -20,6 +20,7 @@ from api.schemas.stats import (
     TeacherDepartmentComparisonResponse,
     TeacherDimensionAveragesResponse,
     TeacherHistoryResponse,
+    TeacherMatrixResponse,
     TeacherPerformanceResponse,
     TeacherRankingListResponse,
 )
@@ -246,6 +247,37 @@ async def get_teacher_dimension_averages(
         message="Teacher dimension averages retrieved successfully",
         data=result,
         path="/stats/teacher-dimension-averages",
+    )
+
+
+@router.get(
+    "/teacher-matrix",
+    response_model=TeacherMatrixResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_teacher_matrix(
+    teacher_id: Annotated[int, Query(..., description="Teacher ID")],
+    evaluation_id: Annotated[int, Query(..., description="Evaluation ID")],
+    _=Depends(get_current_user),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get teacher evaluation matrix (per-course per-question averages)."""
+
+    result = await controller.get_teacher_matrix(teacher_id, evaluation_id)
+
+    if result is None:
+        return ResponseSchema(
+            status=404,
+            message="Teacher not found",
+            data=None,
+            path="/stats/teacher-matrix",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Teacher matrix retrieved successfully",
+        data=result,
+        path="/stats/teacher-matrix",
     )
 
 
