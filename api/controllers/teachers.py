@@ -268,11 +268,12 @@ class TeachersController:
         page: int = 1,
         limit: int = 10,
         search: str | None = None,
+        academic_period_id: int | None = None,
     ) -> tuple[list[dict], int]:
         """Get all teachers with pagination and search."""
 
         teachers, total = await self.repository.get_all(
-            page=page, limit=limit, search=search
+            page=page, limit=limit, search=search, academic_period_id=academic_period_id
         )
 
         return await self._enrich_teachers(teachers), total
