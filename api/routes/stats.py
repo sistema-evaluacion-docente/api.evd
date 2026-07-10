@@ -14,6 +14,8 @@ from api.schemas.stats import (
     DepartmentAverageWithPreviousResponse,
     GradeDistributionResponse,
     StatsListResponse,
+    SubjectListResponse,
+    SubjectTeachersResponse,
     TeacherAverageWithPreviousResponse,
     TeacherCommentsBySubjectResponse,
     TeacherCoursesResponse,
@@ -414,4 +416,58 @@ async def get_grade_distribution(
         message=message,
         data=distribution,
         path="/stats/grade-distribution",
+    )
+
+
+@router.get(
+    "/subjects",
+    response_model=SubjectListResponse,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_subjects(
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    department_id: Annotated[int | None, Query()] = None,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get subjects analytics for an academic period."""
+
+    result = await controller.get_subjects(academic_period_id, department_id)
+
+    return ResponseSchema(
+        status=200,
+        message="Subjects analytics retrieved successfully",
+        data=result,
+        path="/stats/subjects",
+    )
+
+
+@router.get(
+    "/subject-teachers",
+    response_model=SubjectTeachersResponse,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_subject_teachers(
+    course_id: Annotated[int, Query(..., description="Course ID")],
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Endpoint to get teachers for a subject with per-dimension comparison."""
+
+    result = await controller.get_subject_teachers(course_id, academic_period_id)
+
+    if result is None:
+        return ResponseSchema(
+            status=404,
+            message="Course or academic period not found",
+            data=None,
+            path="/stats/subject-teachers",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Subject teachers retrieved successfully",
+        data=result,
+        path="/stats/subject-teachers",
     )

@@ -1134,6 +1134,330 @@ class StatsRepository:
         }
 
 
+    async def get_subjects(
+        self, academic_period_id: int, department_id: int | None = None
+    ) -> list[dict]:
+        """Return subjects (courses) with analytics for a given academic period."""
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        if not period:
+            return []
+
+        base_q = (
+            self.db.query(
+                CourseModel.id.label("course_id"),
+                CourseModel.code.label("course_code"),
+                CourseModel.name.label("course_name"),
+                DepartmentModel.id.label("department_id"),
+                DepartmentModel.name.label("department_name"),
+                func.count(func.distinct(AcademicGroupModel.teacher_id)).label(
+                    "teacher_count"
+                ),
+                func.count(func.distinct(AcademicGroupModel.id)).label("group_count"),
+                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+                func.sum(EvaluationScoreModel.respondent_count).label(
+                    "total_respondents"
+                ),
+            )
+            .join(AcademicGroupModel, AcademicGroupModel.course_id == CourseModel.id)
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .outerjoin(DepartmentModel, DepartmentModel.id == CourseModel.department_id)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+        )
+
+        if department_id is not None:
+            base_q = base_q.filter(EvaluationModel.department_id == department_id)
+
+        rows = (
+            base_q.group_by(
+                CourseModel.id,
+                CourseModel.code,
+                CourseModel.name,
+                DepartmentModel.id,
+                DepartmentModel.name,
+            )
+            .order_by(func.avg(EvaluationScoreModel.overall_average).desc())
+            .all()
+        )
+
+        if not rows:
+            return []
+
+        course_ids = [row.course_id for row in rows]
+
+        prev_period_code = await self._get_previous_period_code(period.code)
+        prev_avg_by_course: dict[int, float | None] = {}
+
+        if prev_period_code:
+            prev_period = (
+                self.db.query(AcademicPeriodModel)
+                .filter(AcademicPeriodModel.code == prev_period_code)
+                .first()
+            )
+            if prev_period:
+                prev_q = (
+                    self.db.query(
+                        CourseModel.id.label("course_id"),
+                        func.avg(EvaluationScoreModel.overall_average).label("avg"),
+                    )
+                    .join(
+                        AcademicGroupModel,
+                        AcademicGroupModel.course_id == CourseModel.id,
+                    )
+                    .join(
+                        EvaluationScoreModel,
+                        EvaluationScoreModel.academic_group_id
+                        == AcademicGroupModel.id,
+                    )
+                    .join(
+                        EvaluationModel,
+                        EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+                    )
+                    .filter(
+                        EvaluationModel.academic_period_id == prev_period.id,
+                        CourseModel.id.in_(course_ids),
+                    )
+                )
+                if department_id is not None:
+                    prev_q = prev_q.filter(
+                        EvaluationModel.department_id == department_id
+                    )
+                prev_rows = prev_q.group_by(CourseModel.id).all()
+                prev_avg_by_course = {
+                    r.course_id: float(r.avg) if r.avg else None
+                    for r in prev_rows
+                }
+
+        qs_q = (
+            self.db.query(
+                CourseModel.id.label("course_id"),
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .join(CourseModel, CourseModel.id == AcademicGroupModel.course_id)
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                CourseModel.id.in_(course_ids),
+            )
+        )
+        if department_id is not None:
+            qs_q = qs_q.filter(EvaluationModel.department_id == department_id)
+
+        qs_rows = qs_q.group_by(
+            CourseModel.id, EvaluationQuestionScoreModel.question_code
+        ).all()
+
+        course_q_scores: dict[int, dict[str, float]] = {}
+        for qs in qs_rows:
+            course_q_scores.setdefault(qs.course_id, {})[qs.question_code] = float(
+                qs.avg_score
+            )
+
+        weakest_dim_by_course: dict[int, str | None] = {}
+        strongest_dim_by_course: dict[int, str | None] = {}
+        for cid, q_scores in course_q_scores.items():
+            worst_dim = None
+            worst_avg = float("inf")
+            best_dim = None
+            best_avg = float("-inf")
+            for dim_name, codes in DIMENSION_MAP.items():
+                dim_scores = [q_scores[c] for c in codes if c in q_scores]
+                if dim_scores:
+                    avg = sum(dim_scores) / len(dim_scores)
+                    if avg < worst_avg:
+                        worst_avg = avg
+                        worst_dim = dim_name
+                    if avg > best_avg:
+                        best_avg = avg
+                        best_dim = dim_name
+            weakest_dim_by_course[cid] = worst_dim
+            strongest_dim_by_course[cid] = best_dim
+
+        return [
+            {
+                "course_id": row.course_id,
+                "course_code": row.course_code,
+                "course_name": row.course_name,
+                "department_id": row.department_id,
+                "department_name": row.department_name,
+                "teacher_count": row.teacher_count,
+                "group_count": row.group_count,
+                "overall_average": (
+                    float(row.overall_average) if row.overall_average else None
+                ),
+                "previous_overall_average": prev_avg_by_course.get(row.course_id),
+                "total_respondents": row.total_respondents or 0,
+                "weakest_dimension": weakest_dim_by_course.get(row.course_id),
+                "strongest_dimension": strongest_dim_by_course.get(row.course_id),
+            }
+            for row in rows
+        ]
+
+    async def get_subject_teachers(
+        self, course_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Return teachers for a subject with per-dimension averages."""
+
+        from api.models.user import UserModel as UserModelLocal
+
+        course = (
+            self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
+        )
+        if not course:
+            return None
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        if not period:
+            return None
+
+        teacher_rows = (
+            self.db.query(
+                TeacherModel.id.label("teacher_id"),
+                TeacherModel.institutional_code,
+                TeacherModel.contract_type,
+                UserModelLocal.name,
+                UserModelLocal.avatar_url,
+                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+                func.count(func.distinct(AcademicGroupModel.id)).label("group_count"),
+            )
+            .join(AcademicGroupModel, AcademicGroupModel.teacher_id == TeacherModel.id)
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(UserModelLocal, UserModelLocal.id == TeacherModel.user_id)
+            .filter(
+                AcademicGroupModel.course_id == course_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(
+                TeacherModel.id,
+                TeacherModel.institutional_code,
+                TeacherModel.contract_type,
+                UserModelLocal.name,
+                UserModelLocal.avatar_url,
+            )
+            .order_by(func.avg(EvaluationScoreModel.overall_average).desc())
+            .all()
+        )
+
+        if not teacher_rows:
+            return {
+                "course_id": course.id,
+                "course_code": course.code,
+                "course_name": course.name,
+                "academic_period_id": academic_period_id,
+                "academic_period_code": period.code,
+                "teachers": [],
+            }
+
+        teacher_ids = [row.teacher_id for row in teacher_rows]
+
+        qs_rows = (
+            self.db.query(
+                AcademicGroupModel.teacher_id,
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                AcademicGroupModel.course_id == course_id,
+                EvaluationModel.academic_period_id == academic_period_id,
+                AcademicGroupModel.teacher_id.in_(teacher_ids),
+            )
+            .group_by(
+                AcademicGroupModel.teacher_id,
+                EvaluationQuestionScoreModel.question_code,
+            )
+            .all()
+        )
+
+        teacher_q_scores: dict[int, dict[str, float]] = {}
+        for qs in qs_rows:
+            teacher_q_scores.setdefault(qs.teacher_id, {})[qs.question_code] = float(
+                qs.avg_score
+            )
+
+        teachers = []
+        for row in teacher_rows:
+            q_scores = teacher_q_scores.get(row.teacher_id, {})
+            dimensions = []
+            for dim_name, codes in DIMENSION_MAP.items():
+                dim_scores = [q_scores[c] for c in codes if c in q_scores]
+                avg = (
+                    round(sum(dim_scores) / len(dim_scores), 2) if dim_scores else None
+                )
+                dimensions.append({"dimension": dim_name, "average": avg})
+
+            teachers.append(
+                {
+                    "teacher_id": row.teacher_id,
+                    "institutional_code": row.institutional_code,
+                    "name": row.name,
+                    "avatar_url": row.avatar_url,
+                    "contract_type": row.contract_type,
+                    "group_count": row.group_count,
+                    "overall_average": (
+                        float(row.overall_average) if row.overall_average else None
+                    ),
+                    "dimensions": dimensions,
+                }
+            )
+
+        return {
+            "course_id": course.id,
+            "course_code": course.code,
+            "course_name": course.name,
+            "academic_period_id": academic_period_id,
+            "academic_period_code": period.code,
+            "teachers": teachers,
+        }
+
+
 def get_stats_repository(db: Annotated[Session, Depends(get_db)]):
     """Get stats repository"""
 
