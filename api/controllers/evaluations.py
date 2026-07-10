@@ -37,6 +37,7 @@ class EvaluationsController:
         search: str | None = None,
         period_id: int | None = None,
         department_id: int | None = None,
+        sort_by: str | None = None,
     ) -> tuple[list[dict], int]:
         """Get all evaluations with optional filters."""
 
@@ -46,6 +47,7 @@ class EvaluationsController:
             search=search,
             period_id=period_id,
             department_id=department_id,
+            sort_by=sort_by,
         )
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:

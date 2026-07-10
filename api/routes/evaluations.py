@@ -226,6 +226,10 @@ async def get_all_evaluations(
     ),
     period_id: int | None = Query(None, description="Filter by academic period ID"),
     department_id: int | None = Query(None, description="Filter by department ID"),
+    sort_by: str | None = Query(
+        None,
+        description="Sort by: average_asc (lowest first), average_desc (highest first)",
+    ),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
@@ -237,6 +241,7 @@ async def get_all_evaluations(
         search=search,
         period_id=period_id,
         department_id=department_id,
+        sort_by=sort_by,
     )
 
     pages = (total + limit - 1) // limit if total else 0

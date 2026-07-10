@@ -29,6 +29,7 @@ class EvaluationOut(BaseModel):
     active: Optional[bool]
     status: Optional[str]
     count: Optional[int]
+    overall_average: Optional[float]
     created_at: datetime
     updated_at: datetime
 

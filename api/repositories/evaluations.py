@@ -61,32 +61,104 @@ class EvaluationsRepository:
         search: str | None = None,
         period_id: int | None = None,
         department_id: int | None = None,
+        sort_by: str | None = None,
     ) -> tuple[list[dict], int]:
         """Get all evaluations with optional filters."""
 
-        query = self.db.query(EvaluationModel).outerjoin(
+        filter_query = self.db.query(EvaluationModel).outerjoin(
             EvaluationModel.academic_period
         )
 
         if period_id is not None:
-            query = query.filter(EvaluationModel.academic_period_id == period_id)
+            filter_query = filter_query.filter(
+                EvaluationModel.academic_period_id == period_id
+            )
         if department_id is not None:
-            query = query.filter(EvaluationModel.department_id == department_id)
+            filter_query = filter_query.filter(
+                EvaluationModel.department_id == department_id
+            )
 
         if search:
             pattern = f"%{search}%"
-            query = query.filter(AcademicPeriodModel.name.ilike(pattern))
+            filter_query = filter_query.filter(AcademicPeriodModel.name.ilike(pattern))
 
-        total = query.count()
+        total = filter_query.count()
+
+        base_query = (
+            self.db.query(
+                EvaluationModel.id,
+                EvaluationModel.user_id,
+                EvaluationModel.academic_period_id,
+                EvaluationModel.department_id,
+                EvaluationModel.pdf_url,
+                EvaluationModel.active,
+                EvaluationModel.status,
+                EvaluationModel.count,
+                EvaluationModel.created_at,
+                EvaluationModel.updated_at,
+                AcademicPeriodModel.name.label("period_name"),
+                AcademicPeriodModel.code.label("period_code"),
+                func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+            )
+            .outerjoin(EvaluationModel.academic_period)
+            .outerjoin(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .group_by(
+                EvaluationModel.id,
+                AcademicPeriodModel.id,
+            )
+        )
+
+        if period_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == period_id
+            )
+        if department_id is not None:
+            base_query = base_query.filter(
+                EvaluationModel.department_id == department_id
+            )
+
+        if search:
+            pattern = f"%{search}%"
+            base_query = base_query.filter(AcademicPeriodModel.name.ilike(pattern))
+
+        order_clause = EvaluationModel.created_at.desc()
+        if sort_by == "average_asc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).asc()
+        elif sort_by == "average_desc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).desc()
 
         evaluations = (
-            query.order_by(EvaluationModel.created_at.desc())
+            base_query.order_by(order_clause)
             .offset((page - 1) * limit)
             .limit(limit)
             .all()
         )
 
-        return [evaluation_to_dict(e) for e in evaluations], total
+        result = []
+        for e in evaluations:
+            eval_dict = {
+                "id": e.id,
+                "user_id": e.user_id,
+                "academic_period_id": e.academic_period_id,
+                "department_id": e.department_id,
+                "pdf_url": e.pdf_url,
+                "active": e.active,
+                "status": e.status,
+                "count": e.count,
+                "created_at": e.created_at,
+                "updated_at": e.updated_at,
+                "overall_average": (
+                    float(e.overall_average) if e.overall_average else None
+                ),
+                "academic_period_name": e.period_name,
+                "academic_period_code": e.period_code,
+            }
+            result.append(eval_dict)
+
+        return result, total
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:
         """Get an evaluation by ID."""
