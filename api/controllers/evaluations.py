@@ -5,7 +5,10 @@ Evaluations controller
 from fastapi.param_functions import Depends
 
 from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.repositories.evaluations import EvaluationsRepository, get_evaluations_repository
+from api.repositories.evaluations import (
+    EvaluationsRepository,
+    get_evaluations_repository,
+)
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 
@@ -29,13 +32,20 @@ class EvaluationsController:
 
     async def get_all(
         self,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
         period_id: int | None = None,
         department_id: int | None = None,
-    ) -> list[dict]:
+    ) -> tuple[list[dict], int]:
         """Get all evaluations with optional filters."""
 
         return await self.repository.get_all(
-            period_id=period_id, department_id=department_id
+            page=page,
+            limit=limit,
+            search=search,
+            period_id=period_id,
+            department_id=department_id,
         )
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:
@@ -67,15 +77,17 @@ class EvaluationsController:
 
         return await self.repository.get_summary(evaluation_id)
 
-    async def get_dimension_averages(
-        self, evaluation_id: int
-    ) -> list[dict] | None:
+    async def get_dimension_averages(self, evaluation_id: int) -> list[dict] | None:
         """Get dimension-level averages for an evaluation."""
 
         return await self.repository.get_dimension_averages(evaluation_id)
 
     async def get_teachers_by_period(
-        self, academic_period_id: int, page: int = 1, limit: int = 10, search: str | None = None
+        self,
+        academic_period_id: int,
+        page: int = 1,
+        limit: int = 10,
+        search: str | None = None,
     ) -> dict | None:
         """Get all teachers with their average evaluation scores for a given academic period."""
 

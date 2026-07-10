@@ -218,6 +218,12 @@ async def get_question_catalog(
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_evaluations(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
+    search: str | None = Query(
+        None,
+        description="Search term for period name, teacher name, or course",
+    ),
     period_id: int | None = Query(None, description="Filter by academic period ID"),
     department_id: int | None = Query(None, description="Filter by department ID"),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
@@ -225,14 +231,21 @@ async def get_all_evaluations(
 ):
     """Endpoint to list all evaluations with optional filters."""
 
-    evaluations = await controller.get_all(
-        period_id=period_id, department_id=department_id
+    evaluations, total = await controller.get_all(
+        page=page,
+        limit=limit,
+        search=search,
+        period_id=period_id,
+        department_id=department_id,
     )
+
+    pages = (total + limit - 1) // limit if total else 0
 
     return ResponseSchema(
         status=200,
         message="Evaluations found",
         data=evaluations,
+        pagination={"total": total, "page": page, "limit": limit, "pages": pages},
         path="/evaluations",
     )
 
@@ -453,7 +466,9 @@ async def export_teacher_evaluation(
 
     # Fetch teacher-vs-department comparison data
     comparison = None
-    eval_record = db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+    eval_record = (
+        db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+    )
     if eval_record:
         comparison = await stats_repo.get_teacher_vs_department(
             teacher_id, eval_record.academic_period_id
@@ -608,7 +623,11 @@ async def export_teacher_evaluation(
     lc.alignment = left()
     dept_avg_label = f"{dept_overall} / 5.0" if dept_overall else "N/D"
     if dept_name:
-        dept_avg_label = f"{dept_overall} / 5.0  ({dept_name})" if dept_overall else f"N/D  ({dept_name})"
+        dept_avg_label = (
+            f"{dept_overall} / 5.0  ({dept_name})"
+            if dept_overall
+            else f"N/D  ({dept_name})"
+        )
     vc = ws.cell(row=r, column=2, value=dept_avg_label)
     vc.font = Font(bold=True, color=score_color(dept_overall))
     vc.border = thin_border()
@@ -631,9 +650,9 @@ async def export_teacher_evaluation(
             else None
         )
         diff_str = (
-            f"+{diff}" if diff is not None and diff > 0
-            else str(diff) if diff is not None
-            else "N/D"
+            f"+{diff}"
+            if diff is not None and diff > 0
+            else str(diff) if diff is not None else "N/D"
         )
         style_data_row(
             ws,

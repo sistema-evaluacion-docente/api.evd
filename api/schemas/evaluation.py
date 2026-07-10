@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.pagination import Pagination
+
 
 class EvaluationStatusUpdate(BaseModel):
     """Schema for activating/deactivating an evaluation."""
@@ -50,4 +52,5 @@ class EvaluationListResponse(BaseModel):
     data: list[EvaluationOut]
     error: Optional[str] = None
     timestamp: datetime
+    pagination: Optional[Pagination] = None
     path: str
