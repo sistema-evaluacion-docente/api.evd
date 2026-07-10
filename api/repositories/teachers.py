@@ -48,6 +48,7 @@ class TeachersRepository:
         limit: int = 10,
         search: str | None = None,
         academic_period_id: int | None = None,
+        active: bool | None = None,
     ) -> tuple[list[dict], int]:
         """Get all teachers with optional pagination, search, and period average."""
 
@@ -56,6 +57,9 @@ class TeachersRepository:
             .outerjoin(TeacherModel.user)
             .options(joinedload(TeacherModel.user))
         )
+
+        if active is not None:
+            query = query.filter(TeacherModel.active == active)
 
         if search:
             pattern = f"%{search}%"
