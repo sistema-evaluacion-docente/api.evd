@@ -20,6 +20,8 @@ class UsersController:
         self.audits_repository = audits_repository
 
     async def login(self, current_user):
+        if current_user is None:
+            return None
         try:
             user = await self.repository.get_by_uid(current_user.uid)
 

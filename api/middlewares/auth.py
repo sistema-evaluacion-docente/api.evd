@@ -33,7 +33,7 @@ def verify_token(token: str) -> dict:
         firebase_admin.auth.RevokedIdTokenError: If the token has been revoked.
     """
 
-    decoded_token = auth.verify_id_token(token)
+    decoded_token = auth.verify_id_token(token, clock_skew_seconds=2)
 
     return decoded_token
 
@@ -104,7 +104,8 @@ def get_current_user(
         auth.InvalidIdTokenError,
         auth.ExpiredIdTokenError,
         auth.RevokedIdTokenError,
-    ):
+    ) as e:
+        print(f"[auth] Firebase token error: {type(e).__name__}: {e}")
         return None
 
     return TokenUser(

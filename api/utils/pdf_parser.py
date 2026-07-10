@@ -74,7 +74,7 @@ def _parse_teacher_header(text: str) -> dict | None:
     '04041 ADARME JAIMES MARCO ANTONIO TC'
     """
     match = re.search(
-        r"^\s*(\d{5})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]+?)(?:\s+(TC|TP|HC|HORA\s+CATEDRA))?\s*$",
+        r"^\s*(\d{5,})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]+?)(?:\s+(TC|TP|HC|HORA\s+CATEDRA))?\s*$",
         text,
         re.MULTILINE,
     )

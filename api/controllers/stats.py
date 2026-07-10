@@ -124,7 +124,20 @@ class StatsController:
         """Get teacher evaluation matrix (per-course per-question averages)."""
 
         return await self.repository.get_teacher_matrix(teacher_id, evaluation_id)
+    
+    async def get_subjects(
+        self, academic_period_id: int, department_id: int | None = None
+    ) -> list[dict]:
+        """Get subjects analytics for an academic period."""
 
+        return await self.repository.get_subjects(academic_period_id, department_id)
+
+    async def get_subject_teachers(
+        self, course_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Get teachers for a subject with per-dimension averages."""
+
+        return await self.repository.get_subject_teachers(course_id, academic_period_id)
 
 def get_stats_controller(
     repository: StatsRepository = Depends(get_stats_repository),

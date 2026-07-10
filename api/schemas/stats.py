@@ -92,7 +92,7 @@ class DepartmentAverageWithPreviousResponse(BaseModel):
 
     status: int
     message: str
-    data: DepartmentAverageWithPrevious
+    data: DepartmentAverageWithPrevious | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -119,7 +119,7 @@ class TeacherAverageWithPreviousResponse(BaseModel):
 
     status: int
     message: str
-    data: TeacherAverageWithPrevious
+    data: TeacherAverageWithPrevious | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -138,7 +138,7 @@ class TeacherHistoryResponse(BaseModel):
 
     status: int
     message: str
-    data: list[TeacherHistoryEntry]
+    data: list[TeacherHistoryEntry] | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -158,7 +158,7 @@ class TeacherCoursesResponse(BaseModel):
 
     status: int
     message: str
-    data: list[TeacherCourseItem]
+    data: list[TeacherCourseItem] | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -217,7 +217,7 @@ class TeacherCommentsBySubjectResponse(BaseModel):
 
     status: int
     message: str
-    data: TeacherCommentsBySubjectData
+    data: TeacherCommentsBySubjectData | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -244,7 +244,7 @@ class TeacherDimensionAveragesResponse(BaseModel):
 
     status: int
     message: str
-    data: TeacherDimensionAveragesData
+    data: TeacherDimensionAveragesData | None = None
     error: str | None = None
     timestamp: datetime
     path: str
@@ -325,6 +325,76 @@ class TeacherDepartmentComparisonResponse(BaseModel):
     status: int
     message: str
     data: TeacherDepartmentComparison | None = None
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class SubjectItem(BaseModel):
+    """Analytics summary for a single subject (course) in an academic period."""
+
+    course_id: int
+    course_code: str
+    course_name: str | None
+    department_id: int | None
+    department_name: str | None
+    teacher_count: int
+    group_count: int
+    overall_average: float | None
+    previous_overall_average: float | None
+    total_respondents: int
+    weakest_dimension: str | None
+    strongest_dimension: str | None
+
+
+class SubjectListResponse(BaseModel):
+    """Response envelope for subjects analytics list."""
+
+    status: int
+    message: str
+    data: list[SubjectItem] | None = None
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class SubjectTeacherDimension(BaseModel):
+    """Average score for a single dimension for a teacher in a subject."""
+
+    dimension: str
+    average: float | None
+
+
+class SubjectTeacherItem(BaseModel):
+    """Teacher entry in a subject's teacher comparison."""
+
+    teacher_id: int
+    institutional_code: str
+    name: str | None
+    avatar_url: str | None
+    contract_type: str | None
+    group_count: int
+    overall_average: float | None
+    dimensions: list[SubjectTeacherDimension]
+
+
+class SubjectTeachersData(BaseModel):
+    """All teachers for a subject in an academic period with dimension breakdown."""
+
+    course_id: int
+    course_code: str
+    course_name: str | None
+    academic_period_id: int
+    academic_period_code: str
+    teachers: list[SubjectTeacherItem]
+
+
+class SubjectTeachersResponse(BaseModel):
+    """Response envelope for subject teachers comparison."""
+
+    status: int
+    message: str
+    data: SubjectTeachersData | None = None
     error: str | None = None
     timestamp: datetime
     path: str
