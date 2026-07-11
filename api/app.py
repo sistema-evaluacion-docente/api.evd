@@ -24,6 +24,8 @@ from api.models import (
     evaluation_question_score,
     evaluation_score,
     faculty,
+    pedagogical_category,
+    risk_level,
     role,
     setting,
     setting_history,
