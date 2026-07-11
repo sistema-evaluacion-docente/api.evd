@@ -14,6 +14,9 @@ def comment_to_dict(
 ) -> dict:
     """Convert CommentModel instance to dictionary."""
 
+    risk = comment.risk_level_rel
+    category = comment.pedagogical_category_rel
+
     return {
         "id": comment.id,
         "teacher_id": comment.teacher_id,
@@ -24,8 +27,16 @@ def comment_to_dict(
         "teacher_avatar_url": teacher_avatar_url,
         "course_name": course_name,
         "original_text": comment.original_text,
-        "risk_level": comment.risk_level,
-        "pedagogical_category_id": comment.pedagogical_category_id,
+        "risk_level": {
+            "id": risk.id,
+            "name": risk.name,
+            "color_hex": risk.color_hex,
+        } if risk else None,
+        "pedagogical_category": {
+            "id": category.id,
+            "name": category.name,
+            "color_hex": category.color_hex,
+        } if category else None,
         "created_at": comment.created_at,
         "updated_at": comment.updated_at,
     }

@@ -5,7 +5,7 @@ Comment model
 import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -22,8 +22,15 @@ class CommentModel(Base):
     evaluation_id = Column(Integer, ForeignKey("evaluations.id"), nullable=True)
     academic_groups_id = Column(Integer, ForeignKey("academic_groups.id"), nullable=True)
     original_text = Column(Text, nullable=True)
-    risk_level = Column(Integer, nullable=True)
-    pedagogical_category_id = Column(Integer, nullable=True)
+    risk_level = Column(Integer, ForeignKey("risk_levels.id"), nullable=True)
+    pedagogical_category_id = Column(
+        Integer, ForeignKey("pedagogical_categories.id"), nullable=True
+    )
+
+    risk_level_rel = relationship("RiskLevelModel", lazy="joined", foreign_keys=[risk_level])
+    pedagogical_category_rel = relationship(
+        "PedagogicalCategoryModel", lazy="joined", foreign_keys=[pedagogical_category_id]
+    )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
