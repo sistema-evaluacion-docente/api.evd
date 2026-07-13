@@ -24,6 +24,9 @@ from api.models import (
     evaluation_question_score,
     evaluation_score,
     faculty,
+    improvement_plan,
+    improvement_plan_checkpoint,
+    improvement_plan_item,
     pedagogical_category,
     risk_level,
     role,
@@ -46,6 +49,7 @@ from api.routes import (
     evaluations,
     faculties,
     health,
+    improvement_plans,
     settings,
     stats,
     teachers,
@@ -63,6 +67,9 @@ _ = (
     evaluation_question_score,
     evaluation_score,
     faculty,
+    improvement_plan,
+    improvement_plan_checkpoint,
+    improvement_plan_item,
     role,
     teacher,
     user,
@@ -81,9 +88,15 @@ app.mount(
     f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads"
 )
 
+# "*" cannot be combined with allow_credentials=True (Starlette would then omit
+# the Access-Control-Allow-Origin header on preflight). When a wildcard is
+# configured, echo any origin via a regex instead so credentials keep working.
+_allow_all_origins = "*" in config.ALLOWED_ORIGINS
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.ALLOWED_ORIGINS,
+    allow_origins=[] if _allow_all_origins else config.ALLOWED_ORIGINS,
+    allow_origin_regex=".*" if _allow_all_origins else None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -122,3 +135,4 @@ app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
 app.include_router(admin_dashboard.router)
+app.include_router(improvement_plans.router)
