@@ -47,14 +47,19 @@ class TeachersRepository:
         page: int = 1,
         limit: int = 10,
         search: str | None = None,
+        academic_period_id: int | None = None,
+        active: bool | None = None,
     ) -> tuple[list[dict], int]:
-        """Get all teachers with optional pagination and search."""
+        """Get all teachers with optional pagination, search, and period average."""
 
         query = (
             self.db.query(TeacherModel)
             .outerjoin(TeacherModel.user)
             .options(joinedload(TeacherModel.user))
         )
+
+        if active is not None:
+            query = query.filter(TeacherModel.active == active)
 
         if search:
             pattern = f"%{search}%"
@@ -76,7 +81,38 @@ class TeachersRepository:
             .all()
         )
 
-        return [teacher_to_dict(t) for t in teachers], total
+        result = [teacher_to_dict(t) for t in teachers]
+
+        if academic_period_id:
+            teacher_ids = [t["id"] for t in result]
+
+            if teacher_ids:
+                avg_query = (
+                    self.db.query(
+                        AcademicGroupModel.teacher_id,
+                        func.avg(EvaluationScoreModel.overall_average).label("avg"),
+                    )
+                    .join(
+                        EvaluationScoreModel,
+                        EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+                    )
+                    .join(
+                        EvaluationModel,
+                        EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+                    )
+                    .filter(
+                        AcademicGroupModel.teacher_id.in_(teacher_ids),
+                        EvaluationModel.academic_period_id == academic_period_id,
+                    )
+                    .group_by(AcademicGroupModel.teacher_id)
+                )
+
+                avgs = {row.teacher_id: float(row.avg) for row in avg_query.all()}
+
+                for teacher in result:
+                    teacher["overall_average"] = avgs.get(teacher["id"])
+
+        return result, total
 
     async def get_by_id(self, teacher_id: int) -> dict | None:
         """Get a teacher by ID."""
@@ -197,14 +233,11 @@ class TeachersRepository:
 
         return teacher_to_dict(teacher)
 
-
     async def get_history(self, teacher_id: int) -> dict | None:
         """Return the teacher's average score for each academic period."""
 
         teacher = (
-            self.db.query(TeacherModel)
-            .filter(TeacherModel.id == teacher_id)
-            .first()
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
         )
         if not teacher:
             return None

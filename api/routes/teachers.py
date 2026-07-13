@@ -96,12 +96,26 @@ async def get_all_teachers(
         None,
         description="Search term for institutional code, name, email or contract type",
     ),
+    academic_period_id: int | None = Query(
+        None,
+        description="Academic period ID to compute overall_average for each teacher",
+    ),
+    active: bool | None = Query(
+        None,
+        description="Filter teachers by active status",
+    ),
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Endpoint to list all teachers with pagination and search."""
 
-    teachers, total = await controller.get_all(page=page, limit=limit, search=search)
+    teachers, total = await controller.get_all(
+        page=page,
+        limit=limit,
+        search=search,
+        academic_period_id=academic_period_id,
+        active=active,
+    )
 
     pages = (total + limit - 1) // limit if total else 0
 

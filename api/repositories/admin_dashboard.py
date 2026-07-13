@@ -29,7 +29,8 @@ class AdminDashboardRepository:
                   active users, teachers, evaluations, academic periods, and active periods.
         """
 
-        departments = self.db.query(func.count(DepartmentModel.id)).scalar() or 0
+        departments = self.db.query(
+            func.count(DepartmentModel.id)).scalar() or 0
         faculties = self.db.query(func.count(FacultyModel.id)).scalar() or 0
         users = self.db.query(func.count(UserModel.id)).scalar() or 0
         active_users = (
@@ -39,7 +40,8 @@ class AdminDashboardRepository:
             or 0
         )
         teachers = self.db.query(func.count(TeacherModel.id)).scalar() or 0
-        evaluations = self.db.query(func.count(EvaluationModel.id)).scalar() or 0
+        evaluations = self.db.query(
+            func.count(EvaluationModel.id)).scalar() or 0
         academic_periods = (
             self.db.query(func.count(AcademicPeriodModel.id)).scalar() or 0
         )
@@ -67,7 +69,8 @@ class AdminDashboardRepository:
         """
 
         audits = (
-            self.db.query(AuditModel).order_by(AuditModel.id.desc()).limit(limit).all()
+            self.db.query(AuditModel).order_by(
+                AuditModel.id.desc()).limit(limit).all()
         )
 
         return [audit_to_dict(a) for a in audits]
@@ -78,7 +81,8 @@ class AdminDashboardRepository:
         """
 
         audits = (
-            self.db.query(AuditModel).order_by(AuditModel.id.desc()).limit(limit).all()
+            self.db.query(AuditModel).order_by(
+                AuditModel.id.desc()).limit(limit).all()
         )
 
         items = [audit_to_dict(a) for a in audits]
@@ -86,12 +90,14 @@ class AdminDashboardRepository:
         user_ids = [item["user_id"] for item in items if item.get("user_id")]
 
         if user_ids:
-            users = self.db.query(UserModel).filter(UserModel.id.in_(user_ids)).all()
+            users = self.db.query(UserModel).filter(
+                UserModel.id.in_(user_ids)).all()
             users_map = {u.id: u for u in users}
 
             for item in items:
                 user = users_map.get(item.get("user_id"))
                 item["user_name"] = user.name if user else None
+                item["user_avatar"] = user.avatar_url if user else None
 
         return items
 

@@ -64,6 +64,7 @@ class TeacherOut(BaseModel):
     user_id: Optional[int]
     user: Optional[UserOut] = None
     active: Optional[bool]
+    overall_average: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
