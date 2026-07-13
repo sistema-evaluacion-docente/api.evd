@@ -32,11 +32,12 @@ if str(PROJECT_ROOT) not in sys.path:
 from api.database import SessionLocal
 from api.models.department import DepartmentModel
 from api.models.role import RoleModel
+from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 from api.schemas.user import RoleName
 
-_ = (DepartmentModel, RoleModel, UserModel, UserRoleModel)
+_ = (DepartmentModel, RoleModel, TeacherModel, UserModel, UserRoleModel)
 
 load_dotenv()
 
