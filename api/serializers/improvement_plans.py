@@ -2,6 +2,7 @@
 
 from api.models.improvement_plan import ImprovementPlanModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 
 
@@ -44,6 +45,24 @@ def improvement_plan_checkpoint_to_dict(
     }
 
 
+def improvement_plan_evidence_to_dict(
+    evidence: ImprovementPlanEvidenceModel,
+    uploader_name: str | None = None,
+) -> dict:
+    """Convert an ImprovementPlanEvidenceModel instance to a dictionary."""
+
+    return {
+        "id": evidence.id,
+        "plan_id": evidence.plan_id,
+        "item_id": evidence.item_id,
+        "uploaded_by": evidence.uploaded_by,
+        "uploader_name": uploader_name,
+        "description": evidence.description,
+        "file_url": evidence.file_url,
+        "created_at": evidence.created_at,
+    }
+
+
 def _compute_progress(status: str, items: list[ImprovementPlanItemModel]) -> int:
     """Percentage of items marked CUMPLIDO over the total number of items.
 
@@ -70,11 +89,17 @@ def improvement_plan_to_dict(
     verification_period_code: str | None = None,
     suggested_result: str | None = None,
     include_relations: bool = True,
+    evidence_uploader_names: dict[int, str] | None = None,
 ) -> dict:
-    """Convert an ImprovementPlanModel instance to a dictionary."""
+    """Convert an ImprovementPlanModel instance to a dictionary.
+
+    ``evidence_uploader_names`` maps user ids to display names so each
+    evidence carries who attached it."""
 
     items = list(plan.items) if include_relations else []
     checkpoints = list(plan.checkpoints) if include_relations else []
+    evidences = list(plan.evidences) if include_relations else []
+    uploader_names = evidence_uploader_names or {}
 
     return {
         "id": plan.id,
@@ -94,12 +119,23 @@ def improvement_plan_to_dict(
         "end_date": plan.end_date,
         "created_by": plan.created_by,
         "closed_at": plan.closed_at,
+        "acta_pdf_url": plan.acta_pdf_url,
+        "acta_description": plan.acta_description,
+        "acta_uploaded_at": plan.acta_uploaded_at,
+        "has_acta": plan.acta_pdf_url is not None,
         "progress": _compute_progress(plan.status, items),
         "suggested_result": suggested_result,
         "items": [improvement_plan_item_to_dict(i) for i in items],
         "checkpoints": [
             improvement_plan_checkpoint_to_dict(c) for c in checkpoints
         ],
+        "evidences": [
+            improvement_plan_evidence_to_dict(
+                e, uploader_name=uploader_names.get(e.uploaded_by)
+            )
+            for e in evidences
+        ],
+        "evidence_count": len(evidences),
         "created_at": plan.created_at,
         "updated_at": plan.updated_at,
     }
