@@ -135,6 +135,19 @@ class ImprovementPlanCheckpointOut(BaseModel):
     notes: Optional[str] = None
 
 
+class ImprovementPlanEvidenceOut(BaseModel):
+    """Schema for outputting a plan evidence (PDF attached as compliance proof)."""
+
+    id: int
+    plan_id: int
+    item_id: Optional[int] = None
+    uploaded_by: Optional[int] = None
+    uploader_name: Optional[str] = None
+    description: Optional[str] = None
+    file_url: str
+    created_at: Optional[datetime] = None
+
+
 class ImprovementPlanOut(BaseModel):
     """Schema for outputting an improvement plan."""
 
@@ -155,10 +168,16 @@ class ImprovementPlanOut(BaseModel):
     end_date: Optional[date] = None
     created_by: Optional[int] = None
     closed_at: Optional[datetime] = None
+    acta_pdf_url: Optional[str] = None
+    acta_description: Optional[str] = None
+    acta_uploaded_at: Optional[datetime] = None
+    has_acta: bool = False
     progress: int = 0
     suggested_result: Optional[str] = None
     items: list[ImprovementPlanItemOut] = Field(default_factory=list)
     checkpoints: list[ImprovementPlanCheckpointOut] = Field(default_factory=list)
+    evidences: list[ImprovementPlanEvidenceOut] = Field(default_factory=list)
+    evidence_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
