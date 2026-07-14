@@ -17,6 +17,7 @@ from api.schemas.improvement_plan import (
     ImprovementPlanCreate,
     ImprovementPlanUpdate,
 )
+from api.utils.improvement_suggestions import build_indicator_catalog
 
 THRESHOLD_KEY = "improvement_plan.score_threshold"
 DEFAULT_THRESHOLD = 3.5
@@ -161,7 +162,9 @@ class ImprovementPlansController:
         if not existing:
             return None
 
-        evaluated = await self.repository.evaluate(plan_id)
+        evaluated = await self.repository.evaluate(
+            plan_id, threshold=await self._get_threshold()
+        )
 
         await self.audits_repository.create(
             AuditCreate(
@@ -191,6 +194,35 @@ class ImprovementPlansController:
             period_id=period_id,
             threshold=threshold,
         )
+
+    async def get_candidates(
+        self,
+        period_id: int,
+        department_id: int,
+        only_at_risk: bool = False,
+        search: str | None = None,
+    ) -> dict:
+        """Teachers eligible for a plan with their indicator averages."""
+
+        threshold = await self._get_threshold()
+
+        teachers = await self.repository.get_candidates(
+            department_id=department_id,
+            period_id=period_id,
+            threshold=threshold,
+            only_at_risk=only_at_risk,
+            search=search,
+        )
+
+        return {"threshold": threshold, "teachers": teachers}
+
+    async def get_indicators(self) -> dict:
+        """Catalogue of selectable indicators for a plan item (compromiso)."""
+
+        return {
+            "threshold": await self._get_threshold(),
+            **build_indicator_catalog(),
+        }
 
 
 def get_improvement_plans_controller(
