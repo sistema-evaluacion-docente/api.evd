@@ -15,6 +15,10 @@ from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
+from api.models.improvement_plan import ImprovementPlanModel
+from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
+from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.role import RoleModel
@@ -49,6 +53,9 @@ _ = (
     EvaluationQuestionScoreModel,
     EvaluationScoreModel,
     FacultyModel,
+    ImprovementPlanModel,
+    ImprovementPlanCheckpointModel,
+    ImprovementPlanItemModel,
     PedagogicalCategoryModel,
     RiskLevelModel,
     RoleModel,

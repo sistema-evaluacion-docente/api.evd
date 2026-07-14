@@ -176,10 +176,10 @@ class GradeDistributionBin(BaseModel):
 class GradeDistribution(BaseModel):
     """Grade distribution histogram data."""
 
-    academic_period_id: int | None
-    academic_period_code: str | None
-    academic_period_name: str | None
-    department_id: int | None
+    academic_period_id: int | None = None
+    academic_period_code: str | None = None
+    academic_period_name: str | None = None
+    department_id: int | None = None
     bins: list[GradeDistributionBin]
 
 

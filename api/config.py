@@ -8,7 +8,16 @@ load_dotenv()
 
 PORT = os.getenv("PORT", "5000")
 DATABASE_URL = os.getenv("DATABASE_URL")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+# Comma-separated list of allowed CORS origins. Defaults to the local dev
+# frontends. A literal "*" is supported but is handled specially in app.py
+# because "*" is invalid together with allow_credentials=True.
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000"
+    ).split(",")
+    if origin.strip()
+]
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
 MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
 

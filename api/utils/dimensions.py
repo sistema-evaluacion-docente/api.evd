@@ -38,3 +38,7 @@ DIMENSION_MAP = {
     "Procesos de Evaluación": ["015", "016", "017", "018"],
     "Integración Interpersonal": ["019", "020", "021", "022"],
 }
+
+QUESTION_TEXT: dict[str, str] = {q["code"]: q["text"] for q in QUESTIONS}
+
+QUESTION_DIMENSION: dict[str, str] = {q["code"]: q["dimension"] for q in QUESTIONS}

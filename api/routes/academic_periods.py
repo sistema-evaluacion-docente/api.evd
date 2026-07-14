@@ -32,10 +32,18 @@ async def get_all_academic_periods(
     search: str | None = Query(default=None, min_length=1),
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    _=Depends(
+        require_roles(
+            [
+                RoleName.ADMIN,
+                RoleName.DIRECTOR_DE_DEPARTAMENTO,
+                RoleName.DOCENTE,
+            ]
+        )
+    ),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to list all academic periods."""
+    """Endpoint to list all academic periods (any authenticated role)."""
 
     periods = await controller.get_all(search=search, page=page, limit=limit)
 
@@ -65,10 +73,18 @@ async def get_all_academic_periods(
 )
 async def get_academic_period_by_id(
     period_id: int,
-    _=Depends(require_roles([RoleName.ADMIN])),
+    _=Depends(
+        require_roles(
+            [
+                RoleName.ADMIN,
+                RoleName.DIRECTOR_DE_DEPARTAMENTO,
+                RoleName.DOCENTE,
+            ]
+        )
+    ),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to get an academic period by ID."""
+    """Endpoint to get an academic period by ID (any authenticated role)."""
 
     period = await controller.get_by_id(period_id)
 
