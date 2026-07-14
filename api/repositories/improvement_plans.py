@@ -17,6 +17,7 @@ from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.improvement_plan import ImprovementPlanModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -105,6 +106,17 @@ class ImprovementPlansRepository:
         self, plan: ImprovementPlanModel, suggested_result: str | None = None
     ) -> dict:
         name, avatar = self._teacher_info(plan.teacher_id)
+
+        uploader_ids = {e.uploaded_by for e in plan.evidences if e.uploaded_by}
+        uploader_names: dict[int, str] = {}
+        if uploader_ids:
+            rows = (
+                self.db.query(UserModel.id, UserModel.name)
+                .filter(UserModel.id.in_(uploader_ids))
+                .all()
+            )
+            uploader_names = {row[0]: row[1] for row in rows}
+
         return improvement_plan_to_dict(
             plan,
             teacher_name=name,
@@ -112,6 +124,26 @@ class ImprovementPlansRepository:
             origin_period_code=self._period_code(plan.origin_period_id),
             verification_period_code=self._period_code(plan.verification_period_id),
             suggested_result=suggested_result,
+            evidence_uploader_names=uploader_names,
+        )
+
+    def get_teacher_user_id(self, teacher_id: int) -> int | None:
+        """User id linked to a teacher (to check a DOCENTE owns the plan)."""
+
+        row = (
+            self.db.query(TeacherModel.user_id)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+        return row[0] if row else None
+
+    def get_teacher_by_user_id(self, user_id: int) -> TeacherModel | None:
+        """Teacher record linked to a user, if any."""
+
+        return (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.user_id == user_id)
+            .first()
         )
 
     async def has_plan_for(self, teacher_id: int, origin_period_id: int) -> bool:
@@ -313,6 +345,7 @@ class ImprovementPlansRepository:
         period_id: int | None = None,
         status: str | None = None,
         search: str | None = None,
+        teacher_id: int | None = None,
         page: int = 1,
         limit: int = 10,
     ) -> dict:
@@ -322,6 +355,8 @@ class ImprovementPlansRepository:
 
         if department_id is not None:
             query = query.filter(ImprovementPlanModel.department_id == department_id)
+        if teacher_id is not None:
+            query = query.filter(ImprovementPlanModel.teacher_id == teacher_id)
         if period_id is not None:
             query = query.filter(
                 or_(
@@ -432,6 +467,115 @@ class ImprovementPlansRepository:
 
         return self._enrich(plan)
 
+    async def get_by_teacher(self, teacher_id: int) -> list[dict]:
+        """All plans of a teacher, newest first (for the teacher-facing view)."""
+
+        plans = (
+            self.db.query(ImprovementPlanModel)
+            .filter(ImprovementPlanModel.teacher_id == teacher_id)
+            .order_by(ImprovementPlanModel.created_at.desc())
+            .all()
+        )
+        return [self._enrich(plan) for plan in plans]
+
+    # ------------------------------------------------------------------ #
+    # Acta de compromiso & evidences
+    # ------------------------------------------------------------------ #
+    async def set_acta(
+        self,
+        plan_id: int,
+        file_url: str | None = None,
+        description: str | None = None,
+    ) -> dict | None:
+        """Attach/replace the acta PDF and/or update its description.
+
+        Returns the enriched plan plus the previous file url (so the caller
+        can remove the replaced file from disk)."""
+
+        plan = self._load(plan_id)
+        if not plan:
+            return None
+
+        previous_file_url = None
+
+        if file_url:
+            previous_file_url = plan.acta_pdf_url
+            plan.acta_pdf_url = file_url
+            plan.acta_uploaded_at = datetime.now(timezone.utc)
+
+        if description is not None:
+            plan.acta_description = description.strip() or None
+
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return {
+            "plan": self._enrich(plan),
+            "previous_file_url": previous_file_url,
+        }
+
+    async def add_evidence(
+        self,
+        plan_id: int,
+        file_url: str,
+        description: str | None = None,
+        item_id: int | None = None,
+        uploaded_by: int | None = None,
+    ) -> dict | None:
+        """Attach an evidence PDF to the plan (optionally tied to an item)."""
+
+        plan = self._load(plan_id)
+        if not plan:
+            return None
+
+        if item_id is not None and not any(i.id == item_id for i in plan.items):
+            raise ValueError("El ítem indicado no pertenece a este plan")
+
+        plan.evidences.append(
+            ImprovementPlanEvidenceModel(
+                item_id=item_id,
+                uploaded_by=uploaded_by,
+                description=(description.strip() or None) if description else None,
+                file_url=file_url,
+            )
+        )
+
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return self._enrich(plan)
+
+    def get_evidence(
+        self, plan_id: int, evidence_id: int
+    ) -> ImprovementPlanEvidenceModel | None:
+        return (
+            self.db.query(ImprovementPlanEvidenceModel)
+            .filter(
+                ImprovementPlanEvidenceModel.id == evidence_id,
+                ImprovementPlanEvidenceModel.plan_id == plan_id,
+            )
+            .first()
+        )
+
+    async def delete_evidence(self, plan_id: int, evidence_id: int) -> dict | None:
+        """Delete an evidence. Returns the enriched plan and the removed file
+        url so the caller can delete it from disk."""
+
+        evidence = self.get_evidence(plan_id, evidence_id)
+        if not evidence:
+            return None
+
+        file_url = evidence.file_url
+        self.db.delete(evidence)
+        self.db.commit()
+
+        plan = self._load(plan_id)
+
+        return {
+            "plan": self._enrich(plan) if plan else None,
+            "file_url": file_url,
+        }
+
     async def close(
         self, plan_id: int, result: str, reason: str | None = None
     ) -> dict | None:
@@ -541,6 +685,37 @@ class ImprovementPlansRepository:
 
         return self._enrich(plan, suggested_result=suggested_result)
 
+    async def get_evaluated_periods(self, department_id: int) -> list[dict]:
+        """Periods whose grades are already loaded for the department, newest
+        first.
+
+        A plan's origin period is the one where the low performance was
+        detected, so only periods with an uploaded evaluation can be chosen —
+        the current academic period usually has no grades yet (they arrive at
+        the start of the next one)."""
+
+        rows = (
+            self.db.query(
+                AcademicPeriodModel.id,
+                AcademicPeriodModel.code,
+                AcademicPeriodModel.name,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.academic_period_id == AcademicPeriodModel.id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.status == "COMPLETED",
+                EvaluationModel.active.is_(True),
+            )
+            .distinct()
+            .order_by(AcademicPeriodModel.code.desc())
+            .all()
+        )
+
+        return [{"id": row.id, "code": row.code, "name": row.name} for row in rows]
+
     # ------------------------------------------------------------------ #
     # Candidates for a plan (auto-detección + sugerencias)
     # ------------------------------------------------------------------ #
@@ -634,6 +809,143 @@ class ImprovementPlansRepository:
             threshold=threshold,
             only_at_risk=True,
         )
+
+    # ------------------------------------------------------------------ #
+    # Teacher history (evaluaciones por periodo + planes + reincidencia)
+    # ------------------------------------------------------------------ #
+    def _period_question_averages(
+        self, teacher_id: int
+    ) -> dict[str, dict[str, float]]:
+        """Per-period, per-question averages for one teacher, in one query.
+
+        Keyed by period code so it can be merged with the overall history."""
+
+        rows = (
+            self.db.query(
+                AcademicPeriodModel.code.label("period_code"),
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(
+                AcademicPeriodModel,
+                AcademicPeriodModel.id == EvaluationModel.academic_period_id,
+            )
+            .filter(AcademicGroupModel.teacher_id == teacher_id)
+            .group_by(
+                AcademicPeriodModel.code,
+                EvaluationQuestionScoreModel.question_code,
+            )
+            .all()
+        )
+
+        averages: dict[str, dict[str, float]] = {}
+        for row in rows:
+            averages.setdefault(row.period_code, {})[row.question_code] = round(
+                float(row.avg_score), 2
+            )
+
+        return averages
+
+    @staticmethod
+    def _indicator_label(target_type: str, target_ref: str | None) -> str:
+        if target_type == "OVERALL_AVERAGE":
+            return "Promedio general"
+        if target_type == "QUESTION" and target_ref:
+            return f"{target_ref} — {QUESTION_TEXT.get(target_ref, target_ref)}"
+        return target_ref or target_type
+
+    async def get_history(self, teacher_id: int) -> dict | None:
+        """Full follow-up history of a teacher: overall + per-dimension average
+        for every evaluated period, every improvement plan with its resolution,
+        and the indicators the teacher relapsed on (same indicator targeted by
+        plans of different origin periods)."""
+
+        teacher = (
+            self.db.query(TeacherModel)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+        if not teacher:
+            return None
+
+        stats = StatsRepository(self.db)
+        overall_history = await stats.get_teacher_history(teacher_id) or []
+        question_history = self._period_question_averages(teacher_id)
+
+        periods = [
+            {
+                "period_code": entry["period_code"],
+                "period_name": entry["period_name"],
+                "overall_average": entry["overall_average"],
+                "dimensions": {
+                    dimension: self._dimension_average(
+                        question_history.get(entry["period_code"], {}), codes
+                    )
+                    for dimension, codes in DIMENSION_MAP.items()
+                },
+            }
+            for entry in overall_history
+        ]
+
+        plans = (
+            self.db.query(ImprovementPlanModel)
+            .filter(ImprovementPlanModel.teacher_id == teacher_id)
+            .order_by(ImprovementPlanModel.created_at.asc())
+            .all()
+        )
+
+        groups: dict[tuple[str, str | None], dict] = {}
+        for plan in plans:
+            origin_code = self._period_code(plan.origin_period_id)
+            for item in plan.items:
+                if item.target_type == "QUALITATIVE":
+                    continue
+                group = groups.setdefault(
+                    (item.target_type, item.target_ref),
+                    {"plan_ids": [], "origin_period_ids": set(), "period_codes": []},
+                )
+                if plan.id not in group["plan_ids"]:
+                    group["plan_ids"].append(plan.id)
+                    group["origin_period_ids"].add(plan.origin_period_id)
+                    if origin_code:
+                        group["period_codes"].append(origin_code)
+
+        recurrences = [
+            {
+                "target_type": target_type,
+                "target_ref": target_ref,
+                "label": self._indicator_label(target_type, target_ref),
+                "plan_ids": group["plan_ids"],
+                "period_codes": group["period_codes"],
+            }
+            for (target_type, target_ref), group in groups.items()
+            if len(group["origin_period_ids"]) >= 2
+        ]
+
+        name, avatar = self._teacher_info(teacher_id)
+
+        return {
+            "teacher_id": teacher_id,
+            "teacher_name": name,
+            "teacher_avatar_url": avatar,
+            "department_id": teacher.department_id,
+            "periods": periods,
+            "plans": [self._enrich(plan) for plan in plans],
+            "recurrences": recurrences,
+        }
 
 
 def get_improvement_plans_repository(db: Annotated[Session, Depends(get_db)]):
