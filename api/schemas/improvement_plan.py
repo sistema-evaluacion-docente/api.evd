@@ -13,9 +13,15 @@ from api.schemas.pagination import Pagination
 
 
 class TargetType(str, Enum):
-    """How an item's compliance is measured against the verification period."""
+    """How an item's compliance is measured against the verification period.
+
+    ``DIMENSION`` targets the overall score of a dimension (e.g. "Desempeño
+    Docente"); ``QUESTION`` targets a single question of the evaluation form
+    inside that dimension (e.g. "011 - Asiste puntualmente a clase").
+    """
 
     DIMENSION = "DIMENSION"
+    QUESTION = "QUESTION"
     PEDAGOGICAL_CATEGORY = "PEDAGOGICAL_CATEGORY"
     OVERALL_AVERAGE = "OVERALL_AVERAGE"
     QUALITATIVE = "QUALITATIVE"

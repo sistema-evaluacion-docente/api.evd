@@ -26,9 +26,10 @@ class ImprovementPlanItemModel(Base):
     Improvement plan item model.
 
     ``target_type`` drives how compliance is verified against the verification
-    period: DIMENSION / PEDAGOGICAL_CATEGORY / OVERALL_AVERAGE / QUALITATIVE.
-    ``target_ref`` holds the dimension name or the pedagogical_category id
-    (null for OVERALL_AVERAGE and QUALITATIVE).
+    period: DIMENSION / QUESTION / PEDAGOGICAL_CATEGORY / OVERALL_AVERAGE /
+    QUALITATIVE. ``target_ref`` holds the dimension name, the question code
+    (e.g. "011") or the pedagogical_category id (null for OVERALL_AVERAGE and
+    QUALITATIVE).
     """
 
     __tablename__ = "improvement_plan_items"
