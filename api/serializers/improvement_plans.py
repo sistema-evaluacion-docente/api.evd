@@ -44,8 +44,14 @@ def improvement_plan_checkpoint_to_dict(
     }
 
 
-def _compute_progress(items: list[ImprovementPlanItemModel]) -> int:
-    """Percentage of items marked CUMPLIDO over the total number of items."""
+def _compute_progress(status: str, items: list[ImprovementPlanItemModel]) -> int:
+    """Percentage of items marked CUMPLIDO over the total number of items.
+
+    A plan closed as CUMPLIDO is always at 100%: the director confirmed the
+    whole plan was fulfilled, regardless of how each item was left."""
+
+    if status == "CERRADO_CUMPLIDO":
+        return 100
 
     if not items:
         return 0
@@ -88,7 +94,7 @@ def improvement_plan_to_dict(
         "end_date": plan.end_date,
         "created_by": plan.created_by,
         "closed_at": plan.closed_at,
-        "progress": _compute_progress(items),
+        "progress": _compute_progress(plan.status, items),
         "suggested_result": suggested_result,
         "items": [improvement_plan_item_to_dict(i) for i in items],
         "checkpoints": [
