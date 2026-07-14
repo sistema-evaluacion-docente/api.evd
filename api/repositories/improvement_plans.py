@@ -6,11 +6,15 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from api.database import get_db
+from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.evaluation import EvaluationModel
+from api.models.evaluation_question_score import EvaluationQuestionScoreModel
+from api.models.evaluation_score import EvaluationScoreModel
 from api.models.improvement_plan import ImprovementPlanModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
@@ -22,9 +26,12 @@ from api.schemas.improvement_plan import (
     ImprovementPlanUpdate,
 )
 from api.serializers.improvement_plans import improvement_plan_to_dict
+from api.utils.dimensions import DIMENSION_MAP, QUESTION_TEXT
 from api.utils.improvement_suggestions import suggest_actions
 
 CHECKPOINT_STAGES = ["INICIO", "MITAD", "SEMANA_16"]
+
+MEASURABLE_TARGET_TYPES = ("OVERALL_AVERAGE", "DIMENSION", "QUESTION")
 
 CLOSE_RESULT_TO_STATUS = {
     "CUMPLIDO": "CERRADO_CUMPLIDO",
@@ -119,6 +126,124 @@ class ImprovementPlansRepository:
             .first()
             is not None
         )
+
+    def _teachers_with_plan(
+        self, teacher_ids: list[int], origin_period_id: int
+    ) -> set[int]:
+        """Teachers from the list that already have a plan for the period."""
+
+        if not teacher_ids:
+            return set()
+
+        rows = (
+            self.db.query(ImprovementPlanModel.teacher_id)
+            .filter(
+                ImprovementPlanModel.teacher_id.in_(teacher_ids),
+                ImprovementPlanModel.origin_period_id == origin_period_id,
+            )
+            .all()
+        )
+
+        return {row[0] for row in rows}
+
+    # ------------------------------------------------------------------ #
+    # Indicator averages (question = one item of the evaluation form)
+    # ------------------------------------------------------------------ #
+    def _question_averages(
+        self, teacher_ids: list[int], period_id: int
+    ) -> dict[int, dict[str, float]]:
+        """Per-teacher, per-question averages for a period, in a single query."""
+
+        if not teacher_ids:
+            return {}
+
+        rows = (
+            self.db.query(
+                AcademicGroupModel.teacher_id,
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id.in_(teacher_ids),
+                EvaluationModel.academic_period_id == period_id,
+            )
+            .group_by(
+                AcademicGroupModel.teacher_id,
+                EvaluationQuestionScoreModel.question_code,
+            )
+            .all()
+        )
+
+        averages: dict[int, dict[str, float]] = {}
+        for row in rows:
+            averages.setdefault(row.teacher_id, {})[row.question_code] = round(
+                float(row.avg_score), 2
+            )
+
+        return averages
+
+    @staticmethod
+    def _dimension_average(
+        question_averages: dict[str, float], codes: list[str]
+    ) -> float | None:
+        scores = [question_averages[c] for c in codes if c in question_averages]
+
+        return round(sum(scores) / len(scores), 2) if scores else None
+
+    def _build_indicators(
+        self, question_averages: dict[str, float], threshold: float
+    ) -> list[dict]:
+        """Every dimension with its own average and the average of each of its
+        questions, flagged against the institutional threshold."""
+
+        dimensions = []
+
+        for dimension, codes in DIMENSION_MAP.items():
+            average = self._dimension_average(question_averages, codes)
+            questions = []
+
+            for code in codes:
+                q_average = question_averages.get(code)
+                questions.append(
+                    {
+                        "target_type": "QUESTION",
+                        "target_ref": code,
+                        "code": code,
+                        "text": QUESTION_TEXT.get(code, code),
+                        "average": q_average,
+                        "below_threshold": (
+                            q_average is not None and q_average < threshold
+                        ),
+                        "suggestions": suggest_actions("QUESTION", code),
+                    }
+                )
+
+            dimensions.append(
+                {
+                    "dimension": dimension,
+                    "target_type": "DIMENSION",
+                    "target_ref": dimension,
+                    "average": average,
+                    "below_threshold": average is not None and average < threshold,
+                    "suggestions": suggest_actions("DIMENSION", dimension),
+                    "questions": questions,
+                }
+            )
+
+        return dimensions
 
     # ------------------------------------------------------------------ #
     # CRUD
@@ -328,9 +453,12 @@ class ImprovementPlansRepository:
     # ------------------------------------------------------------------ #
     # Compliance verification against the verification period
     # ------------------------------------------------------------------ #
-    async def evaluate(self, plan_id: int) -> dict | None:
+    async def evaluate(self, plan_id: int, threshold: float) -> dict | None:
         """Recompute item results against the verification period and suggest
-        an aggregated result. Does NOT close the plan (director confirms)."""
+        an aggregated result. Does NOT close the plan (director confirms).
+
+        Items without an explicit ``target_value`` are verified against the
+        institutional ``threshold``."""
 
         plan = self._load(plan_id)
         if not plan:
@@ -357,41 +485,55 @@ class ImprovementPlansRepository:
         )
         overall_avg = overall.get("overall_average") if overall else None
 
-        dim_data = await stats.get_teacher_dimension_averages(
-            plan.teacher_id, verification_period_id
-        )
-        dim_by_name: dict[str, float | None] = {}
-        if dim_data:
-            for d in dim_data.get("dimensions", []):
-                dim_by_name[d["dimension"]] = d["average"]
+        question_avgs = self._question_averages(
+            [plan.teacher_id], verification_period_id
+        ).get(plan.teacher_id, {})
 
-        measurable = 0
+        dim_by_name = {
+            dimension: self._dimension_average(question_avgs, codes)
+            for dimension, codes in DIMENSION_MAP.items()
+        }
+
+        measured = 0
         fulfilled = 0
 
         for item in plan.items:
+            if item.target_type not in MEASURABLE_TARGET_TYPES:
+                continue
+
             result_value: float | None = None
 
             if item.target_type == "OVERALL_AVERAGE":
                 result_value = overall_avg
             elif item.target_type == "DIMENSION" and item.target_ref:
                 result_value = dim_by_name.get(item.target_ref)
+            elif item.target_type == "QUESTION" and item.target_ref:
+                result_value = question_avgs.get(item.target_ref)
 
-            if item.target_type in ("OVERALL_AVERAGE", "DIMENSION"):
-                measurable += 1
-                item.result_value = result_value
-                target = float(item.target_value) if item.target_value else None
-                if result_value is not None and target is not None:
-                    if result_value >= target:
-                        item.status = "CUMPLIDO"
-                        fulfilled += 1
-                    else:
-                        item.status = "NO_CUMPLIDO"
+            item.result_value = result_value
+
+            if result_value is None:
+                # The verification period has no grades for this indicator yet:
+                # leave the item as it is instead of failing it for missing data.
+                continue
+
+            target = (
+                float(item.target_value)
+                if item.target_value is not None
+                else threshold
+            )
+
+            measured += 1
+
+            if result_value >= target:
+                item.status = "CUMPLIDO"
+                fulfilled += 1
+            else:
+                item.status = "NO_CUMPLIDO"
 
         suggested_result = None
-        if measurable > 0:
-            suggested_result = (
-                "CUMPLIDO" if fulfilled == measurable else "NO_CUMPLIDO"
-            )
+        if measured > 0:
+            suggested_result = "CUMPLIDO" if fulfilled == measured else "NO_CUMPLIDO"
             plan.status = "RESULTADO_DISPONIBLE"
 
         self.db.commit()
@@ -400,16 +542,24 @@ class ImprovementPlansRepository:
         return self._enrich(plan, suggested_result=suggested_result)
 
     # ------------------------------------------------------------------ #
-    # At-risk detection (auto-detección + sugerencias)
+    # Candidates for a plan (auto-detección + sugerencias)
     # ------------------------------------------------------------------ #
-    async def get_at_risk(
+    async def get_candidates(
         self,
         department_id: int,
         period_id: int,
         threshold: float,
+        only_at_risk: bool = False,
+        search: str | None = None,
     ) -> list[dict]:
-        """Teachers in the department below threshold in the period that do not
-        yet have a plan for that period, with weak dimensions + suggestions."""
+        """Teachers of the department evaluated in the period, each with the
+        average of every dimension and of every question of the form.
+
+        A teacher can be below the threshold in a single question while keeping
+        a healthy overall average, so by default the whole department is
+        returned and the caller decides. ``only_at_risk`` narrows the list to
+        teachers below the threshold that have no plan yet for the period
+        (auto-detection for the dashboard)."""
 
         stats = StatsRepository(self.db)
 
@@ -418,38 +568,37 @@ class ImprovementPlansRepository:
             department_id=department_id,
             page=1,
             limit=1000,
+            search=search,
             sort="asc",
         )
 
+        teachers = ranking.get("teachers", [])
+        teacher_ids = [t["teacher_id"] for t in teachers]
+
+        averages_by_teacher = self._question_averages(teacher_ids, period_id)
+        planned = self._teachers_with_plan(teacher_ids, period_id)
+
         result: list[dict] = []
 
-        for teacher in ranking.get("teachers", []):
-            avg = teacher.get("overall_average")
-            if avg is None or avg >= threshold:
-                continue
-
+        for teacher in teachers:
             teacher_id = teacher["teacher_id"]
+            avg = teacher.get("overall_average")
+            below_threshold = avg is not None and avg < threshold
+            has_plan = teacher_id in planned
 
-            if await self.has_plan_for(teacher_id, period_id):
+            if only_at_risk and (not below_threshold or has_plan):
                 continue
 
-            dim_data = await stats.get_teacher_dimension_averages(
-                teacher_id, period_id
+            dimensions = self._build_indicators(
+                averages_by_teacher.get(teacher_id, {}), threshold
             )
-            weak_dimensions = []
-            if dim_data:
-                for d in dim_data.get("dimensions", []):
-                    d_avg = d.get("average")
-                    if d_avg is not None and d_avg < threshold:
-                        weak_dimensions.append(
-                            {
-                                "dimension": d["dimension"],
-                                "average": d_avg,
-                                "suggestions": suggest_actions(
-                                    "DIMENSION", d["dimension"]
-                                ),
-                            }
-                        )
+
+            weak_questions = [
+                {**question, "dimension": dimension["dimension"]}
+                for dimension in dimensions
+                for question in dimension["questions"]
+                if question["below_threshold"]
+            ]
 
             result.append(
                 {
@@ -458,12 +607,33 @@ class ImprovementPlansRepository:
                     "avatar_url": teacher.get("avatar_url"),
                     "institutional_code": teacher.get("institutional_code"),
                     "overall_average": avg,
-                    "weak_dimensions": weak_dimensions,
+                    "below_threshold": below_threshold,
+                    "has_plan": has_plan,
+                    "dimensions": dimensions,
+                    "weak_dimensions": [
+                        d for d in dimensions if d["below_threshold"]
+                    ],
+                    "weak_questions": weak_questions,
                     "overall_suggestions": suggest_actions("OVERALL_AVERAGE"),
                 }
             )
 
         return result
+
+    async def get_at_risk(
+        self,
+        department_id: int,
+        period_id: int,
+        threshold: float,
+    ) -> list[dict]:
+        """Teachers below threshold in the period without a plan yet."""
+
+        return await self.get_candidates(
+            department_id=department_id,
+            period_id=period_id,
+            threshold=threshold,
+            only_at_risk=True,
+        )
 
 
 def get_improvement_plans_repository(db: Annotated[Session, Depends(get_db)]):
