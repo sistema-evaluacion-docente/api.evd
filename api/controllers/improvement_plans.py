@@ -17,6 +17,7 @@ from api.schemas.improvement_plan import (
     ImprovementPlanCreate,
     ImprovementPlanUpdate,
 )
+from api.schemas.user import RoleName
 from api.utils.improvement_suggestions import build_indicator_catalog
 
 THRESHOLD_KEY = "improvement_plan.score_threshold"
@@ -83,6 +84,7 @@ class ImprovementPlansController:
         period_id: int | None = None,
         status: str | None = None,
         search: str | None = None,
+        teacher_id: int | None = None,
         page: int = 1,
         limit: int = 10,
     ) -> dict:
@@ -93,6 +95,7 @@ class ImprovementPlansController:
             period_id=period_id,
             status=status,
             search=search,
+            teacher_id=teacher_id,
             page=page,
             limit=limit,
         )
@@ -101,6 +104,150 @@ class ImprovementPlansController:
         """Get a plan by id."""
 
         return await self.repository.get_by_id(plan_id)
+
+    def can_access_plan(self, current_user: dict, plan: dict) -> bool:
+        """Whether the user may see/touch this plan.
+
+        ADMIN always; a director within their department; a DOCENTE only when
+        the plan belongs to their own teacher record."""
+
+        roles = set(current_user.get("roles", []))
+
+        if RoleName.ADMIN.value in roles:
+            return True
+
+        if (
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
+            and plan.get("department_id") is not None
+            and plan.get("department_id") == current_user.get("department_id")
+        ):
+            return True
+
+        if RoleName.DOCENTE.value in roles:
+            teacher_user_id = self.repository.get_teacher_user_id(
+                plan["teacher_id"]
+            )
+            return (
+                teacher_user_id is not None
+                and teacher_user_id == current_user.get("id")
+            )
+
+        return False
+
+    async def get_my_plans(self, current_user: dict) -> list[dict]:
+        """Plans of the authenticated teacher (empty if no teacher record)."""
+
+        user_id = current_user.get("id")
+        teacher = (
+            self.repository.get_teacher_by_user_id(user_id) if user_id else None
+        )
+        if not teacher:
+            return []
+
+        return await self.repository.get_by_teacher(teacher.id)
+
+    async def get_history(self, teacher_id: int) -> dict | None:
+        """Cross-period history of a teacher with plans and recurrences."""
+
+        return await self.repository.get_history(teacher_id)
+
+    async def set_acta(
+        self,
+        plan_id: int,
+        current_user,
+        file_url: str | None = None,
+        description: str | None = None,
+    ) -> dict | None:
+        """Attach/replace the acta de compromiso of a plan."""
+
+        result = await self.repository.set_acta(
+            plan_id, file_url=file_url, description=description
+        )
+        if not result:
+            return None
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=await self._resolve_user_id(current_user),
+                table_name="improvement_plans",
+                operation="ACTA_UPLOAD",
+                element=f"ImprovementPlan {plan_id}",
+                description=(
+                    f"Se {'adjuntó el PDF del' if file_url else 'actualizó el'} "
+                    f"acta de compromiso del plan #{plan_id}"
+                ),
+                created_at=None,
+            )
+        )
+
+        return result
+
+    async def add_evidence(
+        self,
+        plan_id: int,
+        current_user,
+        file_url: str,
+        description: str | None = None,
+        item_id: int | None = None,
+    ) -> dict | None:
+        """Attach an evidence PDF to a plan."""
+
+        user_id = await self._resolve_user_id(current_user)
+
+        plan = await self.repository.add_evidence(
+            plan_id,
+            file_url=file_url,
+            description=description,
+            item_id=item_id,
+            uploaded_by=user_id,
+        )
+        if not plan:
+            return None
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=user_id,
+                table_name="improvement_plan_evidences",
+                operation="EVIDENCE_ADD",
+                element=f"ImprovementPlan {plan_id}",
+                description=(
+                    f"Se adjuntó una evidencia al plan #{plan_id}"
+                    + (f" (ítem #{item_id})" if item_id else "")
+                ),
+                created_at=None,
+            )
+        )
+
+        return plan
+
+    def get_evidence(self, plan_id: int, evidence_id: int):
+        """Raw evidence record (for authorization before deleting)."""
+
+        return self.repository.get_evidence(plan_id, evidence_id)
+
+    async def delete_evidence(
+        self, plan_id: int, evidence_id: int, current_user
+    ) -> dict | None:
+        """Delete an evidence from a plan."""
+
+        result = await self.repository.delete_evidence(plan_id, evidence_id)
+        if not result:
+            return None
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=await self._resolve_user_id(current_user),
+                table_name="improvement_plan_evidences",
+                operation="EVIDENCE_DELETE",
+                element=f"ImprovementPlan {plan_id}",
+                description=(
+                    f"Se eliminó la evidencia #{evidence_id} del plan #{plan_id}"
+                ),
+                created_at=None,
+            )
+        )
+
+        return result
 
     async def update(
         self, plan_id: int, data: ImprovementPlanUpdate, current_user
@@ -215,6 +362,11 @@ class ImprovementPlansController:
         )
 
         return {"threshold": threshold, "teachers": teachers}
+
+    async def get_evaluated_periods(self, department_id: int) -> list[dict]:
+        """Periods with grades already loaded (selectable as plan origin)."""
+
+        return await self.repository.get_evaluated_periods(department_id)
 
     async def get_indicators(self) -> dict:
         """Catalogue of selectable indicators for a plan item (compromiso)."""
