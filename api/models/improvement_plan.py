@@ -51,6 +51,13 @@ class ImprovementPlanModel(Base):
     closed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # Acta de compromiso firmada con el docente (PDF + descripción). Optional
+    # at creation and replaceable while the plan is open.
+    acta_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    acta_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    acta_uploaded_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     items: Mapped[list["ImprovementPlanItemModel"]] = relationship(
         "ImprovementPlanItemModel",
@@ -62,6 +69,12 @@ class ImprovementPlanModel(Base):
         "ImprovementPlanCheckpointModel",
         back_populates="plan",
         cascade="all, delete-orphan",
+    )
+    evidences: Mapped[list["ImprovementPlanEvidenceModel"]] = relationship(
+        "ImprovementPlanEvidenceModel",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="ImprovementPlanEvidenceModel.created_at",
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
