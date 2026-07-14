@@ -737,6 +737,24 @@
           "primaryKey": false,
           "unique": false,
           "createdAt": 1780155252970
+        },
+        {
+          "id": "201",
+          "name": "ai_status",
+          "type": {
+            "name": "varchar",
+            "id": "varchar",
+            "fieldAttributes": {
+              "hasCharMaxLength": true
+            },
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1783900000000,
+          "characterMaximumLength": "255",
+          "comments": "Estado del analisis de IA sobre los comentarios: PENDING, ANALYZING, ANALYZED, FAILED"
         }
       ],
       "indexes": [

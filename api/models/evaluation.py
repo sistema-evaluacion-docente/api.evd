@@ -26,6 +26,7 @@ class EvaluationModel(Base):
     academic_period = relationship("AcademicPeriodModel", lazy="joined")
     active = Column(Boolean, nullable=True, default=True)
     status = Column(String(255), nullable=True)
+    ai_status = Column(String(255), nullable=True, default="PENDING")
     count = Column(Integer, nullable=True)
 
     created_at: Mapped[datetime.datetime] = mapped_column(

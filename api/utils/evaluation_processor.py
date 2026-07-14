@@ -16,7 +16,10 @@ from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.pedagogical_category import PedagogicalCategoryModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
+from api.utils.ai_analyzer import analyze_comment
 
 logger = logging.getLogger(__name__)
 
@@ -121,12 +124,36 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                         )
 
                 for text in group_data.get("comments", []):
+                    analysis = analyze_comment(text)
+
+                    risk_level_id = None
+                    if analysis["risk_label"]:
+                        risk_row = (
+                            db.query(RiskLevelModel)
+                            .filter(RiskLevelModel.name == analysis["risk_label"])
+                            .first()
+                        )
+                        risk_level_id = risk_row.id if risk_row else None
+
+                    category_id = None
+                    if analysis["category_label"]:
+                        cat_row = (
+                            db.query(PedagogicalCategoryModel)
+                            .filter(
+                                PedagogicalCategoryModel.name == analysis["category_label"]
+                            )
+                            .first()
+                        )
+                        category_id = cat_row.id if cat_row else None
+
                     db.add(
                         CommentModel(
                             teacher_id=teacher.id,
                             evaluation_id=evaluation_id,
                             academic_groups_id=academic_group.id,
                             original_text=text,
+                            risk_level=risk_level_id,
+                            pedagogical_category_id=category_id,
                         )
                     )
 
