@@ -113,6 +113,75 @@ async def get_at_risk_teachers(
     )
 
 
+@router.get(
+    "/candidates",
+    response_model=ResponseSchema,
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def get_plan_candidates(
+    period_id: int = Query(..., description="Academic period to inspect"),
+    department_id: int | None = Query(default=None),
+    only_at_risk: bool = Query(
+        default=False,
+        description="Only teachers below the threshold without a plan yet",
+    ),
+    search: str | None = Query(default=None, min_length=1),
+    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    controller: ImprovementPlansController = Depends(
+        get_improvement_plans_controller
+    ),
+):
+    """Teachers that can receive a plan, with the average of every dimension and
+    of every question of the evaluation form.
+
+    Returns the whole department by default: a teacher with a healthy overall
+    average may still be below the threshold in a single question."""
+
+    effective_department = _effective_department_id(current_user, department_id)
+
+    if effective_department is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere un department_id (el usuario no tiene departamento asignado)",
+        )
+
+    result = await controller.get_candidates(
+        period_id=period_id,
+        department_id=effective_department,
+        only_at_risk=only_at_risk,
+        search=search,
+    )
+
+    return ResponseSchema(
+        status=200,
+        message="Plan candidates found",
+        data=result,
+        path="/improvement-plans/candidates",
+    )
+
+
+@router.get(
+    "/indicators",
+    response_model=ResponseSchema,
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_plan_indicators(
+    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    controller: ImprovementPlansController = Depends(
+        get_improvement_plans_controller
+    ),
+):
+    """Indicators a plan item can commit to: the overall average, each dimension
+    as a whole, and each question of the evaluation form within it."""
+
+    return ResponseSchema(
+        status=200,
+        message="Plan indicators found",
+        data=await controller.get_indicators(),
+        path="/improvement-plans/indicators",
+    )
+
+
 @router.post(
     "/",
     response_model=ImprovementPlanDetailResponse,
