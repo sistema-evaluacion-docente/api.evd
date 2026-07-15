@@ -34,16 +34,43 @@ class DepartmentsRepository:
 
         return department_to_dict(department)
 
-    async def get_all(self) -> list[dict]:
-        """Get all departments ordered by creation date descending."""
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict:
+        """Get all departments with pagination and optional search filter."""
+
+        query = self.db.query(DepartmentModel)
+
+        if search:
+            term = search.strip()
+            if term:
+                like_term = f"%{term}%"
+                query = query.filter(
+                    (DepartmentModel.name.ilike(like_term))
+                    | (DepartmentModel.code.ilike(like_term))
+                )
+
+        total = query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
 
         departments = (
-            self.db.query(DepartmentModel)
-            .order_by(DepartmentModel.created_at.desc())
+            query.order_by(DepartmentModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
             .all()
         )
 
-        return [department_to_dict(d) for d in departments]
+        return {
+            "items": [department_to_dict(d) for d in departments],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_id(self, department_id: int) -> dict | None:
         """Get a department by ID."""

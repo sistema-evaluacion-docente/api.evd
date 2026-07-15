@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.pagination import Pagination
+
 
 class DepartmentCreate(BaseModel):
     """Schema for creating a department."""
@@ -54,6 +56,7 @@ class DepartmentListResponse(BaseModel):
     status: int
     message: str
     data: list[DepartmentOut]
+    pagination: Pagination
     error: Optional[str] = None
     timestamp: datetime
     path: str
