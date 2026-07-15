@@ -33,16 +33,43 @@ class FacultiesRepository:
 
         return faculty_to_dict(faculty)
 
-    async def get_all(self) -> list[dict]:
-        """Get all faculties ordered by creation date descending."""
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict:
+        """Get all faculties with pagination and optional search filter."""
+
+        query = self.db.query(FacultyModel)
+
+        if search:
+            term = search.strip()
+            if term:
+                like_term = f"%{term}%"
+                query = query.filter(
+                    (FacultyModel.name.ilike(like_term))
+                    | (FacultyModel.code.ilike(like_term))
+                )
+
+        total = query.count()
+        pages = (total + limit - 1) // limit if total else 0
+        offset = (page - 1) * limit
 
         faculties = (
-            self.db.query(FacultyModel)
-            .order_by(FacultyModel.created_at.desc())
+            query.order_by(FacultyModel.created_at.desc())
+            .offset(offset)
+            .limit(limit)
             .all()
         )
 
-        return [faculty_to_dict(f) for f in faculties]
+        return {
+            "items": [faculty_to_dict(f) for f in faculties],
+            "total": total,
+            "page": page,
+            "limit": limit,
+            "pages": pages,
+        }
 
     async def get_by_id(self, faculty_id: int) -> dict | None:
         """Get a faculty by ID."""

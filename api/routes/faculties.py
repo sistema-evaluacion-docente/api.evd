@@ -2,7 +2,7 @@
 Routes for faculty operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.faculties import (
     FacultiesController,
@@ -15,6 +15,7 @@ from api.schemas.faculty import (
     FacultyListResponse,
     FacultyUpdate,
 )
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
@@ -27,17 +28,26 @@ router = APIRouter(prefix="/faculties", tags=["Faculties"])
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_faculties(
+    search: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: FacultiesController = Depends(get_faculties_controller),
 ):
     """Endpoint to list all faculties."""
 
-    faculties = await controller.get_all()
+    faculties = await controller.get_all(search=search, page=page, limit=limit)
 
     return ResponseSchema(
         status=200,
         message="Faculties found",
-        data=faculties,
+        data=faculties["items"],
+        pagination=Pagination(
+            total=faculties["total"],
+            page=faculties["page"],
+            limit=faculties["limit"],
+            pages=faculties["pages"],
+        ),
         path="/faculties",
     )
 
@@ -45,7 +55,8 @@ async def get_all_faculties(
 @router.get(
     "/{faculty_id}",
     response_model=FacultyDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_faculty_by_id(
     faculty_id: int,
@@ -74,7 +85,8 @@ async def get_faculty_by_id(
 @router.post(
     "/",
     response_model=FacultyDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
     status_code=201,
 )
 async def create_faculty(
@@ -105,7 +117,8 @@ async def create_faculty(
 @router.put(
     "/{faculty_id}",
     response_model=FacultyDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
 )
 async def update_faculty(
     faculty_id: int,

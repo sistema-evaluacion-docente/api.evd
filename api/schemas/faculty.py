@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.pagination import Pagination
+
 
 class FacultyCreate(BaseModel):
     """Schema for creating a faculty."""
@@ -51,6 +53,7 @@ class FacultyListResponse(BaseModel):
     status: int
     message: str
     data: list[FacultyOut]
+    pagination: Pagination
     error: Optional[str] = None
     timestamp: datetime
     path: str
