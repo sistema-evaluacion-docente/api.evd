@@ -43,6 +43,7 @@ from api.routes import (
     admin_dashboard,
     audits,
     comments,
+    comparison,
     courses,
     departments,
     evaluation_question_scores,
@@ -138,3 +139,4 @@ app.include_router(settings.router)
 app.include_router(stats.router)
 app.include_router(admin_dashboard.router)
 app.include_router(improvement_plans.router)
+app.include_router(comparison.router)
