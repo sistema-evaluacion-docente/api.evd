@@ -28,6 +28,7 @@ class EvaluationOut(BaseModel):
     pdf_url: Optional[str]
     active: Optional[bool]
     status: Optional[str]
+    ai_status: Optional[str] = None
     count: Optional[int]
     overall_average: Optional[float] = None
     created_at: datetime

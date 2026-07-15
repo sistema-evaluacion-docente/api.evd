@@ -54,7 +54,7 @@ from api.schemas.pagination import Pagination
 from api.utils.dimensions import QUESTIONS
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
-from api.utils.evaluation_processor import process_evaluation
+from api.utils.evaluation_processor import analyze_evaluation_comments, process_evaluation
 from api.utils.pdf_parser import parse_pdf
 from api.utils.file_validation import validate_file_size
 
@@ -749,7 +749,7 @@ async def export_teacher_evaluation(
             style_section_header(ws, r, course_label)
             r += 1
             for comment in comments:
-                cell = ws.cell(row=r, column=1, value=comment)
+                cell = ws.cell(row=r, column=1, value=comment.get("original_text", "") if isinstance(comment, dict) else comment)
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
                 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
                 ws.row_dimensions[r].height = 40
@@ -855,6 +855,63 @@ async def export_evaluation(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
+
+
+@router.post(
+    "/{evaluation_id}/analyze",
+    status_code=202,
+    response_model=EvaluationDetailResponse,
+    responses={
+        400: {"model": ResponseSchema},
+        403: {"description": "Forbidden"},
+        404: {"model": ResponseSchema},
+    },
+)
+async def analyze_evaluation(
+    evaluation_id: int,
+    background_tasks: BackgroundTasks,
+    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+    db: Session = Depends(get_db),
+):
+    """Trigger AI classification of all comments for an evaluation.
+
+    Returns 202 immediately while the analysis runs in the background.
+    The evaluation's ai_status transitions: PENDING → ANALYZING → ANALYZED/FAILED.
+    """
+    evaluation = db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+
+    if not evaluation:
+        return ResponseSchema(
+            status=404,
+            message="Evaluation not found",
+            path=f"/evaluations/{evaluation_id}/analyze",
+        )
+
+    if evaluation.status != "COMPLETED":
+        return ResponseSchema(
+            status=400,
+            message="La evaluación todavía no ha sido procesada completamente",
+            path=f"/evaluations/{evaluation_id}/analyze",
+        )
+
+    if evaluation.ai_status == "ANALYZING":
+        return ResponseSchema(
+            status=400,
+            message="El análisis de IA ya está en progreso para esta evaluación",
+            path=f"/evaluations/{evaluation_id}/analyze",
+        )
+
+    background_tasks.add_task(analyze_evaluation_comments, evaluation_id)
+
+    evaluation_data = await controller.get_by_id(evaluation_id)
+
+    return ResponseSchema(
+        status=202,
+        message="Análisis de IA iniciado. Procesando en segundo plano.",
+        data=evaluation_data,
+        path=f"/evaluations/{evaluation_id}/analyze",
     )
 
 

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
+from api.models.course import CourseModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.serializers.evaluation_scores import evaluation_score_to_dict
 
@@ -56,35 +57,50 @@ class EvaluationScoresRepository:
     async def get_by_id(self, score_id: int) -> dict | None:
         """Get an evaluation score by ID."""
 
-        score = (
-            self.db.query(EvaluationScoreModel)
-            .filter(EvaluationScoreModel.id == score_id)
-            .first()
-        )
-
-        if not score:
-            return None
-
-        return evaluation_score_to_dict(score)
-
-    async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
-        """Get all scores for a given evaluation, including group_name."""
-
-        results = (
+        result = (
             self.db.query(
-                EvaluationScoreModel, AcademicGroupModel.group_name
+                EvaluationScoreModel,
+                AcademicGroupModel.group_name,
+                CourseModel.name.label("course_name"),
+                CourseModel.code.label("course_code"),
             )
             .outerjoin(
                 AcademicGroupModel,
                 EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
             )
+            .outerjoin(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
+            .filter(EvaluationScoreModel.id == score_id)
+            .first()
+        )
+
+        if not result:
+            return None
+
+        score, group_name, course_name, course_code = result
+        return evaluation_score_to_dict(score, group_name, course_name, course_code)
+
+    async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
+        """Get all scores for a given evaluation, including group_name and course_name."""
+
+        results = (
+            self.db.query(
+                EvaluationScoreModel,
+                AcademicGroupModel.group_name,
+                CourseModel.name.label("course_name"),
+                CourseModel.code.label("course_code"),
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .outerjoin(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
             .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
             .all()
         )
 
         return [
-            evaluation_score_to_dict(score, group_name)
-            for score, group_name in results
+            evaluation_score_to_dict(score, group_name, course_name, course_code)
+            for score, group_name, course_name, course_code in results
         ]
 
     async def get_by_evaluation_paginated(
@@ -98,12 +114,16 @@ class EvaluationScoresRepository:
 
         base_query = (
             self.db.query(
-                EvaluationScoreModel, AcademicGroupModel.group_name
+                EvaluationScoreModel,
+                AcademicGroupModel.group_name,
+                CourseModel.name.label("course_name"),
+                CourseModel.code.label("course_code"),
             )
             .outerjoin(
                 AcademicGroupModel,
                 EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
             )
+            .outerjoin(CourseModel, AcademicGroupModel.course_id == CourseModel.id)
             .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
         )
 
@@ -111,6 +131,7 @@ class EvaluationScoresRepository:
             search_pattern = f"%{search}%"
             base_query = base_query.filter(
                 AcademicGroupModel.group_name.ilike(search_pattern)
+                | CourseModel.name.ilike(search_pattern)
             )
 
         total = base_query.count()
@@ -126,8 +147,8 @@ class EvaluationScoresRepository:
 
         return {
             "scores": [
-                evaluation_score_to_dict(score, group_name)
-                for score, group_name in results
+                evaluation_score_to_dict(score, group_name, course_name, course_code)
+                for score, group_name, course_name, course_code in results
             ],
             "total": total,
             "page": page,
