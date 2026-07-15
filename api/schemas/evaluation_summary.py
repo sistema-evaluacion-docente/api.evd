@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel
 
+from api.schemas.comment import CommentOut
+
 
 class QuestionItem(BaseModel):
     """A single evaluation question with its dimension."""
@@ -123,7 +125,7 @@ class CourseComments(BaseModel):
     course_code: str
     course_name: Optional[str]
     group_name: Optional[str]
-    comments: list[str]
+    comments: list[CommentOut]
 
 
 class TeacherCommentsOut(BaseModel):

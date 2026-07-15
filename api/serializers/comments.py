@@ -32,11 +32,13 @@ def comment_to_dict(
             "name": risk.name,
             "color_hex": risk.color_hex,
         } if risk else None,
+        "risk_score": comment.risk_score,
         "pedagogical_category": {
             "id": category.id,
             "name": category.name,
             "color_hex": category.color_hex,
         } if category else None,
+        "category_score": comment.category_score,
         "created_at": comment.created_at,
         "updated_at": comment.updated_at,
     }

@@ -17,6 +17,7 @@ from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.serializers.comments import comment_to_dict
 from api.serializers.evaluations import evaluation_to_dict
 from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
 
@@ -287,12 +288,7 @@ class EvaluationsRepository:
         from api.models.comment import CommentModel
 
         rows = (
-            self.db.query(
-                CommentModel.original_text,
-                AcademicGroupModel.group_name,
-                CourseModel.code.label("course_code"),
-                CourseModel.name.label("course_name"),
-            )
+            self.db.query(CommentModel, AcademicGroupModel, CourseModel)
             .join(
                 AcademicGroupModel,
                 CommentModel.academic_groups_id == AcademicGroupModel.id,
@@ -307,17 +303,20 @@ class EvaluationsRepository:
         )
 
         grouped: dict[tuple, dict] = {}
-        for text, group_name, course_code, course_name in rows:
-            key = (course_code, group_name)
+        for comment, academic_group, course in rows:
+            if not comment.original_text:
+                continue
+            key = (course.code, academic_group.group_name)
             if key not in grouped:
                 grouped[key] = {
-                    "course_code": course_code,
-                    "course_name": course_name,
-                    "group_name": group_name,
+                    "course_code": course.code,
+                    "course_name": course.name,
+                    "group_name": academic_group.group_name,
                     "comments": [],
                 }
-            if text:
-                grouped[key]["comments"].append(text)
+            grouped[key]["comments"].append(
+                comment_to_dict(comment, group_name=academic_group.group_name)
+            )
 
         return {
             "teacher_id": teacher_id,

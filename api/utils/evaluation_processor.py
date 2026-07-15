@@ -19,7 +19,7 @@ from api.models.evaluation_score import EvaluationScoreModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
-from api.utils.ai_analyzer import analyze_comment
+from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 
 logger = logging.getLogger(__name__)
 
@@ -124,36 +124,14 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                         )
 
                 for text in group_data.get("comments", []):
-                    analysis = analyze_comment(text)
-
-                    risk_level_id = None
-                    if analysis["risk_label"]:
-                        risk_row = (
-                            db.query(RiskLevelModel)
-                            .filter(RiskLevelModel.name == analysis["risk_label"])
-                            .first()
-                        )
-                        risk_level_id = risk_row.id if risk_row else None
-
-                    category_id = None
-                    if analysis["category_label"]:
-                        cat_row = (
-                            db.query(PedagogicalCategoryModel)
-                            .filter(
-                                PedagogicalCategoryModel.name == analysis["category_label"]
-                            )
-                            .first()
-                        )
-                        category_id = cat_row.id if cat_row else None
-
                     db.add(
                         CommentModel(
                             teacher_id=teacher.id,
                             evaluation_id=evaluation_id,
                             academic_groups_id=academic_group.id,
                             original_text=text,
-                            risk_level=risk_level_id,
-                            pedagogical_category_id=category_id,
+                            risk_level=None,
+                            pedagogical_category_id=None,
                         )
                     )
 
@@ -165,6 +143,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         if evaluation:
             evaluation.status = "COMPLETED"
             evaluation.count = len(parsed["teachers"])
+            evaluation.ai_status = "PENDING"
 
         db.commit()
         logger.info("Evaluation %d processed successfully", evaluation_id)
@@ -183,6 +162,87 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             )
             if evaluation:
                 evaluation.status = "FAILED"
+                db.commit()
+        except Exception:
+            pass
+
+    finally:
+        db.close()
+
+
+def analyze_evaluation_comments(evaluation_id: int) -> None:
+    """Run AI classification on every comment of an evaluation.
+
+    Designed to run as a FastAPI BackgroundTask. Marks ai_status as
+    ANALYZING while running, then ANALYZED on success or FAILED on error.
+    """
+    db = SessionLocal()
+
+    try:
+        evaluation = (
+            db.query(EvaluationModel)
+            .filter(EvaluationModel.id == evaluation_id)
+            .first()
+        )
+        if not evaluation:
+            logger.error("analyze_evaluation_comments: evaluation %d not found", evaluation_id)
+            return
+
+        evaluation.ai_status = "ANALYZING"
+        db.commit()
+
+        comments = (
+            db.query(CommentModel)
+            .filter(CommentModel.evaluation_id == evaluation_id)
+            .all()
+        )
+
+        risk_cache: dict[str, int | None] = {}
+        category_cache: dict[str, int | None] = {}
+
+        for comment in comments:
+            if not comment.original_text:
+                continue
+
+            result = analyze_comment(comment.original_text)
+
+            risk_label = result.get("risk_label")
+            if risk_label is not None:
+                if risk_label not in risk_cache:
+                    row = db.query(RiskLevelModel).filter(RiskLevelModel.name == risk_label).first()
+                    risk_cache[risk_label] = row.id if row else None
+                comment.risk_level = risk_cache[risk_label]
+                comment.risk_score = result.get("risk_score")
+
+            category_label = result.get("category_label")
+            if category_label is not None:
+                if category_label not in category_cache:
+                    row = (
+                        db.query(PedagogicalCategoryModel)
+                        .filter(PedagogicalCategoryModel.name == category_label)
+                        .first()
+                    )
+                    category_cache[category_label] = row.id if row else None
+                comment.pedagogical_category_id = category_cache[category_label]
+                comment.category_score = result.get("category_score")
+
+        evaluation.ai_status = "ANALYZED"
+        db.commit()
+        logger.info("AI analysis completed for evaluation %d", evaluation_id)
+
+    except Exception as exc:
+        db.rollback()
+        logger.error(
+            "AI analysis failed for evaluation %d: %s", evaluation_id, exc, exc_info=True
+        )
+        try:
+            evaluation = (
+                db.query(EvaluationModel)
+                .filter(EvaluationModel.id == evaluation_id)
+                .first()
+            )
+            if evaluation:
+                evaluation.ai_status = "FAILED"
                 db.commit()
         except Exception:
             pass

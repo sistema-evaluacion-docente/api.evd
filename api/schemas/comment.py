@@ -10,6 +10,18 @@ from pydantic import BaseModel
 from api.schemas.pagination import Pagination
 
 
+class RiskLevelOut(BaseModel):
+    id: int
+    name: str
+    color_hex: Optional[str] = None
+
+
+class PedagogicalCategoryOut(BaseModel):
+    id: int
+    name: str
+    color_hex: Optional[str] = None
+
+
 class CommentOut(BaseModel):
     """Schema for outputting a comment."""
 
@@ -22,8 +34,10 @@ class CommentOut(BaseModel):
     teacher_avatar_url: Optional[str] = None
     course_name: Optional[str] = None
     original_text: Optional[str]
-    risk_level: Optional[int]
-    pedagogical_category_id: Optional[int]
+    risk_level: Optional[RiskLevelOut] = None
+    risk_score: Optional[float] = None
+    pedagogical_category: Optional[PedagogicalCategoryOut] = None
+    category_score: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 

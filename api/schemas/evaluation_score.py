@@ -16,6 +16,8 @@ class EvaluationScoreOut(BaseModel):
     evaluation_id: int
     academic_group_id: int
     group_name: Optional[str] = None
+    course_name: Optional[str] = None
+    course_code: Optional[str] = None
     respondent_count: int
     overall_average: Optional[Decimal]
     created_at: datetime

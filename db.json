@@ -2,7 +2,7 @@
   "id": "0",
   "name": "Evaluacion Docente",
   "createdAt": "2026-05-30T15:25:58.831Z",
-  "updatedAt": "2026-06-25T14:32:42.584Z",
+  "updatedAt": "2026-07-14T10:00:00.000Z",
   "databaseType": "postgresql",
   "tables": [
     {
@@ -2390,6 +2390,34 @@
           "unique": false,
           "createdAt": 1780171619853,
           "comments": "Categoria pedagogica identificada por IA"
+        },
+        {
+          "id": "252",
+          "name": "risk_score",
+          "type": {
+            "name": "float4",
+            "id": "float4",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1783900100000,
+          "comments": "Confianza del modelo de riesgo (0.0 - 1.0). Ej: 0.9312 = 93.12%"
+        },
+        {
+          "id": "253",
+          "name": "category_score",
+          "type": {
+            "name": "float4",
+            "id": "float4",
+            "usageLevel": 1
+          },
+          "nullable": true,
+          "primaryKey": false,
+          "unique": false,
+          "createdAt": 1783900200000,
+          "comments": "Confianza del modelo de categoria pedagogica (0.0 - 1.0). Ej: 0.7841 = 78.41%"
         },
         {
           "id": "166",

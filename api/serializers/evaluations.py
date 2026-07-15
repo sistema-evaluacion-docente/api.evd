@@ -16,6 +16,7 @@ def evaluation_to_dict(evaluation: EvaluationModel) -> dict:
         "pdf_url": evaluation.pdf_url,
         "active": evaluation.active,
         "status": evaluation.status,
+        "ai_status": evaluation.ai_status,
         "count": evaluation.count,
         "created_at": evaluation.created_at,
         "updated_at": evaluation.updated_at,
