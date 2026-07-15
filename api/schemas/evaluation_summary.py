@@ -149,6 +149,7 @@ class TeacherPeriodHistory(BaseModel):
     """Teacher average for a single academic period."""
 
     evaluation_id: int
+    period_id: int
     period_code: str
     period_name: Optional[str]
     overall_average: Optional[float]

@@ -90,7 +90,8 @@ class TeachersRepository:
                 avg_query = (
                     self.db.query(
                         AcademicGroupModel.teacher_id,
-                        func.avg(EvaluationScoreModel.overall_average).label("avg"),
+                        func.avg(EvaluationScoreModel.overall_average).label(
+                            "avg"),
                     )
                     .join(
                         EvaluationScoreModel,
@@ -107,7 +108,8 @@ class TeachersRepository:
                     .group_by(AcademicGroupModel.teacher_id)
                 )
 
-                avgs = {row.teacher_id: float(row.avg) for row in avg_query.all()}
+                avgs = {row.teacher_id: float(row.avg)
+                        for row in avg_query.all()}
 
                 for teacher in result:
                     teacher["overall_average"] = avgs.get(teacher["id"])
@@ -118,7 +120,8 @@ class TeachersRepository:
         """Get a teacher by ID."""
 
         teacher = (
-            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+            self.db.query(TeacherModel).filter(
+                TeacherModel.id == teacher_id).first()
         )
 
         if not teacher:
@@ -155,7 +158,8 @@ class TeachersRepository:
         """Delete a teacher by ID."""
 
         teacher = (
-            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+            self.db.query(TeacherModel).filter(
+                TeacherModel.id == teacher_id).first()
         )
 
         if not teacher:
@@ -217,7 +221,8 @@ class TeachersRepository:
         """Update a teacher's fields."""
 
         teacher = (
-            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+            self.db.query(TeacherModel).filter(
+                TeacherModel.id == teacher_id).first()
         )
 
         if not teacher:
@@ -237,13 +242,15 @@ class TeachersRepository:
         """Return the teacher's average score for each academic period."""
 
         teacher = (
-            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+            self.db.query(TeacherModel).filter(
+                TeacherModel.id == teacher_id).first()
         )
         if not teacher:
             return None
 
         teacher_user = (
-            self.db.query(UserModel).filter(UserModel.id == teacher.user_id).first()
+            self.db.query(UserModel).filter(
+                UserModel.id == teacher.user_id).first()
             if teacher.user_id
             else None
         )
@@ -253,7 +260,9 @@ class TeachersRepository:
                 EvaluationModel.id.label("evaluation_id"),
                 AcademicPeriodModel.code.label("period_code"),
                 AcademicPeriodModel.name.label("period_name"),
-                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
+                AcademicPeriodModel.id.label("period_id"),
+                func.avg(EvaluationScoreModel.overall_average).label(
+                    "avg_score"),
                 func.count(EvaluationScoreModel.id).label("group_count"),
             )
             .join(
@@ -273,6 +282,7 @@ class TeachersRepository:
                 EvaluationModel.id,
                 AcademicPeriodModel.code,
                 AcademicPeriodModel.name,
+                AcademicPeriodModel.id
             )
             .order_by(AcademicPeriodModel.code.asc())
             .all()
@@ -285,6 +295,7 @@ class TeachersRepository:
             "history": [
                 {
                     "evaluation_id": row.evaluation_id,
+                    "period_id": row.period_id,
                     "period_code": row.period_code,
                     "period_name": row.period_name,
                     "overall_average": (
