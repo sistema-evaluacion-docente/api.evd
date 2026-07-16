@@ -27,6 +27,12 @@ class DepartmentUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+class AssignDirectorRequest(BaseModel):
+    """Schema for assigning a director to a department."""
+
+    user_id: int
+
+
 class DepartmentOut(BaseModel):
     """Schema for outputting a department."""
 
@@ -35,6 +41,7 @@ class DepartmentOut(BaseModel):
     name: str
     faculty_id: Optional[int]
     active: Optional[bool]
+    director: Optional[dict] = None
     created_at: datetime
     updated_at: datetime
 

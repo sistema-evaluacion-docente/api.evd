@@ -8,13 +8,19 @@ from api.controllers.departments import (
     DepartmentsController,
     get_departments_controller,
 )
+from api.controllers.directors import (
+    DirectorsController,
+    get_directors_controller,
+)
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.department import (
+    AssignDirectorRequest,
     DepartmentCreate,
     DepartmentDetailResponse,
     DepartmentListResponse,
     DepartmentUpdate,
 )
+from api.schemas.director import DirectorDetailResponse
 from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
@@ -143,4 +149,42 @@ async def update_department(
         message="Department updated successfully",
         data=department,
         path=f"/departments/{department_id}",
+    )
+
+
+@router.post(
+    "/{department_id}/director",
+    response_model=DirectorDetailResponse,
+    responses={
+        400: {"model": ResponseSchema},
+        403: {"description": "Forbidden"},
+        404: {"model": ResponseSchema},
+    },
+)
+async def assign_director(
+    department_id: int,
+    payload: AssignDirectorRequest,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: DirectorsController = Depends(get_directors_controller),
+):
+    """Endpoint to assign a director to a department."""
+
+    try:
+        director = await controller.assign_director(
+            department_id, payload.user_id, current_user
+        )
+    except ValueError as e:
+        status = 404 if "not found" in str(e).lower() else 400
+        return ResponseSchema(
+            status=status,
+            message=str(e),
+            path=f"/departments/{department_id}/director",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Director assigned successfully",
+        data=director,
+        path=f"/departments/{department_id}/director",
     )
