@@ -28,7 +28,6 @@ class UserCreate(BaseModel):
     email: str
     username: Optional[str] = None
     name: Optional[str] = None
-    department_id: Optional[int] = None
     active: Optional[bool] = True
     avatar_url: Optional[str] = None
     institutional_code: Optional[str] = None
@@ -45,7 +44,6 @@ class UserUpdate(BaseModel):
     """
 
     name: Optional[str] = None
-    department_id: Optional[int] = None
     active: Optional[bool] = None
     avatar_url: Optional[str] = None
     roles: Optional[list[RoleName]] = Field(default=None, min_length=1)
@@ -61,7 +59,6 @@ class UserOut(BaseModel):
     email: str
     username: Optional[str]
     name: Optional[str]
-    department_id: Optional[int]
     active: Optional[bool]
     avatar_url: Optional[str]
     roles: list[RoleName]
