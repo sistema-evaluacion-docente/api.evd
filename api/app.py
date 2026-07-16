@@ -20,6 +20,7 @@ from api.models import (
     comment,
     course,
     department,
+    director,
     evaluation,
     evaluation_question_score,
     evaluation_score,
@@ -46,6 +47,7 @@ from api.routes import (
     comparison,
     courses,
     departments,
+    directors,
     evaluation_question_scores,
     evaluation_scores,
     evaluations,
@@ -65,6 +67,7 @@ _ = (
     comment,
     course,
     department,
+    director,
     evaluation,
     evaluation_question_score,
     evaluation_score,
@@ -126,6 +129,7 @@ app.include_router(health.router)
 app.include_router(teachers.router)
 app.include_router(courses.router)
 app.include_router(departments.router)
+app.include_router(directors.router)
 app.include_router(academic_groups.router)
 app.include_router(evaluations.router)
 app.include_router(evaluation_scores.router)
