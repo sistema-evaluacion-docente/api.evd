@@ -9,6 +9,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from api.database import get_db
+from api.models.director import DirectorsModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -92,9 +93,15 @@ class UsersRepository:
         if existing:
             return
 
+        director_record = (
+            self.db.query(DirectorsModel)
+            .filter(DirectorsModel.user_id == user.id)
+            .first()
+        )
+
         teacher = TeacherModel(
             institutional_code=institutional_code or str(user.id),
-            department_id=user.department_id,
+            department_id=director_record.department_id if director_record else None,
             contract_type=contract_type,
             user_id=user.id,
             active=user.active,
@@ -151,7 +158,6 @@ class UsersRepository:
             email=data.email,
             username=data.username,
             name=data.name,
-            department_id=data.department_id,
             active=data.active,
             avatar_url=data.avatar_url,
         )
