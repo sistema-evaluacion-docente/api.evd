@@ -8,7 +8,6 @@ from typing import Optional
 from sqlalchemy import (
     Boolean,
     DateTime,
-    ForeignKey,
     Integer,
     String,
     Text,
@@ -37,9 +36,6 @@ class UserModel(Base):
     )
     username: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    department_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("departments.id"), nullable=True
-    )
     active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
