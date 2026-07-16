@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models.department import DepartmentModel
+from api.models.director import DirectorsModel
+from api.models.user import UserModel
 from api.schemas.department import DepartmentCreate, DepartmentUpdate
 from api.serializers.departments import department_to_dict
 
@@ -64,8 +66,41 @@ class DepartmentsRepository:
             .all()
         )
 
+        department_dicts = [department_to_dict(d) for d in departments]
+
+        if department_dicts:
+            department_ids = [d["id"] for d in department_dicts]
+
+            directors = (
+                self.db.query(
+                    UserModel.id,
+                    UserModel.name,
+                    UserModel.avatar_url,
+                    DirectorsModel.department_id,
+                )
+                .select_from(UserModel)
+                .join(DirectorsModel, DirectorsModel.user_id == UserModel.id)
+                .filter(
+                    DirectorsModel.department_id.in_(department_ids),
+                    DirectorsModel.active == True,
+                )
+                .all()
+            )
+
+            directors_by_dept = {
+                d.department_id: {
+                    "id": d.id,
+                    "name": d.name,
+                    "avatar_url": d.avatar_url,
+                }
+                for d in directors
+            }
+
+            for dept_dict in department_dicts:
+                dept_dict["director"] = directors_by_dept.get(dept_dict["id"])
+
         return {
-            "items": [department_to_dict(d) for d in departments],
+            "items": department_dicts,
             "total": total,
             "page": page,
             "limit": limit,
@@ -84,7 +119,31 @@ class DepartmentsRepository:
         if not department:
             return None
 
-        return department_to_dict(department)
+        dept_dict = department_to_dict(department)
+
+        director_row = (
+            self.db.query(
+                UserModel.id,
+                UserModel.name,
+                UserModel.avatar_url,
+            )
+            .select_from(UserModel)
+            .join(DirectorsModel, DirectorsModel.user_id == UserModel.id)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active == True,
+            )
+            .first()
+        )
+
+        if director_row:
+            dept_dict["director"] = {
+                "id": director_row.id,
+                "name": director_row.name,
+                "avatar_url": director_row.avatar_url,
+            }
+
+        return dept_dict
 
     async def get_by_code(self, code: str) -> dict | None:
         """Get a department by code."""
