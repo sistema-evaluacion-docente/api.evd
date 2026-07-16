@@ -26,31 +26,20 @@ class UsersController:
             user = await self.repository.get_by_uid(current_user.uid)
 
             if not user:
-                username = current_user.email.split("@")[0]
+                return None
+                # username = current_user.email.split("@")[0]
 
-                user = await self.repository.save(
-                    UserCreate(
-                        uid=current_user.uid,
-                        email=current_user.email,
-                        username=username,
-                        name=current_user.name,
-                        department_id=None,
-                        active=True,
-                        avatar_url=current_user.picture,
-                    )
-                )
-
-            # create log
-            # await self.audits_repository.create(
-            #     data=AuditCreate(
-            #         user_id=user["id"],
-            #         table_name="users",
-            #         operation="LOGIN",
-            #         element=f"User {current_user.uid}",
-            #         description=f"Inicio de sesión del usuario {current_user.email}",
-            #         created_at=None,
-            #     )
-            # )
+                # user = await self.repository.save(
+                #     UserCreate(
+                #         uid=current_user.uid,
+                #         email=current_user.email,
+                #         username=username,
+                #         name=current_user.name,
+                #         department_id=None,
+                #         active=True,
+                #         avatar_url=current_user.picture,
+                #     )
+                # )
 
             return user
         except Exception as e:

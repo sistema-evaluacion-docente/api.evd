@@ -2,7 +2,7 @@
 Routes for department operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 
 from api.controllers.departments import (
     DepartmentsController,
@@ -15,6 +15,7 @@ from api.schemas.department import (
     DepartmentListResponse,
     DepartmentUpdate,
 )
+from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
@@ -27,17 +28,26 @@ router = APIRouter(prefix="/departments", tags=["Departments"])
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_departments(
+    search: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=10, ge=1, le=100),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
     """Endpoint to list all departments."""
 
-    departments = await controller.get_all()
+    departments = await controller.get_all(search=search, page=page, limit=limit)
 
     return ResponseSchema(
         status=200,
         message="Departments found",
-        data=departments,
+        data=departments["items"],
+        pagination=Pagination(
+            total=departments["total"],
+            page=departments["page"],
+            limit=departments["limit"],
+            pages=departments["pages"],
+        ),
         path="/departments",
     )
 
@@ -45,7 +55,8 @@ async def get_all_departments(
 @router.get(
     "/{department_id}",
     response_model=DepartmentDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
+    responses={403: {"description": "Forbidden"},
+               404: {"model": ResponseSchema}},
 )
 async def get_department_by_id(
     department_id: int,
@@ -74,7 +85,8 @@ async def get_department_by_id(
 @router.post(
     "/",
     response_model=DepartmentDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
     status_code=201,
 )
 async def create_department(
@@ -105,7 +117,8 @@ async def create_department(
 @router.put(
     "/{department_id}",
     response_model=DepartmentDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={400: {"model": ResponseSchema},
+               403: {"description": "Forbidden"}},
 )
 async def update_department(
     department_id: int,

@@ -51,9 +51,14 @@ class DepartmentsController:
         )
         return department
 
-    async def get_all(self) -> list[dict]:
-        """Get all departments."""
-        return await self.repository.get_all()
+    async def get_all(
+        self,
+        search: str | None = None,
+        page: int = 1,
+        limit: int = 10,
+    ) -> dict:
+        """Get all departments with pagination and optional search."""
+        return await self.repository.get_all(search=search, page=page, limit=limit)
 
     async def get_by_id(self, department_id: int) -> dict | None:
         """Get a department by ID."""
