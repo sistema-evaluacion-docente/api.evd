@@ -102,11 +102,13 @@ async def login_user(
 
     if not user:
         return ResponseSchema(
-            status=401, message="Authentication failed", path="/users/auth"
+            status=401,
+            message="Autenticación fallida",
+            path="/users/auth"
         )
 
     return ResponseSchema(
-        status=200, message="Authentication successful", data=user, path="/users/auth"
+        status=200, message="Autenticación exitosa", data=user, path="/users/auth"
     )
 
 
