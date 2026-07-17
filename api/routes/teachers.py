@@ -12,6 +12,7 @@ from api.schemas.teacher import (
     BulkUploadResult,
     TeacherBulkUploadResponse,
     TeacherCreate,
+    TeacherCreateWithUser,
     TeacherDetailResponse,
     TeacherListResponse,
     TeacherUpdate,
@@ -104,10 +105,33 @@ async def get_all_teachers(
         None,
         description="Filter teachers by active status",
     ),
-    _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    department_id: int | None = Query(
+        None,
+        description="Filter teachers by department ID",
+    ),
+    current_user=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Endpoint to list all teachers with pagination and search."""
+
+    user_roles = set(current_user.get("roles", []))
+
+    if RoleName.DIRECTOR_DE_DEPARTAMENTO.value in user_roles and RoleName.ADMIN.value not in user_roles:
+        user_department_id = current_user.get("department_id")
+
+        if not user_department_id:
+            raise HTTPException(
+                status_code=400,
+                detail="El director no tiene un departamento asignado",
+            )
+
+        if department_id is not None and department_id != user_department_id:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para ver profesores de otro departamento",
+            )
+
+        department_id = user_department_id
 
     teachers, total = await controller.get_all(
         page=page,
@@ -115,6 +139,7 @@ async def get_all_teachers(
         search=search,
         academic_period_id=academic_period_id,
         active=active,
+        department_id=department_id,
     )
 
     pages = (total + limit - 1) // limit if total else 0
@@ -228,15 +253,15 @@ async def get_teacher_by_id(
     status_code=201,
 )
 async def create_teacher(
-    payload: TeacherCreate,
+    payload: TeacherCreateWithUser,
     current_user=Depends(get_current_user),
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """Endpoint to create a new teacher."""
+    """Endpoint to create a new teacher with user information."""
 
     try:
-        teacher = await controller.create(payload, current_user)
+        teacher = await controller.create_with_user(payload, current_user)
     except ValueError as e:
         return ResponseSchema(
             status=400,

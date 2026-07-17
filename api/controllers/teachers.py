@@ -16,7 +16,7 @@ from api.repositories.audits import AuditsRepository, get_audits_repository
 from api.repositories.teachers import TeachersRepository, get_teachers_repository
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
-from api.schemas.teacher import TeacherCreate, TeacherUpdate
+from api.schemas.teacher import TeacherCreate, TeacherCreateWithUser, TeacherUpdate
 from api.schemas.user import UserCreate
 
 
@@ -93,6 +93,55 @@ class TeachersController:
                 operation="CREATE",
                 element=f"Teacher {teacher.get('id')}",
                 description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, activo: {data.active}",
+                created_at=None,
+            )
+        )
+
+        return teacher
+
+    async def create_with_user(self, data: TeacherCreateWithUser, current_user) -> dict:
+        """Create a user and then a teacher linked to that user."""
+
+        existing = await self.repository.get_by_institutional_code(
+            data.institutional_code
+        )
+
+        if existing:
+            raise ValueError(
+                f"A teacher with institutional code '{data.institutional_code}' already exists"
+            )
+
+        existing_user = await self.users_repository.get_by_email(data.email)
+
+        if existing_user:
+            raise ValueError(
+                f"A user with email '{data.email}' already exists"
+            )
+
+        user_data = UserCreate(
+            email=data.email,
+            username=data.username or data.email.split("@")[0],
+            name=data.name,
+            active=data.active,
+            institutional_code=data.institutional_code,
+            contract_type=data.contract_type,
+        )
+
+        created_user = await self.users_repository.save(user_data, department_id=data.department_id)
+
+        teacher = await self.repository.get_by_institutional_code(
+            data.institutional_code
+        )
+
+        teacher = await self._enrich_teacher(teacher)
+
+        await self.audits_repository.create(
+            AuditCreate(
+                user_id=await self._resolve_user_id(current_user),
+                table_name="teachers",
+                operation="CREATE",
+                element=f"Teacher {teacher.get('id')}",
+                description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, usuario: {data.email}",
                 created_at=None,
             )
         )
@@ -270,6 +319,7 @@ class TeachersController:
         search: str | None = None,
         academic_period_id: int | None = None,
         active: bool | None = None,
+        department_id: int | None = None,
     ) -> tuple[list[dict], int]:
         """Get all teachers with pagination and search."""
 
@@ -279,6 +329,7 @@ class TeachersController:
             search=search,
             academic_period_id=academic_period_id,
             active=active,
+            department_id=department_id,
         )
 
         return await self._enrich_teachers(teachers), total

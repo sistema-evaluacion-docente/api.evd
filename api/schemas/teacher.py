@@ -32,6 +32,30 @@ class TeacherCreate(BaseModel):
         return v
 
 
+class TeacherCreateWithUser(BaseModel):
+    """Schema for creating a teacher with user information."""
+
+    email: str
+    name: str
+    institutional_code: str
+    department_id: Optional[int] = None
+    contract_type: Optional[str] = None
+    username: Optional[str] = None
+    active: Optional[bool] = True
+
+    @field_validator("institutional_code")
+    @classmethod
+    def validate_institutional_code(cls, v: str) -> str:
+        v = v.strip()
+
+        if not v.isdigit():
+            raise ValueError(
+                "institutional_code debe ser un número entero sin decimales"
+            )
+
+        return v
+
+
 class TeacherUpdate(BaseModel):
     """Schema for updating a teacher."""
 
