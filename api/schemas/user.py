@@ -58,6 +58,7 @@ class UserOut(BaseModel):
     uid: Optional[str]
     email: str
     username: Optional[str]
+    department_id: Optional[int]
     name: Optional[str]
     active: Optional[bool]
     avatar_url: Optional[str]

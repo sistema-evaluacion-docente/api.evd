@@ -40,7 +40,8 @@ class UsersRepository:
 
         for role_name in role_names:
             value = (
-                role_name.value if isinstance(role_name, RoleName) else str(role_name)
+                role_name.value if isinstance(
+                    role_name, RoleName) else str(role_name)
             )
             if value not in seen:
                 normalized.append(value)
@@ -54,7 +55,8 @@ class UsersRepository:
         if not role_names:
             return []
 
-        roles = self.db.query(RoleModel).filter(RoleModel.name.in_(role_names)).all()
+        roles = self.db.query(RoleModel).filter(
+            RoleModel.name.in_(role_names)).all()
 
         found = {role.name for role in roles}
         missing = [role for role in role_names if role not in found]
@@ -69,7 +71,8 @@ class UsersRepository:
 
         resolved_roles = self._resolve_roles(role_names)
 
-        self.db.query(UserRoleModel).filter(UserRoleModel.user_id == user_id).delete()
+        self.db.query(UserRoleModel).filter(
+            UserRoleModel.user_id == user_id).delete()
 
         for role in resolved_roles:
             self.db.add(UserRoleModel(user_id=user_id, role_id=role.id))
@@ -80,6 +83,7 @@ class UsersRepository:
         roles: list[str],
         institutional_code: str | None = None,
         contract_type: str | None = None,
+        department_id: int | None = None,
     ) -> None:
         """Create TeacherModel if user has DOCENTE role and no teacher record exists."""
 
@@ -87,7 +91,8 @@ class UsersRepository:
             return
 
         existing = (
-            self.db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
+            self.db.query(TeacherModel).filter(
+                TeacherModel.user_id == user.id).first()
         )
 
         if existing:
@@ -101,7 +106,8 @@ class UsersRepository:
 
         teacher = TeacherModel(
             institutional_code=institutional_code or str(user.id),
-            department_id=director_record.department_id if director_record else None,
+            department_id=department_id or (
+                director_record.department_id if director_record else None),
             contract_type=contract_type,
             user_id=user.id,
             active=user.active,
@@ -121,7 +127,7 @@ class UsersRepository:
 
         return [row[0] for row in rows]
 
-    async def save(self, data: UserCreate):
+    async def save(self, data: UserCreate, department_id: int | None = None):
         """
         Save user and assign roles if not exists
         """
@@ -130,12 +136,14 @@ class UsersRepository:
 
         if data.uid:
             existing_user = (
-                self.db.query(UserModel).filter(UserModel.uid == data.uid).first()
+                self.db.query(UserModel).filter(
+                    UserModel.uid == data.uid).first()
             )
 
         if not existing_user:
             existing_user = (
-                self.db.query(UserModel).filter(UserModel.email == data.email).first()
+                self.db.query(UserModel).filter(
+                    UserModel.email == data.email).first()
             )
 
             if existing_user and data.uid:
@@ -146,7 +154,8 @@ class UsersRepository:
         if existing_user:
             if normalized_roles:
                 self._replace_user_roles(existing_user.id, normalized_roles)
-                self._ensure_teacher(existing_user, normalized_roles)
+                self._ensure_teacher(
+                    existing_user, normalized_roles, department_id=department_id)
                 self.db.commit()
 
             roles = self._get_user_role_names(existing_user.id)
@@ -173,6 +182,7 @@ class UsersRepository:
             roles_to_assign,
             institutional_code=data.institutional_code,
             contract_type=data.contract_type,
+            department_id=department_id,
         )
 
         self.db.commit()
@@ -192,12 +202,27 @@ class UsersRepository:
             return None
 
         roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
+
+        department_id = None
+
+        if "DIRECTOR DE DEPARTAMENTO" in roles:
+            director = self.db.query(DirectorsModel).filter(
+                DirectorsModel.user_id == user.id).first()
+            if director:
+                department_id = director.department_id
+        elif "DOCENTE" in roles:
+            teacher = self.db.query(TeacherModel).filter(
+                TeacherModel.user_id == user.id).first()
+            if teacher:
+                department_id = teacher.department_id
+
+        return user_to_dict(user, roles=roles, department_id=department_id)
 
     async def get_by_email(self, email: str):
         """Get user by email."""
 
-        user = self.db.query(UserModel).filter(UserModel.email == email).first()
+        user = self.db.query(UserModel).filter(
+            UserModel.email == email).first()
 
         if not user:
             return None
@@ -210,7 +235,8 @@ class UsersRepository:
         Get user by username
         """
 
-        user = self.db.query(UserModel).filter(UserModel.username == username).first()
+        user = self.db.query(UserModel).filter(
+            UserModel.username == username).first()
 
         if not user:
             return None
