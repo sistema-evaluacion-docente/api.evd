@@ -1,126 +1,111 @@
 """
-Faculties repository
+Faculty repository module.
 """
 
 from typing import Annotated
 
-from fastapi.params import Depends
+from fastapi import Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
+from api.models.department import DepartmentModel
 from api.models.faculty import FacultyModel
-from api.schemas.faculty import FacultyCreate, FacultyUpdate
-from api.serializers.faculties import faculty_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.faculty import FacultyCreate, FacultyFilters, FacultyUpdate
 
 
-class FacultiesRepository:
-    """Faculties repository"""
+class FacultiesRepository(BaseRepository[FacultyModel]):
+    """Repository for Faculty operations."""
 
-    def __init__(self, db: Session):
-        self.db = db
+    def __init__(self, db: Annotated[Session, Depends(get_db)]):
+        super().__init__(FacultyModel, db)
 
-    async def create(self, data: FacultyCreate) -> dict:
-        """Create a new faculty."""
+    def get_by_code(self, code: str) -> FacultyModel | None:
+        """Get a faculty by code."""
 
-        faculty = FacultyModel(
-            name=data.name,
-            code=data.code,
-        )
+        return self.db.query(FacultyModel).filter(FacultyModel.code == code).first()
 
-        self.db.add(faculty)
-        self.db.commit()
-        self.db.refresh(faculty)
-
-        return faculty_to_dict(faculty)
-
-    async def get_all(
-        self,
-        search: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict:
-        """Get all faculties with pagination and optional search filter."""
+    def search(
+        self, filters: FacultyFilters, pagination: PaginationParams
+    ) -> tuple[list[FacultyModel], int]:
+        """Search faculties with filters and pagination."""
 
         query = self.db.query(FacultyModel)
 
-        if search:
-            term = search.strip()
-            if term:
-                like_term = f"%{term}%"
-                query = query.filter(
-                    (FacultyModel.name.ilike(like_term))
-                    | (FacultyModel.code.ilike(like_term))
-                )
+        if filters.search:
+            search_term = f"%{filters.search}%"
+            query = query.filter(
+                (FacultyModel.name.ilike(search_term))
+                | (FacultyModel.code.ilike(search_term))
+            )
 
-        total = query.count()
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
+        if filters.active is not None:
+            query = query.filter(FacultyModel.active == filters.active)
 
-        faculties = (
-            query.order_by(FacultyModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+        return self.paginate(query, pagination)
+
+    def get_department_counts(self, faculty_ids: list[int]) -> dict[int, int]:
+        """Get department counts for multiple faculties."""
+
+        if not faculty_ids:
+            return {}
+
+        results = (
+            self.db.query(
+                DepartmentModel.faculty_id,
+                func.count(DepartmentModel.id),
+            )
+            .filter(DepartmentModel.faculty_id.in_(faculty_ids))
+            .group_by(DepartmentModel.faculty_id)
             .all()
         )
 
-        return {
-            "items": [faculty_to_dict(f) for f in faculties],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-        }
+        return {faculty_id: count for faculty_id, count in results}
 
-    async def get_by_id(self, faculty_id: int) -> dict | None:
-        """Get a faculty by ID."""
+    def has_departments(self, faculty_id: int) -> bool:
+        """Check if a faculty has any departments."""
 
-        faculty = (
-            self.db.query(FacultyModel)
-            .filter(FacultyModel.id == faculty_id)
-            .first()
+        count = (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.faculty_id == faculty_id)
+            .count()
         )
+        return count > 0
 
-        if not faculty:
-            return None
+    def create_faculty(self, data: FacultyCreate) -> FacultyModel:
+        """Create a new faculty."""
 
-        return faculty_to_dict(faculty)
+        faculty = FacultyModel(**data.model_dump())
+        self.db.add(faculty)
+        self.db.commit()
+        self.db.refresh(faculty)
+        return faculty
 
-    async def get_by_code(self, code: str) -> dict | None:
-        """Get a faculty by code."""
+    def update_faculty(
+        self, faculty: FacultyModel, data: FacultyUpdate
+    ) -> FacultyModel:
+        """Update a faculty."""
 
-        faculty = (
-            self.db.query(FacultyModel).filter(FacultyModel.code == code).first()
-        )
-
-        if not faculty:
-            return None
-
-        return faculty_to_dict(faculty)
-
-    async def update(self, faculty_id: int, data: FacultyUpdate) -> dict | None:
-        """Update a faculty's fields."""
-
-        faculty = (
-            self.db.query(FacultyModel)
-            .filter(FacultyModel.id == faculty_id)
-            .first()
-        )
-
-        if not faculty:
-            return None
-
-        payload = data.model_dump(exclude_unset=True)
-
-        for field, value in payload.items():
-            setattr(faculty, field, value)
+        update_data = data.model_dump(exclude_unset=True)
+        for key, value in update_data.items():
+            setattr(faculty, key, value)
 
         self.db.commit()
         self.db.refresh(faculty)
+        return faculty
 
-        return faculty_to_dict(faculty)
+    def delete_faculty(self, faculty: FacultyModel) -> None:
+        """Delete a faculty."""
+
+        self.db.delete(faculty)
+        self.db.commit()
 
 
-def get_faculties_repository(db: Annotated[Session, Depends(get_db)]):
-    """Get faculties repository"""
+def get_faculties_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> FacultiesRepository:
+    """Get faculties repository instance."""
 
     return FacultiesRepository(db)
