@@ -47,6 +47,9 @@ class EnvelopeRouter(APIRouter):
         """Add an API route with optional response envelope support."""
 
         if envelope and response_model is not None:
-            response_model = ResponseEnvelope[response_model]
+            try:
+                response_model = ResponseEnvelope[response_model]
+            except TypeError:
+                pass
 
         super().add_api_route(path, endpoint, response_model=response_model, **kwargs)
