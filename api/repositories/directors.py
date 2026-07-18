@@ -244,6 +244,18 @@ class DirectorsRepository:
     async def assign_director(self, user_id: int, department_id: int) -> dict:
         """Assign a director to a department, replacing any existing director."""
 
+        existing_user_director = (
+            self.db.query(DirectorsModel)
+            .filter(DirectorsModel.user_id == user_id)
+            .first()
+        )
+
+        if (
+            existing_user_director
+            and existing_user_director.department_id != department_id
+        ):
+            raise ValueError("Este usuario ya es director de otro departamento")
+
         existing = (
             self.db.query(DirectorsModel)
             .filter(DirectorsModel.department_id == department_id)
