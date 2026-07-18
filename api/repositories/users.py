@@ -1,122 +1,109 @@
-"""
-Users repository
-"""
+"""Repository for user-related database operations."""
 
-from typing import Annotated, Sequence
+from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.director import DirectorsModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
-from api.schemas.user import RoleName, UserCreate, UserStatusUpdate, UserUpdate
-from api.serializers.users import user_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.user import UserFilters
 
 
-class UsersRepository:
-    """
-    class users repository
-    """
+class UsersRepository(BaseRepository[UserModel]):
+    """Repository for user-related database operations."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(UserModel, db)
 
-    @staticmethod
-    def _normalize_role_names(
-        role_names: Sequence[RoleName | str] | None,
-    ) -> list[str]:
-        """Normalize role names to plain strings preserving order and uniqueness."""
+    def get_by_uid(self, uid: str) -> UserModel | None:
+        """Retrieve a user by their unique identifier (UID)."""
 
-        if not role_names:
-            return []
-
-        normalized: list[str] = []
-        seen: set[str] = set()
-
-        for role_name in role_names:
-            value = (
-                role_name.value if isinstance(
-                    role_name, RoleName) else str(role_name)
-            )
-            if value not in seen:
-                normalized.append(value)
-                seen.add(value)
-
-        return normalized
-
-    def _resolve_roles(self, role_names: list[str]) -> list[RoleModel]:
-        """Resolve role names to RoleModel instances and validate existence."""
-
-        if not role_names:
-            return []
-
-        roles = self.db.query(RoleModel).filter(
-            RoleModel.name.in_(role_names)).all()
-
-        found = {role.name for role in roles}
-        missing = [role for role in role_names if role not in found]
-
-        if missing:
-            raise ValueError(f"Unknown roles: {', '.join(missing)}")
-
-        return roles
-
-    def _replace_user_roles(self, user_id: int, role_names: list[str]):
-        """Replace all user role assignments with provided role names."""
-
-        resolved_roles = self._resolve_roles(role_names)
-
-        self.db.query(UserRoleModel).filter(
-            UserRoleModel.user_id == user_id).delete()
-
-        for role in resolved_roles:
-            self.db.add(UserRoleModel(user_id=user_id, role_id=role.id))
-
-    def _ensure_teacher(
-        self,
-        user: UserModel,
-        roles: list[str],
-        institutional_code: str | None = None,
-        contract_type: str | None = None,
-        department_id: int | None = None,
-    ) -> None:
-        """Create TeacherModel if user has DOCENTE role and no teacher record exists."""
-
-        if RoleName.DOCENTE.value not in roles:
-            return
-
-        existing = (
-            self.db.query(TeacherModel).filter(
-                TeacherModel.user_id == user.id).first()
-        )
-
-        if existing:
-            return
-
-        director_record = (
-            self.db.query(DirectorsModel)
-            .filter(DirectorsModel.user_id == user.id)
+        return (
+            self.db.query(UserModel)
+            .options(selectinload(UserModel.teacher))
+            .filter(UserModel.uid == uid)
             .first()
         )
 
-        teacher = TeacherModel(
-            institutional_code=institutional_code or str(user.id),
-            department_id=department_id or (
-                director_record.department_id if director_record else None),
-            contract_type=contract_type,
-            user_id=user.id,
-            active=user.active,
+    def get_by_email(self, email: str) -> UserModel | None:
+        """Retrieve a user by their email address."""
+
+        return self.db.query(UserModel).filter(UserModel.email == email).first()
+
+    def get_by_username(self, username: str) -> UserModel | None:
+        """Retrieve a user by their username."""
+
+        return self.db.query(UserModel).filter(UserModel.username == username).first()
+
+    def search(
+        self,
+        filters: UserFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[UserModel], int]:
+        """Search for users based on filters and pagination parameters."""
+
+        query = self.db.query(UserModel)
+
+        if filters.search:
+            term = filters.search.strip()
+
+            if term:
+                like_term = f"%{term}%"
+
+                query = query.filter(
+                    or_(
+                        UserModel.uid.ilike(like_term),
+                        UserModel.email.ilike(like_term),
+                        UserModel.username.ilike(like_term),
+                        UserModel.name.ilike(like_term),
+                    )
+                )
+
+        if filters.active is not None:
+            query = query.filter(UserModel.active == filters.active)
+
+        query = query.options(selectinload(UserModel.teacher)).order_by(
+            UserModel.created_at.desc()
         )
 
-        self.db.add(teacher)
+        return self.paginate(query, pagination)
 
-    def _get_user_role_names(self, user_id: int) -> list[str]:
-        """Get role names for a user."""
+    def get_by_uids(self, uids: list[str]) -> list[UserModel]:
+        """Retrieve users by a list of unique identifiers (UIDs)."""
+
+        if not uids:
+            return []
+
+        return (
+            self.db.query(UserModel)
+            .options(selectinload(UserModel.teacher))
+            .filter(UserModel.uid.in_(uids))
+            .all()
+        )
+
+    def get_by_ids(self, ids: list[int]) -> list[UserModel]:
+        """Retrieve users by a list of database IDs."""
+
+        if not ids:
+            return []
+
+        return (
+            self.db.query(UserModel)
+            .options(selectinload(UserModel.teacher))
+            .filter(UserModel.id.in_(ids))
+            .all()
+        )
+
+    def get_user_role_names(self, user_id: int) -> list[str]:
+        """Retrieve the names of roles associated with a specific user."""
 
         rows = (
             self.db.query(RoleModel.name)
@@ -127,171 +114,13 @@ class UsersRepository:
 
         return [row[0] for row in rows]
 
-    async def save(self, data: UserCreate, department_id: int | None = None):
-        """
-        Save user and assign roles if not exists
-        """
+    def get_user_role_names_bulk(self, user_ids: list[int]) -> dict[int, list[str]]:
+        """Retrieve the names of roles associated with multiple users."""
 
-        existing_user = None
+        if not user_ids:
+            return {}
 
-        if data.uid:
-            existing_user = (
-                self.db.query(UserModel).filter(
-                    UserModel.uid == data.uid).first()
-            )
-
-        if not existing_user:
-            existing_user = (
-                self.db.query(UserModel).filter(
-                    UserModel.email == data.email).first()
-            )
-
-            if existing_user and data.uid:
-                existing_user.uid = data.uid
-
-        normalized_roles = self._normalize_role_names(data.roles)
-
-        if existing_user:
-            if normalized_roles:
-                self._replace_user_roles(existing_user.id, normalized_roles)
-                self._ensure_teacher(
-                    existing_user, normalized_roles, department_id=department_id)
-                self.db.commit()
-
-            roles = self._get_user_role_names(existing_user.id)
-
-            return user_to_dict(existing_user, roles=roles)
-
-        user = UserModel(
-            uid=data.uid,
-            email=data.email,
-            username=data.username,
-            name=data.name,
-            active=data.active,
-            avatar_url=data.avatar_url,
-        )
-
-        self.db.add(user)
-        self.db.flush()
-
-        roles_to_assign = normalized_roles or [RoleName.DOCENTE.value]
-        self._replace_user_roles(user.id, roles_to_assign)
-
-        self._ensure_teacher(
-            user,
-            roles_to_assign,
-            institutional_code=data.institutional_code,
-            contract_type=data.contract_type,
-            department_id=department_id,
-        )
-
-        self.db.commit()
-        self.db.refresh(user)
-
-        roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
-
-    async def get_by_uid(self, uid: str):
-        """
-        Get user by uid
-        """
-
-        user = self.db.query(UserModel).filter(UserModel.uid == uid).first()
-
-        if not user:
-            return None
-
-        roles = self._get_user_role_names(user.id)
-
-        department_id = None
-
-        if "DIRECTOR DE DEPARTAMENTO" in roles:
-            director = self.db.query(DirectorsModel).filter(
-                DirectorsModel.user_id == user.id).first()
-            if director:
-                department_id = director.department_id
-        elif "DOCENTE" in roles:
-            teacher = self.db.query(TeacherModel).filter(
-                TeacherModel.user_id == user.id).first()
-            if teacher:
-                department_id = teacher.department_id
-
-        return user_to_dict(user, roles=roles, department_id=department_id)
-
-    async def get_by_email(self, email: str):
-        """Get user by email."""
-
-        user = self.db.query(UserModel).filter(
-            UserModel.email == email).first()
-
-        if not user:
-            return None
-
-        roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
-
-    async def get_by_username(self, username: str):
-        """
-        Get user by username
-        """
-
-        user = self.db.query(UserModel).filter(
-            UserModel.username == username).first()
-
-        if not user:
-            return None
-
-        roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
-
-    async def get_all(
-        self,
-        search: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ):
-        """
-        Get users with pagination and optional search filter
-        """
-
-        query = self.db.query(UserModel)
-
-        if search:
-            term = search.strip()
-            if term:
-                like_term = f"%{term}%"
-                query = query.filter(
-                    or_(
-                        UserModel.uid.ilike(like_term),
-                        UserModel.email.ilike(like_term),
-                        UserModel.username.ilike(like_term),
-                        UserModel.name.ilike(like_term),
-                    )
-                )
-
-        total = query.count()
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
-
-        users = (
-            query.order_by(UserModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-
-        if not users:
-            return {
-                "items": [],
-                "total": total,
-                "page": page,
-                "limit": limit,
-                "pages": pages,
-            }
-
-        user_ids = [user.id for user in users]
-
-        role_rows = (
+        rows = (
             self.db.query(UserRoleModel.user_id, RoleModel.name)
             .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
             .filter(UserRoleModel.user_id.in_(user_ids))
@@ -299,136 +128,143 @@ class UsersRepository:
         )
 
         roles_by_user: dict[int, list[str]] = {}
-        for user_id, role_name in role_rows:
+
+        for user_id, role_name in rows:
             key = int(user_id)
+
             if key not in roles_by_user:
                 roles_by_user[key] = []
+
             roles_by_user[key].append(role_name)
 
-        return {
-            "items": [
-                user_to_dict(user, roles=roles_by_user.get(user.id, []))
-                for user in users
-            ],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-        }
+        return roles_by_user
 
-    async def get_by_uids(self, uids: list[str]):
-        """
-        Get multiple users by their uids in a single query
-        """
+    def get_roles_by_names(self, role_names: list[str]) -> list[RoleModel]:
+        """Retrieve role models based on a list of role names."""
 
-        if not uids:
+        if not role_names:
             return []
 
-        users = self.db.query(UserModel).filter(UserModel.uid.in_(uids)).all()
+        return self.db.query(RoleModel).filter(RoleModel.name.in_(role_names)).all()
 
-        user_ids = [user.id for user in users]
+    def replace_user_roles(self, user_id: int, role_ids: list[int]) -> None:
+        """Replace the roles associated with a specific user."""
 
-        role_rows = (
-            self.db.query(UserRoleModel.user_id, RoleModel.name)
-            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
-            .filter(UserRoleModel.user_id.in_(user_ids))
-            .all()
-        )
+        self.db.query(UserRoleModel).filter(UserRoleModel.user_id == user_id).delete()
 
-        roles_by_user: dict[int, list[str]] = {}
-        for user_id, role_name in role_rows:
-            key = int(user_id)
-            if key not in roles_by_user:
-                roles_by_user[key] = []
-            roles_by_user[key].append(role_name)
+        for role_id in role_ids:
+            self.db.add(UserRoleModel(user_id=user_id, role_id=role_id))
 
-        users_dict: dict[str, dict] = {
-            str(user.uid): user_to_dict(user, roles=roles_by_user.get(user.id, []))
-            for user in users
-        }
+    def update_fields(self, user: UserModel, data: dict) -> None:
+        """Update specific fields of a user model based on provided data."""
 
-        return [users_dict[uid] for uid in uids if uid in users_dict]
-
-    async def get_by_ids(self, ids: list[int]):
-        """Get multiple users by their database ids."""
-
-        if not ids:
-            return []
-
-        users = self.db.query(UserModel).filter(UserModel.id.in_(ids)).all()
-
-        user_ids = [user.id for user in users]
-
-        role_rows = (
-            self.db.query(UserRoleModel.user_id, RoleModel.name)
-            .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
-            .filter(UserRoleModel.user_id.in_(user_ids))
-            .all()
-        )
-
-        roles_by_user: dict[int, list[str]] = {}
-        for user_id, role_name in role_rows:
-            key = int(user_id)
-            if key not in roles_by_user:
-                roles_by_user[key] = []
-            roles_by_user[key].append(role_name)
-
-        users_dict: dict[int, dict] = {
-            user.id: user_to_dict(user, roles=roles_by_user.get(user.id, []))
-            for user in users
-        }
-
-        return [users_dict[uid] for uid in ids if uid in users_dict]
-
-    async def update(self, uid: str, data: UserUpdate):
-        """
-        Update user by uid
-        """
-
-        user = self.db.query(UserModel).filter(UserModel.uid == uid).first()
-
-        if not user:
-            return None
-
-        payload = data.model_dump(exclude_unset=True)
-        requested_roles = payload.pop("roles", None)
-
-        # update fields
-        for field, value in payload.items():
+        for field, value in data.items():
             if value is not None and field != "uid":
                 setattr(user, field, value)
 
-        if requested_roles is not None:
-            normalized_roles = self._normalize_role_names(requested_roles)
-            self._replace_user_roles(user.id, normalized_roles)
-            self._ensure_teacher(user, normalized_roles)
-
         self.db.commit()
         self.db.refresh(user)
 
-        roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
+    def update_active(self, user: UserModel, active: bool) -> None:
+        """Update the active status of a user model."""
 
-    async def update_status(self, uid: str, data: UserStatusUpdate):
-        """Activate/deactivate user by uid."""
+        user.active = active
+        self.db.commit()
+        self.db.refresh(user)
 
-        user = self.db.query(UserModel).filter(UserModel.uid == uid).first()
+    def set_uid(self, user: UserModel, uid: str) -> None:
+        """Set the unique identifier (UID) for a user model."""
+
+        user.uid = uid
+        self.db.commit()
+
+    def get_teacher_by_user_id(self, user_id: int) -> TeacherModel | None:
+        """Retrieve a teacher model associated with a specific user ID."""
+
+        return (
+            self.db.query(TeacherModel).filter(TeacherModel.user_id == user_id).first()
+        )
+
+    def get_director_by_user_id(self, user_id: int) -> DirectorsModel | None:
+        """Retrieve a director model associated with a specific user ID."""
+
+        return (
+            self.db.query(DirectorsModel)
+            .filter(DirectorsModel.user_id == user_id)
+            .first()
+        )
+
+    def create_teacher(
+        self,
+        user_id: int,
+        institutional_code: str | None = None,
+        contract_type: str | None = None,
+        department_id: int | None = None,
+        active: bool | None = True,
+    ) -> TeacherModel:
+        """Create a new teacher model associated with a specific user ID."""
+
+        teacher = TeacherModel(
+            institutional_code=institutional_code or str(user_id),
+            department_id=department_id,
+            contract_type=contract_type,
+            user_id=user_id,
+            active=active,
+        )
+
+        self.db.add(teacher)
+        self.db.flush()
+
+        return teacher
+
+    def find_or_create_user(self, data: dict) -> tuple[UserModel, bool]:
+        """Find an existing user by UID or email, or create a new user if not found."""
+
+        user = None
+        is_new = True
+
+        if data.get("uid"):
+            user = self.db.query(UserModel).filter(UserModel.uid == data["uid"]).first()
 
         if not user:
-            return None
+            user = (
+                self.db.query(UserModel)
+                .filter(UserModel.email == data["email"])
+                .first()
+            )
+            if user and data.get("uid"):
+                user.uid = data["uid"]
+                self.db.flush()
 
-        setattr(user, "active", data.active)
+        if not user:
+            create_fields = {
+                "uid": data.get("uid"),
+                "email": data["email"],
+                "username": data.get("username"),
+                "name": data.get("name"),
+                "active": data.get("active", True),
+                "avatar_url": data.get("avatar_url"),
+            }
+            user = UserModel(**create_fields)
+            self.db.add(user)
+            self.db.flush()
+        else:
+            is_new = False
+
+        return user, is_new
+
+    def commit(self) -> None:
+        """Commit the current transaction to the database."""
 
         self.db.commit()
-        self.db.refresh(user)
 
-        roles = self._get_user_role_names(user.id)
-        return user_to_dict(user, roles=roles)
+    def refresh(self, user: UserModel) -> None:
+        """Refresh the state of a user model from the database."""
+
+        self.db.refresh(user)
 
 
 def get_users_repository(db: Annotated[Session, Depends(get_db)]):
-    """
-    Get users repository
-    """
+    """Dependency injection for UsersRepository."""
 
     return UsersRepository(db)
