@@ -215,6 +215,23 @@ class AcademicPeriodsRepository:
 
         return academic_period_to_dict(period)
 
+    async def delete(self, period_id: int) -> bool:
+        """Delete an academic period by ID. Returns True if deleted, False if not found."""
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == period_id)
+            .first()
+        )
+
+        if not period:
+            return False
+
+        self.db.delete(period)
+        self.db.commit()
+
+        return True
+
 
 def get_academic_periods_repository(db: Annotated[Session, Depends(get_db)]):
     """Get academic periods repository"""

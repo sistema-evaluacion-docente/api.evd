@@ -49,7 +49,9 @@ async def get_all_academic_periods(
 
     if periods is None:
         return ResponseSchema(
-            status=400, message="Error getting academic periods", path="/academic-periods"
+            status=400,
+            message="Error getting academic periods",
+            path="/academic-periods",
         )
 
     return ResponseSchema(
@@ -260,4 +262,40 @@ async def update_academic_period_status(
         message="Academic period status updated successfully",
         data=period,
         path=f"/academic-periods/{period_id}/status",
+    )
+
+
+@router.delete(
+    "/{period_id}",
+    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def delete_academic_period(
+    period_id: int,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
+):
+    """Endpoint to delete an academic period. Only allowed if no evaluations are associated."""
+
+    try:
+        deleted = await controller.delete(period_id, current_user)
+    except ValueError as e:
+        return ResponseSchema(
+            status=400,
+            message=str(e),
+            path=f"/academic-periods/{period_id}",
+        )
+
+    if not deleted:
+        return ResponseSchema(
+            status=404,
+            message="Academic period not found",
+            path=f"/academic-periods/{period_id}",
+        )
+
+    return ResponseSchema(
+        status=200,
+        message="Academic period deleted successfully",
+        data=None,
+        path=f"/academic-periods/{period_id}",
     )

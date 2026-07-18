@@ -9,6 +9,10 @@ from api.repositories.academic_periods import (
     get_academic_periods_repository,
 )
 from api.repositories.audits import AuditsRepository, get_audits_repository
+from api.repositories.evaluations import (
+    EvaluationsRepository,
+    get_evaluations_repository,
+)
 from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.academic_period import (
     AcademicPeriodCreate,
@@ -26,10 +30,12 @@ class AcademicPeriodsController:
         repository: AcademicPeriodsRepository,
         audits_repository: AuditsRepository,
         users_repository: UsersRepository,
+        evaluations_repository: EvaluationsRepository,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
         self.users_repository = users_repository
+        self.evaluations_repository = evaluations_repository
 
     async def _resolve_user_id(self, current_user) -> int | None:
         user = await self.users_repository.get_by_uid(current_user.uid)
@@ -92,7 +98,13 @@ class AcademicPeriodsController:
         updated = await self.repository.update(period_id, data)
 
         changes = []
-        for field in ("name", "start_date", "end_date", "evaluation_end_date", "final_evaluation_date"):
+        for field in (
+            "name",
+            "start_date",
+            "end_date",
+            "evaluation_end_date",
+            "final_evaluation_date",
+        ):
             new_val = getattr(data, field, None)
             if new_val is not None and new_val != period.get(field):
                 old_val = period.get(field)
@@ -191,12 +203,49 @@ class AcademicPeriodsController:
 
         return updated
 
+    async def delete(self, period_id: int, current_user) -> bool:
+        """Delete an academic period. Raises ValueError if period has evaluations."""
+
+        period = await self.repository.get_by_id(period_id)
+
+        if not period:
+            return False
+
+        has_evaluations = await self.evaluations_repository.has_evaluations_for_period(
+            period_id
+        )
+
+        if has_evaluations:
+            raise ValueError(
+                f"No se puede eliminar el periodo '{period.get('code', '')}' porque tiene evaluaciones asociadas. "
+                "Se recomienda desactivar el periodo en su lugar."
+            )
+
+        deleted = await self.repository.delete(period_id)
+
+        if deleted:
+            await self.audits_repository.create(
+                AuditCreate(
+                    user_id=await self._resolve_user_id(current_user),
+                    table_name="academic_periods",
+                    operation="DELETE",
+                    element=f"AcademicPeriod {period_id}",
+                    description=f"Se eliminó el período académico {period.get('code', '')} (nombre: {period.get('name', '')})",
+                    created_at=None,
+                )
+            )
+
+        return deleted
+
 
 def get_academic_periods_controller(
     repository: AcademicPeriodsRepository = Depends(get_academic_periods_repository),
     audits_repository: AuditsRepository = Depends(get_audits_repository),
     users_repository: UsersRepository = Depends(get_users_repository),
+    evaluations_repository: EvaluationsRepository = Depends(get_evaluations_repository),
 ):
     """Get academic periods controller"""
 
-    return AcademicPeriodsController(repository, audits_repository, users_repository)
+    return AcademicPeriodsController(
+        repository, audits_repository, users_repository, evaluations_repository
+    )
