@@ -1,6 +1,4 @@
-"""
-Teachers repository
-"""
+"""Repository for teacher-related database operations."""
 
 from typing import Annotated
 
@@ -9,6 +7,7 @@ from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
@@ -16,160 +15,92 @@ from api.models.evaluation import EvaluationModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
-from api.schemas.teacher import TeacherCreate, TeacherUpdate
-from api.serializers.teachers import teacher_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.teacher import TeacherFilters
 
 
-class TeachersRepository:
-    """Teachers repository"""
+class TeachersRepository(BaseRepository[TeacherModel]):
+    """Repository for teacher-related database operations."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(TeacherModel, db)
 
-    async def create(self, data: TeacherCreate) -> dict:
-        """Create a new teacher."""
+    def get_by_id(self, teacher_id: int) -> TeacherModel | None:
+        """Get a teacher by ID with user relationship loaded."""
 
-        teacher = TeacherModel(
-            institutional_code=data.institutional_code,
-            department_id=data.department_id,
-            contract_type=data.contract_type,
-            user_id=data.user_id,
-        )
-
-        self.db.add(teacher)
-        self.db.commit()
-        self.db.refresh(teacher)
-
-        return teacher_to_dict(teacher)
-
-    async def get_all(
-        self,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-        academic_period_id: int | None = None,
-        active: bool | None = None,
-        department_id: int | None = None,
-    ) -> tuple[list[dict], int]:
-        """Get all teachers with optional pagination, search, and period average."""
-
-        query = (
+        return (
             self.db.query(TeacherModel)
-            .outerjoin(TeacherModel.user)
             .options(joinedload(TeacherModel.user))
+            .filter(TeacherModel.id == teacher_id)
+            .first()
         )
 
-        if active is not None:
-            query = query.filter(TeacherModel.active == active)
-
-        if department_id is not None:
-            query = query.filter(TeacherModel.department_id == department_id)
-
-        if search:
-            pattern = f"%{search}%"
-            query = query.filter(
-                or_(
-                    TeacherModel.institutional_code.ilike(pattern),
-                    TeacherModel.contract_type.ilike(pattern),
-                    UserModel.name.ilike(pattern),
-                    UserModel.email.ilike(pattern),
-                )
-            )
-
-        total = query.count()
-
-        teachers = (
-            query.order_by(TeacherModel.created_at.desc())
-            .offset((page - 1) * limit)
-            .limit(limit)
-            .all()
-        )
-
-        result = [teacher_to_dict(t) for t in teachers]
-
-        if academic_period_id:
-            teacher_ids = [t["id"] for t in result]
-
-            if teacher_ids:
-                avg_query = (
-                    self.db.query(
-                        AcademicGroupModel.teacher_id,
-                        func.avg(EvaluationScoreModel.overall_average).label(
-                            "avg"),
-                    )
-                    .join(
-                        EvaluationScoreModel,
-                        EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
-                    )
-                    .join(
-                        EvaluationModel,
-                        EvaluationScoreModel.evaluation_id == EvaluationModel.id,
-                    )
-                    .filter(
-                        AcademicGroupModel.teacher_id.in_(teacher_ids),
-                        EvaluationModel.academic_period_id == academic_period_id,
-                    )
-                    .group_by(AcademicGroupModel.teacher_id)
-                )
-
-                avgs = {row.teacher_id: float(row.avg)
-                        for row in avg_query.all()}
-
-                for teacher in result:
-                    teacher["overall_average"] = avgs.get(teacher["id"])
-
-        return result, total
-
-    async def get_by_id(self, teacher_id: int) -> dict | None:
-        """Get a teacher by ID."""
-
-        teacher = (
-            self.db.query(TeacherModel).filter(
-                TeacherModel.id == teacher_id).first()
-        )
-
-        if not teacher:
-            return None
-
-        return teacher_to_dict(teacher)
-
-    async def get_by_institutional_code(self, institutional_code: str) -> dict | None:
+    def get_by_institutional_code(self, institutional_code: str) -> TeacherModel | None:
         """Get a teacher by institutional code."""
 
-        teacher = (
+        return (
             self.db.query(TeacherModel)
             .filter(TeacherModel.institutional_code == institutional_code)
             .first()
         )
 
-        if not teacher:
-            return None
-
-        return teacher_to_dict(teacher)
-
-    async def get_by_institutional_codes(self, codes: list[str]) -> list[dict]:
+    def get_by_institutional_codes(self, codes: list[str]) -> list[TeacherModel]:
         """Get existing teachers by a list of institutional codes."""
 
-        teachers = (
+        if not codes:
+            return []
+
+        return (
             self.db.query(TeacherModel)
             .filter(TeacherModel.institutional_code.in_(codes))
             .all()
         )
 
-        return [teacher_to_dict(t) for t in teachers]
+    def search(
+        self,
+        filters: TeacherFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[TeacherModel], int]:
+        """Search for teachers based on filters and pagination parameters."""
 
-    async def delete(self, teacher_id: int) -> dict | None:
-        """Delete a teacher by ID."""
+        query = self.db.query(TeacherModel).options(joinedload(TeacherModel.user))
 
-        teacher = (
-            self.db.query(TeacherModel).filter(
-                TeacherModel.id == teacher_id).first()
-        )
+        if filters.search:
+            term = filters.search.strip()
+
+            if term:
+                like_term = f"%{term}%"
+
+                query = query.filter(
+                    or_(
+                        TeacherModel.institutional_code.ilike(like_term),
+                        TeacherModel.contract_type.ilike(like_term),
+                        UserModel.name.ilike(like_term),
+                        UserModel.email.ilike(like_term),
+                    )
+                )
+
+        if filters.active is not None:
+            query = query.filter(TeacherModel.active == filters.active)
+
+        if filters.department_id is not None:
+            query = query.filter(TeacherModel.department_id == filters.department_id)
+
+        if filters.contract_type is not None:
+            query = query.filter(TeacherModel.contract_type == filters.contract_type)
+
+        query = query.order_by(TeacherModel.created_at.desc())
+
+        return self.paginate(query, pagination)
+
+    def delete_teacher(self, teacher_id: int) -> TeacherModel | None:
+        """Delete a teacher by ID. Raises ValueError if teacher has academic groups."""
+
+        teacher = self.get_by_id(teacher_id)
 
         if not teacher:
             return None
 
-        teacher_dict = teacher_to_dict(teacher)
         self.db.delete(teacher)
 
         try:
@@ -180,9 +111,51 @@ class TeachersRepository:
                 "No se puede eliminar el profesor porque tiene grupos académicos asociados"
             )
 
-        return teacher_dict
+        return teacher
 
-    async def count_by_department(
+    def update_teacher(self, teacher: TeacherModel, data: dict) -> TeacherModel:
+        """Update a teacher's fields."""
+
+        for field, value in data.items():
+            if value is not None:
+                setattr(teacher, field, value)
+
+        self.db.commit()
+        self.db.refresh(teacher)
+
+        return teacher
+
+    def get_teacher_averages_by_period(
+        self, teacher_ids: list[int], academic_period_id: int
+    ) -> dict[int, float]:
+        """Get average evaluation scores for teachers in a given academic period."""
+
+        if not teacher_ids:
+            return {}
+
+        avg_query = (
+            self.db.query(
+                AcademicGroupModel.teacher_id,
+                func.avg(EvaluationScoreModel.overall_average).label("avg"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(
+                AcademicGroupModel.teacher_id.in_(teacher_ids),
+                EvaluationModel.academic_period_id == academic_period_id,
+            )
+            .group_by(AcademicGroupModel.teacher_id)
+        )
+
+        return {row.teacher_id: float(row.avg) for row in avg_query.all()}
+
+    def count_by_department(
         self,
         department_id: int,
         academic_period_id: int,
@@ -221,40 +194,16 @@ class TeachersRepository:
             "previous_count": previous_count,
         }
 
-    async def update(self, teacher_id: int, data: TeacherUpdate) -> dict | None:
-        """Update a teacher's fields."""
-
-        teacher = (
-            self.db.query(TeacherModel).filter(
-                TeacherModel.id == teacher_id).first()
-        )
-
-        if not teacher:
-            return None
-
-        payload = data.model_dump(exclude_unset=True)
-
-        for field, value in payload.items():
-            setattr(teacher, field, value)
-
-        self.db.commit()
-        self.db.refresh(teacher)
-
-        return teacher_to_dict(teacher)
-
-    async def get_history(self, teacher_id: int) -> dict | None:
+    def get_history(self, teacher_id: int) -> dict | None:
         """Return the teacher's average score for each academic period."""
 
-        teacher = (
-            self.db.query(TeacherModel).filter(
-                TeacherModel.id == teacher_id).first()
-        )
+        teacher = self.get_by_id(teacher_id)
+
         if not teacher:
             return None
 
         teacher_user = (
-            self.db.query(UserModel).filter(
-                UserModel.id == teacher.user_id).first()
+            self.db.query(UserModel).filter(UserModel.id == teacher.user_id).first()
             if teacher.user_id
             else None
         )
@@ -265,8 +214,7 @@ class TeachersRepository:
                 AcademicPeriodModel.code.label("period_code"),
                 AcademicPeriodModel.name.label("period_name"),
                 AcademicPeriodModel.id.label("period_id"),
-                func.avg(EvaluationScoreModel.overall_average).label(
-                    "avg_score"),
+                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
                 func.count(EvaluationScoreModel.id).label("group_count"),
             )
             .join(
@@ -286,7 +234,7 @@ class TeachersRepository:
                 EvaluationModel.id,
                 AcademicPeriodModel.code,
                 AcademicPeriodModel.name,
-                AcademicPeriodModel.id
+                AcademicPeriodModel.id,
             )
             .order_by(AcademicPeriodModel.code.asc())
             .all()
@@ -313,6 +261,6 @@ class TeachersRepository:
 
 
 def get_teachers_repository(db: Annotated[Session, Depends(get_db)]):
-    """Get teachers repository"""
+    """Dependency injection for TeachersRepository."""
 
     return TeachersRepository(db)
