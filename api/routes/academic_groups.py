@@ -2,12 +2,13 @@
 Routes for academic group operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 
 from api.controllers.academic_groups import (
     AcademicGroupsController,
     get_academic_groups_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.academic_group import (
     AcademicGroupCreate,
@@ -18,7 +19,7 @@ from api.schemas.academic_group import (
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/academic-groups", tags=["Academic Groups"])
+router = EnvelopeRouter(prefix="/academic-groups", tags=["Academic Groups"])
 
 
 @router.get(

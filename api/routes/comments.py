@@ -3,9 +3,10 @@ Routes for comment operations.
 """
 
 from api.schemas.pagination import Pagination
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query
 
 from api.controllers.comments import CommentsController, get_comments_controller
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.models.teacher import TeacherModel
 from api.schemas.comment import (
@@ -16,7 +17,7 @@ from api.schemas.comment import (
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/comments", tags=["Comments"])
+router = EnvelopeRouter(prefix="/comments", tags=["Comments"])
 
 
 @router.get(

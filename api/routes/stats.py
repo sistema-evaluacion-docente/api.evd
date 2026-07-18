@@ -4,9 +4,10 @@ Routes for statistics operations.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.stats import StatsController, get_stats_controller
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
@@ -28,7 +29,7 @@ from api.schemas.stats import (
 )
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/stats", tags=["Stats"])
+router = EnvelopeRouter(prefix="/stats", tags=["Stats"])
 
 
 @router.get(

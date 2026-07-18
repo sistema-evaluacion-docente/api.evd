@@ -4,14 +4,15 @@ Routes for audit log operations.
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.audits import AuditsController, get_audits_controller
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import require_roles
 from api.schemas.audit import AuditDetailResponse, AuditListResponse
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/audits", tags=["Audits"])
+router = EnvelopeRouter(prefix="/audits", tags=["Audits"])
 
 
 @router.get(

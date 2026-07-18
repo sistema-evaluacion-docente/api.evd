@@ -2,12 +2,13 @@
 Routes for faculty operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.faculties import (
     FacultiesController,
     get_faculties_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.faculty import (
     FacultyCreate,
@@ -19,7 +20,7 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/faculties", tags=["Faculties"])
+router = EnvelopeRouter(prefix="/faculties", tags=["Faculties"])
 
 
 @router.get(

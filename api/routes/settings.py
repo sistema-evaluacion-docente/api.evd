@@ -2,12 +2,13 @@
 Routes for settings operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.settings import (
     SettingsController,
     get_settings_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
@@ -20,7 +21,7 @@ from api.schemas.setting import (
 )
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/settings", tags=["Settings"])
+router = EnvelopeRouter(prefix="/settings", tags=["Settings"])
 
 
 @router.get(

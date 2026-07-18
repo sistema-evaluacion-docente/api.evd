@@ -2,12 +2,13 @@
 Routes for director operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.directors import (
     DirectorsController,
     get_directors_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.director import (
     DirectorCreate,
@@ -19,7 +20,7 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/directors", tags=["Directors"])
+router = EnvelopeRouter(prefix="/directors", tags=["Directors"])
 
 
 @router.get(

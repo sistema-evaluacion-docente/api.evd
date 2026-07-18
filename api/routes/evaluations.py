@@ -8,7 +8,6 @@ import uuid
 
 import openpyxl
 from fastapi import (
-    APIRouter,
     BackgroundTasks,
     Depends,
     File,
@@ -26,6 +25,7 @@ from api.controllers.evaluations import (
     EvaluationsController,
     get_evaluations_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.database import get_db
 from api.middlewares.auth import get_current_user, require_roles
 from api.models.academic_period import AcademicPeriodModel
@@ -67,7 +67,7 @@ from api.repositories.academic_periods import (
 )
 from api.schemas.academic_period import AcademicPeriodCreate
 
-router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
+router = EnvelopeRouter(prefix="/evaluations", tags=["Evaluations"])
 
 
 @router.post(
@@ -190,8 +190,8 @@ async def upload_evaluation(
     with open(filepath, "wb") as f:
         f.write(pdf_bytes)
 
-    user_record = await users_repo.get_by_uid(current_user["uid"])
-    resolved_user_id = user_record["id"] if user_record else None
+    user_record = users_repo.get_by_uid(current_user["uid"])
+    resolved_user_id = user_record.id if user_record else None
 
     evaluation = await evaluations_repo.create(
         user_id=resolved_user_id,

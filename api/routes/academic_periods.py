@@ -2,17 +2,18 @@
 Routes for academic period operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.academic_periods import (
     AcademicPeriodsController,
     get_academic_periods_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.academic_period import (
     AcademicPeriodCreate,
     AcademicPeriodDetailResponse,
-    AcademicPeriodListResponse,
+    AcademicPeriodOut,
     AcademicPeriodStatusUpdate,
     AcademicPeriodUpdate,
 )
@@ -20,12 +21,12 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/academic-periods", tags=["Academic Periods"])
+router = EnvelopeRouter(prefix="/academic-periods", tags=["Academic Periods"])
 
 
 @router.get(
     "/",
-    response_model=AcademicPeriodListResponse,
+    response_model=list[AcademicPeriodOut],
     responses={403: {"description": "Forbidden"}},
 )
 async def get_all_academic_periods(
@@ -54,18 +55,7 @@ async def get_all_academic_periods(
             path="/academic-periods",
         )
 
-    return ResponseSchema(
-        status=200,
-        message="Academic periods found",
-        data=periods["items"],
-        pagination=Pagination(
-            limit=periods["limit"],
-            total=periods["total"],
-            pages=periods["pages"],
-            page=periods["page"],
-        ),
-        path="/academic-periods",
-    )
+    return periods["items"]
 
 
 @router.get(
@@ -267,6 +257,7 @@ async def update_academic_period_status(
 
 @router.delete(
     "/{period_id}",
+    response_model=None,
     responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
 )
 async def delete_academic_period(

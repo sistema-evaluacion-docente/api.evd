@@ -2,7 +2,7 @@
 Routes for department operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.departments import (
     DepartmentsController,
@@ -12,6 +12,7 @@ from api.controllers.directors import (
     DirectorsController,
     get_directors_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.department import (
     AssignDirectorRequest,
@@ -25,7 +26,7 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/departments", tags=["Departments"])
+router = EnvelopeRouter(prefix="/departments", tags=["Departments"])
 
 
 @router.get(

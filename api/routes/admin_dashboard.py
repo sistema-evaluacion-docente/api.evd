@@ -2,17 +2,18 @@
 Routes for admin dashboard operations.
 """
 
-from fastapi import APIRouter, Depends
+from fastapi import Depends
 
 from api.controllers.admin_dashboard import (
     AdminDashboardController,
     get_admin_dashboard_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import require_roles
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/admin/dashboard", tags=["Admin Dashboard"])
+router = EnvelopeRouter(prefix="/admin/dashboard", tags=["Admin Dashboard"])
 
 
 @router.get(
