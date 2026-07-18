@@ -1,8 +1,6 @@
-"""
-Routes for department operations.
-"""
+"""Routes for department operations."""
 
-from fastapi import Depends, Query
+from fastapi import Depends, HTTPException
 
 from api.controllers.departments import (
     DepartmentsController,
@@ -12,180 +10,110 @@ from api.controllers.directors import (
     DirectorsController,
     get_directors_controller,
 )
+from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
-from api.middlewares.auth import get_current_user, require_roles
+from api.middlewares.auth import require_roles
 from api.schemas.department import (
     AssignDirectorRequest,
     DepartmentCreate,
-    DepartmentDetailResponse,
-    DepartmentListResponse,
+    DepartmentFiltersDep,
+    DepartmentOut,
     DepartmentUpdate,
 )
-from api.schemas.director import DirectorDetailResponse
-from api.schemas.pagination import Pagination
-from api.schemas.response import ResponseSchema
+from api.schemas.director import DirectorOut
 from api.schemas.user import RoleName
 
 router = EnvelopeRouter(prefix="/departments", tags=["Departments"])
 
+_ROLES = [RoleName.ADMIN]
 
-@router.get(
-    "/",
-    response_model=DepartmentListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+
+@router.get("/", response_model=list[DepartmentOut])
 async def get_all_departments(
-    search: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    filters: DepartmentFiltersDep,
+    pagination: PaginationDep,
+    _=Depends(require_roles(_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
-    """Endpoint to list all departments."""
+    """List all departments with pagination and filters."""
 
-    departments = await controller.get_all(search=search, page=page, limit=limit)
-
-    return ResponseSchema(
-        status=200,
-        message="Departments found",
-        data=departments["items"],
-        pagination=Pagination(
-            total=departments["total"],
-            page=departments["page"],
-            limit=departments["limit"],
-            pages=departments["pages"],
-        ),
-        path="/departments",
-    )
+    return await controller.get_all(filters, pagination)
 
 
-@router.get(
-    "/{department_id}",
-    response_model=DepartmentDetailResponse,
-    responses={403: {"description": "Forbidden"},
-               404: {"model": ResponseSchema}},
-)
+@router.get("/{department_id}", response_model=DepartmentOut)
 async def get_department_by_id(
     department_id: int,
-    _=Depends(require_roles([RoleName.ADMIN])),
+    _=Depends(require_roles(_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
-    """Endpoint to get a department by ID."""
+    """Get a department by ID."""
 
     department = await controller.get_by_id(department_id)
 
     if not department:
-        return ResponseSchema(
-            status=404,
-            message="Department not found",
-            path=f"/departments/{department_id}",
-        )
+        raise HTTPException(status_code=404, detail="Departmento no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Department found",
-        data=department,
-        path=f"/departments/{department_id}",
-    )
+    return department
 
 
-@router.post(
-    "/",
-    response_model=DepartmentDetailResponse,
-    responses={400: {"model": ResponseSchema},
-               403: {"description": "Forbidden"}},
-    status_code=201,
-)
+@router.post("/", response_model=DepartmentOut, status_code=201)
 async def create_department(
     payload: DepartmentCreate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
-    """Endpoint to create a new department."""
+    """Create a new department."""
 
-    try:
-        department = await controller.create(payload, current_user)
-    except ValueError as e:
-        return ResponseSchema(
-            status=400,
-            message=str(e),
-            path="/departments",
-        )
-
-    return ResponseSchema(
-        status=201,
-        message="Department created successfully",
-        data=department,
-        path="/departments",
-    )
+    return await controller.create(payload, current_user)
 
 
-@router.put(
-    "/{department_id}",
-    response_model=DepartmentDetailResponse,
-    responses={400: {"model": ResponseSchema},
-               403: {"description": "Forbidden"}},
-)
+@router.put("/{department_id}", response_model=DepartmentOut)
 async def update_department(
     department_id: int,
     payload: DepartmentUpdate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
-    """Endpoint to update a department."""
+    """Update a department."""
 
     department = await controller.update(department_id, payload, current_user)
 
     if not department:
-        return ResponseSchema(
-            status=404,
-            message="Department not found",
-            path=f"/departments/{department_id}",
-        )
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Department updated successfully",
-        data=department,
-        path=f"/departments/{department_id}",
-    )
+    return department
 
 
-@router.post(
-    "/{department_id}/director",
-    response_model=DirectorDetailResponse,
-    responses={
-        400: {"model": ResponseSchema},
-        403: {"description": "Forbidden"},
-        404: {"model": ResponseSchema},
-    },
-)
+@router.delete("/{department_id}", response_model=DepartmentOut)
+async def delete_department(
+    department_id: int,
+    current_user=Depends(require_roles(_ROLES)),
+    controller: DepartmentsController = Depends(get_departments_controller),
+):
+    """Delete a department."""
+
+    department = await controller.delete(department_id, current_user)
+
+    if not department:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
+
+    return department
+
+
+@router.post("/{department_id}/director", response_model=DirectorOut)
 async def assign_director(
     department_id: int,
     payload: AssignDirectorRequest,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: DirectorsController = Depends(get_directors_controller),
 ):
-    """Endpoint to assign a director to a department."""
+    """Assign a director to a department."""
 
     try:
         director = await controller.assign_director(
             department_id, payload.user_id, current_user
         )
     except ValueError as e:
-        status = 404 if "not found" in str(e).lower() else 400
-        return ResponseSchema(
-            status=status,
-            message=str(e),
-            path=f"/departments/{department_id}/director",
-        )
+        raise HTTPException(status_code=400, detail=str(e))
 
-    return ResponseSchema(
-        status=200,
-        message="Director assigned successfully",
-        data=director,
-        path=f"/departments/{department_id}/director",
-    )
+    return director
