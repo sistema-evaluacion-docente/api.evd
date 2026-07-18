@@ -34,7 +34,7 @@ class AcademicPeriodsRepository:
             end_date=data.end_date,
             evaluation_end_date=data.evaluation_end_date,
             final_evaluation_date=data.final_evaluation_date,
-            active=False,
+            active=True,
         )
 
         self.db.add(period)
