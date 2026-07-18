@@ -6,7 +6,12 @@ from fastapi import APIRouter, Depends
 
 from api.controllers.courses import CoursesController, get_courses_controller
 from api.middlewares.auth import get_current_user, require_roles
-from api.schemas.course import CourseCreate, CourseDetailResponse, CourseListResponse, CourseUpdate
+from api.schemas.course import (
+    CourseCreate,
+    CourseDetailResponse,
+    CourseListResponse,
+    CourseUpdate,
+)
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
