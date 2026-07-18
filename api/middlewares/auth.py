@@ -9,11 +9,11 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from firebase_admin import auth, credentials, initialize_app
 
 from api.config import config
-from api.repositories.users import UsersRepository, get_users_repository
+from api.services.user_service import UserService
+from api.dependencies.users import get_user_service
 from api.schemas.user import RoleName, TokenUser
 
 app = initialize_app(credential=credentials.Certificate(config.FIREBASE_CREDENTIALS))
-
 security = HTTPBearer(auto_error=False)
 
 
@@ -111,9 +111,9 @@ def get_current_user(
     return TokenUser(
         uid=decoded_token["user_id"],
         email=decoded_token["email"],
-        name=decoded_token["name"]
-        if "name" in decoded_token
-        else decoded_token["email"],
+        name=(
+            decoded_token["name"] if "name" in decoded_token else decoded_token["email"]
+        ),
         picture=decoded_token["picture"] if "picture" in decoded_token else "",
     )
 
@@ -128,7 +128,7 @@ def require_roles(required_roles: Sequence[RoleName | str]):
 
     async def dependency(
         current_user: TokenUser | None = Depends(get_current_user),
-        users_repository: UsersRepository = Depends(get_users_repository),
+        user_service: UserService = Depends(get_user_service),
     ):
         if current_user is None:
             raise HTTPException(
@@ -136,7 +136,7 @@ def require_roles(required_roles: Sequence[RoleName | str]):
                 detail="Authentication required",
             )
 
-        user = await users_repository.get_by_uid(current_user.uid)
+        user = await user_service.get_by_uid(current_user.uid)
 
         if not user:
             raise HTTPException(
