@@ -24,7 +24,7 @@ class AcademicPeriodsRepository:
     def __init__(self, db: Session):
         self.db = db
 
-    async def create(self, data: AcademicPeriodCreate) -> dict:
+    async def create(self, data: AcademicPeriodCreate) -> AcademicPeriodModel:
         """Create a new academic period."""
 
         period = AcademicPeriodModel(
@@ -38,10 +38,11 @@ class AcademicPeriodsRepository:
         )
 
         self.db.add(period)
+        self.db.flush()
         self.db.commit()
         self.db.refresh(period)
 
-        return academic_period_to_dict(period)
+        return period
 
     async def get_all(
         self,
@@ -117,7 +118,7 @@ class AcademicPeriodsRepository:
 
         return f"{prev_year}-{prev_semester}"
 
-    async def get_by_code(self, code: str) -> dict | None:
+    async def get_by_code(self, code: str) -> AcademicPeriodModel | None:
         """Get an academic period by code."""
 
         period = (
@@ -129,7 +130,7 @@ class AcademicPeriodsRepository:
         if not period:
             return None
 
-        return academic_period_to_dict(period)
+        return period
 
     async def update(self, period_id: int, data: AcademicPeriodUpdate) -> dict | None:
         """Update an academic period's fields."""
