@@ -1,18 +1,32 @@
-"""
-Schemas for request and response bodies related to directors.
-"""
+"""Schemas for Director entity."""
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel, Field
 
-from api.schemas.pagination import Pagination
-from api.schemas.user import RoleName
+
+class UserSummary(BaseModel):
+    """Summary of user for nesting in DirectorOut."""
+
+    id: int
+    email: str
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
+class DepartmentSummary(BaseModel):
+    """Summary of department for nesting in DirectorOut."""
+
+    id: int
+    name: str
+    code: str
 
 
 class DirectorCreate(BaseModel):
-    """Schema for creating a director."""
+    """Schema for creating a director with user and department information."""
 
     email: str
     name: Optional[str] = None
@@ -22,17 +36,7 @@ class DirectorCreate(BaseModel):
     institutional_code: Optional[str] = None
     contract_type: Optional[str] = None
     department_id: int
-    roles: list[RoleName] = Field(
-        default_factory=lambda: [RoleName.DIRECTOR_DE_DEPARTAMENTO],
-        min_length=1,
-    )
-
-
-class DirectorRecordCreate(BaseModel):
-    """Internal schema for creating a director record."""
-
-    user_id: int
-    department_id: int
+    roles: list[str] = Field(default=["DIRECTOR_DE_DEPARTAMENTO"])
 
 
 class DirectorUpdate(BaseModel):
@@ -44,36 +48,33 @@ class DirectorUpdate(BaseModel):
 
 
 class DirectorOut(BaseModel):
-    """Schema for outputting a director."""
+    """Schema for outputting director information with nested user and department summaries."""
 
     id: int
     user_id: int
     department_id: int
-    user: Optional[dict] = None
-    department: Optional[dict] = None
-    active: Optional[bool]
+    user: Optional[UserSummary] = None
+    department: Optional[DepartmentSummary] = None
+    active: bool
     created_at: datetime
     updated_at: datetime
 
 
-class DirectorDetailResponse(BaseModel):
-    """Schema for single director response envelope."""
+@dataclass
+class DirectorFilters:
+    """Filters for searching directors."""
 
-    status: int
-    message: str
-    data: Optional[DirectorOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: Optional[str] = None
+    active: Optional[bool] = None
 
 
-class DirectorListResponse(BaseModel):
-    """Schema for directors list response envelope."""
+def director_filters(
+    search: Optional[str] = Query(None),
+    active: Optional[bool] = Query(None),
+) -> DirectorFilters:
+    """Create DirectorFilters from query parameters."""
 
-    status: int
-    message: str
-    data: list[DirectorOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return DirectorFilters(search=search, active=active)
+
+
+DirectorFiltersDep = Annotated[DirectorFilters, Depends(director_filters)]
