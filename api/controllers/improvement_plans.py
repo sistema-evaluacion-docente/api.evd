@@ -43,9 +43,9 @@ class ImprovementPlansController:
         if isinstance(current_user, dict):
             return current_user.get("id")
 
-        user = await self.users_repository.get_by_uid(current_user.uid)
+        user = self.users_repository.get_by_uid(current_user.uid)
 
-        return user["id"] if user else None
+        return user.id if user else None
 
     async def _get_threshold(self) -> float:
         setting = await self.settings_repository.get_by_key(THRESHOLD_KEY)

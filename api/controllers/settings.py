@@ -26,8 +26,8 @@ class SettingsController:
         self.users_repository = users_repository
 
     async def _resolve_user_id(self, current_user) -> int | None:
-        user = await self.users_repository.get_by_uid(current_user.uid)
-        return user["id"] if user else None
+        user = self.users_repository.get_by_uid(current_user.uid)
+        return user.id if user else None
 
     async def create(self, data: SettingCreate, current_user) -> dict | None:
         existing = await self.repository.get_by_key(data.key)

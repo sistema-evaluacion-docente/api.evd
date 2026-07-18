@@ -67,15 +67,15 @@ class AuditsController:
         if not user_ids:
             return items
 
-        users = await self.users_repository.get_by_ids(user_ids)
+        users = self.users_repository.get_by_ids(user_ids)
 
-        users_map = {u["id"]: u for u in users}
+        users_map = {u.id: u for u in users}
 
         for item in items:
             user = users_map.get(item.get("user_id"))
 
-            item["user_name"] = user["name"] if user else None
-            item["user_avatar"] = user["avatar_url"] if user else None
+            item["user_name"] = user.name if user else None
+            item["user_avatar"] = user.avatar_url if user else None
 
         return items
 

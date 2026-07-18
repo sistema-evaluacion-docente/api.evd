@@ -14,6 +14,8 @@ from api.repositories.users import UsersRepository, get_users_repository
 from api.schemas.audit import AuditCreate
 from api.schemas.director import DirectorCreate, DirectorRecordCreate, DirectorUpdate
 from api.schemas.user import UserCreate
+from api.services.user_service import UserService
+from api.dependencies.users import get_user_service
 
 
 class DirectorsController:
@@ -25,16 +27,18 @@ class DirectorsController:
         audits_repository: AuditsRepository,
         users_repository: UsersRepository,
         departments_repository: DepartmentsRepository,
+        user_service: UserService,
     ):
         self.repository = repository
         self.audits_repository = audits_repository
         self.users_repository = users_repository
         self.departments_repository = departments_repository
+        self.user_service = user_service
 
     async def _resolve_user_id(self, current_user) -> int | None:
-        user = await self.users_repository.get_by_uid(current_user.uid)
+        user = self.users_repository.get_by_uid(current_user.uid)
 
-        return user["id"] if user else None
+        return user.id if user else None
 
     async def create(self, data: DirectorCreate, current_user) -> dict:
         """Create a new director."""
@@ -65,7 +69,7 @@ class DirectorsController:
             roles=data.roles,
         )
 
-        user = await self.users_repository.save(user_data)
+        user = await self.user_service.create_user_with_roles(user_data)
         user_id = user["id"]
 
         director_record = DirectorRecordCreate(
@@ -130,7 +134,7 @@ class DirectorsController:
                 )
 
         if data.user_id is not None:
-            users = await self.users_repository.get_by_ids([data.user_id])
+            users = self.users_repository.get_by_ids([data.user_id])
 
             if not users:
                 raise ValueError(f"El usuario con id {data.user_id} no existe")
@@ -200,7 +204,7 @@ class DirectorsController:
         if not department:
             raise ValueError(f"El departamento con id {department_id} no existe")
 
-        users = await self.users_repository.get_by_ids([user_id])
+        users = self.users_repository.get_by_ids([user_id])
 
         if not users:
             raise ValueError(f"El usuario con id {user_id} no existe")
@@ -227,9 +231,10 @@ def get_directors_controller(
     audits_repository: AuditsRepository = Depends(get_audits_repository),
     users_repository: UsersRepository = Depends(get_users_repository),
     departments_repository: DepartmentsRepository = Depends(get_departments_repository),
+    user_service: UserService = Depends(get_user_service),
 ):
     """Get directors controller"""
 
     return DirectorsController(
-        repository, audits_repository, users_repository, departments_repository
+        repository, audits_repository, users_repository, departments_repository, user_service
     )

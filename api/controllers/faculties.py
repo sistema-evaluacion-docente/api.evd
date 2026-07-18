@@ -28,8 +28,8 @@ class FacultiesController:
         self.users_repository = users_repository
 
     async def _resolve_user_id(self, current_user) -> int | None:
-        user = await self.users_repository.get_by_uid(current_user.uid)
-        return user["id"] if user else None
+        user = self.users_repository.get_by_uid(current_user.uid)
+        return user.id if user else None
 
     async def create(self, data: FacultyCreate, current_user) -> dict:
         """Create a new faculty, rejecting duplicate codes."""
