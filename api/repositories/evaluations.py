@@ -177,6 +177,17 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
+    async def has_evaluations_for_period(self, academic_period_id: int) -> bool:
+        """Check if any evaluations exist for a given academic period."""
+
+        count = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .count()
+        )
+
+        return count > 0
+
     async def get_by_period_id(self, academic_period_id: int) -> dict | None:
         """Get an evaluation by academic period ID."""
 
