@@ -54,9 +54,18 @@ from api.schemas.pagination import Pagination
 from api.utils.dimensions import QUESTIONS
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
-from api.utils.evaluation_processor import analyze_evaluation_comments, process_evaluation
+from api.utils.evaluation_processor import (
+    analyze_evaluation_comments,
+    process_evaluation,
+)
 from api.utils.pdf_parser import parse_pdf
 from api.utils.file_validation import validate_file_size
+
+from api.repositories.academic_periods import (
+    AcademicPeriodsRepository,
+    get_academic_periods_repository,
+)
+from api.schemas.academic_period import AcademicPeriodCreate
 
 router = APIRouter(prefix="/evaluations", tags=["Evaluations"])
 
@@ -80,6 +89,9 @@ async def upload_evaluation(
     db: Session = Depends(get_db),
     evaluations_repo: EvaluationsRepository = Depends(get_evaluations_repository),
     users_repo: UsersRepository = Depends(get_users_repository),
+    academic_periods_repo: AcademicPeriodsRepository = Depends(
+        get_academic_periods_repository
+    ),
 ):
     """Upload a teacher evaluation PDF for a department.
 
@@ -110,6 +122,7 @@ async def upload_evaluation(
         raise HTTPException(
             status_code=422, detail="No se pudo extraer el periodo académico del PDF"
         )
+
     if not parsed.get("department_code"):
         raise HTTPException(
             status_code=422, detail="No se pudo extraer el departamento del PDF"
@@ -121,22 +134,25 @@ async def upload_evaluation(
             detail="No se encontraron datos del docente en el PDF. Asegúrese de que se trate de un documento de evaluación docente de la UFPS.",
         )
 
-    period = (
-        db.query(AcademicPeriodModel)
-        .filter(AcademicPeriodModel.code == parsed["period_code"])
-        .first()
-    )
+    period = await academic_periods_repo.get_by_code(parsed["period_code"])
+
     if not period:
-        raise HTTPException(
-            status_code=422,
-            detail=f"Periodo académico '{parsed['period_code']}' no está registrado en el sistema",
+        # Create the academic period if it doesn't exist
+        period = await academic_periods_repo.create(
+            data=AcademicPeriodCreate(
+                code=parsed["period_code"],
+                name=parsed["period_code"],
+            )
         )
+
+    print(period)
 
     department = (
         db.query(DepartmentModel)
         .filter(DepartmentModel.code == parsed["department_code"])
         .first()
     )
+
     if not department:
         raise HTTPException(
             status_code=422,
@@ -749,7 +765,15 @@ async def export_teacher_evaluation(
             style_section_header(ws, r, course_label)
             r += 1
             for comment in comments:
-                cell = ws.cell(row=r, column=1, value=comment.get("original_text", "") if isinstance(comment, dict) else comment)
+                cell = ws.cell(
+                    row=r,
+                    column=1,
+                    value=(
+                        comment.get("original_text", "")
+                        if isinstance(comment, dict)
+                        else comment
+                    ),
+                )
                 cell.alignment = Alignment(wrap_text=True, vertical="top")
                 ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=4)
                 ws.row_dimensions[r].height = 40
@@ -880,7 +904,9 @@ async def analyze_evaluation(
     Returns 202 immediately while the analysis runs in the background.
     The evaluation's ai_status transitions: PENDING → ANALYZING → ANALYZED/FAILED.
     """
-    evaluation = db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+    evaluation = (
+        db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
+    )
 
     if not evaluation:
         return ResponseSchema(
