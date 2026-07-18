@@ -2,13 +2,13 @@
 Schemas for request and response bodies related to users.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel, Field
-
-from api.schemas.pagination import Pagination
 
 
 class RoleName(str, Enum):
@@ -64,7 +64,6 @@ class UserOut(BaseModel):
     avatar_url: Optional[str]
     roles: list[RoleName]
     teacher_id: Optional[int] = None
-
     created_at: datetime
     updated_at: datetime
 
@@ -81,14 +80,6 @@ class UserStatusUpdate(BaseModel):
     active: bool
 
 
-class UserRolesOut(BaseModel):
-    """Schema for roles assigned to a user."""
-
-    id: int
-    uid: Optional[str]
-    roles: list[RoleName]
-
-
 class TokenUser(BaseModel):
     """
     Schema for the current user.
@@ -100,24 +91,25 @@ class TokenUser(BaseModel):
     picture: str
 
 
-class UserDetailResponse(BaseModel):
-    """Schema for user endpoint response envelopes."""
+@dataclass
+class UserFilters:
+    """
+    Dataclass to hold user filters extracted from query parameters.
+    """
 
-    status: int
-    message: str
-    data: Optional[UserOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    active: bool | None = None
 
 
-class UserListResponse(BaseModel):
-    """Schema for users list endpoint response envelopes."""
+def user_filters(
+    search: str | None = Query(default=None, min_length=1),
+    active: bool | None = Query(default=None),
+) -> UserFilters:
+    """
+    Dependency function to extract user filters from query parameters.
+    """
 
-    status: int
-    message: str
-    data: list[UserOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return UserFilters(search=search, active=active)
+
+
+UserFiltersDep = Annotated[UserFilters, Depends(user_filters)]
