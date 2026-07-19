@@ -32,18 +32,18 @@ class TestUserService:
         return MagicMock()
 
     @pytest.fixture
-    def mock_audits_repo(self):
-        """Mock AuditsRepository."""
+    def mock_audit_service(self):
+        """Mock AuditService."""
 
-        repo = MagicMock()
-        repo.create = AsyncMock()
-        return repo
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
 
     @pytest.fixture
-    def service(self, mock_users_repo, mock_audits_repo):
+    def service(self, mock_users_repo, mock_audit_service):
         """Create service instance with mocked dependencies."""
 
-        return UserService(mock_users_repo, mock_audits_repo)
+        return UserService(mock_users_repo, mock_audit_service)
 
     @pytest.fixture
     def mock_user(self):
@@ -140,7 +140,7 @@ class TestUserService:
 
     @pytest.mark.asyncio
     async def test_create_user_as_admin(
-        self, service, mock_users_repo, mock_audits_repo, mock_user
+        self, service, mock_users_repo, mock_audit_service, mock_user
     ):
         """Test create_user succeeds when requester is ADMIN."""
 
@@ -171,7 +171,7 @@ class TestUserService:
 
         assert result is not None
         mock_users_repo.replace_user_roles.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_user_as_director_with_docente_role(

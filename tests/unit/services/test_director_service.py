@@ -36,11 +36,11 @@ class TestDirectorService:
         return MagicMock()
 
     @pytest.fixture
-    def mock_audits_repo(self):
-        """Mock AuditsRepository."""
-        repo = MagicMock()
-        repo.create = AsyncMock()
-        return repo
+    def mock_audit_service(self):
+        """Mock AuditService."""
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
 
     @pytest.fixture
     def mock_user_service(self):
@@ -55,7 +55,7 @@ class TestDirectorService:
         mock_directors_repo,
         mock_users_repo,
         mock_departments_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_user_service,
     ):
         """Create service instance with mocked dependencies."""
@@ -63,7 +63,7 @@ class TestDirectorService:
             mock_directors_repo,
             mock_users_repo,
             mock_departments_repo,
-            mock_audits_repo,
+            mock_audit_service,
             mock_user_service,
         )
 
@@ -158,7 +158,7 @@ class TestDirectorService:
         mock_departments_repo,
         mock_users_repo,
         mock_user_service,
-        mock_audits_repo,
+        mock_audit_service,
         mock_director,
         current_user,
     ):
@@ -193,7 +193,7 @@ class TestDirectorService:
 
         assert result is not None
         mock_user_service.create_user_with_roles.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_director_department_not_found(
@@ -258,7 +258,7 @@ class TestDirectorService:
         self,
         service,
         mock_directors_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_director,
         current_user,
     ):
@@ -289,7 +289,7 @@ class TestDirectorService:
 
         assert result is not None
         mock_directors_repo.update_director.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_director_not_found(
@@ -309,7 +309,7 @@ class TestDirectorService:
         self,
         service,
         mock_directors_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_director,
         current_user,
     ):
@@ -320,7 +320,7 @@ class TestDirectorService:
 
         assert result is not None
         mock_directors_repo.delete_director.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_delete_director_not_found(

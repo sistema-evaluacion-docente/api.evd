@@ -35,21 +35,21 @@ class TestDepartmentService:
         return MagicMock()
 
     @pytest.fixture
-    def mock_audits_repo(self):
-        """Mock AuditsRepository."""
+    def mock_audit_service(self):
+        """Mock AuditService."""
 
-        repo = MagicMock()
-        repo.create = AsyncMock()
-        return repo
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
 
     @pytest.fixture
-    def service(self, mock_departments_repo, mock_users_repo, mock_audits_repo):
+    def service(self, mock_departments_repo, mock_users_repo, mock_audit_service):
         """Create service instance with mocked dependencies."""
 
         return DepartmentService(
             mock_departments_repo,
             mock_users_repo,
-            mock_audits_repo,
+            mock_audit_service,
         )
 
     @pytest.fixture
@@ -144,7 +144,7 @@ class TestDepartmentService:
         self,
         service,
         mock_departments_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_department,
         current_user,
     ):
@@ -159,7 +159,7 @@ class TestDepartmentService:
 
         assert result is not None
         mock_departments_repo.create.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_department_duplicate_code_raises(
@@ -179,7 +179,7 @@ class TestDepartmentService:
         self,
         service,
         mock_departments_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_department,
         current_user,
     ):
@@ -196,7 +196,7 @@ class TestDepartmentService:
 
         assert result is not None
         mock_departments_repo.update_department.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_department_not_found(
@@ -217,7 +217,7 @@ class TestDepartmentService:
         self,
         service,
         mock_departments_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_department,
         current_user,
     ):
@@ -231,7 +231,7 @@ class TestDepartmentService:
 
         assert result is not None
         mock_departments_repo.delete_department.assert_called_once_with(1)
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_delete_department_not_found(

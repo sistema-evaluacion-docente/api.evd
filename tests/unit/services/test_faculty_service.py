@@ -35,21 +35,21 @@ class TestFacultyService:
         return MagicMock()
 
     @pytest.fixture
-    def mock_audits_repo(self):
-        """Mock AuditsRepository."""
+    def mock_audit_service(self):
+        """Mock AuditService."""
 
-        repo = MagicMock()
-        repo.create = AsyncMock()
-        return repo
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
 
     @pytest.fixture
-    def service(self, mock_faculties_repo, mock_users_repo, mock_audits_repo):
+    def service(self, mock_faculties_repo, mock_users_repo, mock_audit_service):
         """Create service instance with mocked dependencies."""
 
         return FacultyService(
             mock_faculties_repo,
             mock_users_repo,
-            mock_audits_repo,
+            mock_audit_service,
         )
 
     @pytest.fixture
@@ -132,7 +132,12 @@ class TestFacultyService:
 
     @pytest.mark.asyncio
     async def test_create_faculty_success(
-        self, service, mock_faculties_repo, mock_audits_repo, mock_faculty, current_user
+        self,
+        service,
+        mock_faculties_repo,
+        mock_audit_service,
+        mock_faculty,
+        current_user,
     ):
         """Test create succeeds with valid data."""
 
@@ -145,7 +150,7 @@ class TestFacultyService:
 
         assert result is not None
         mock_faculties_repo.create_faculty.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_faculty_duplicate_code_raises(
@@ -162,7 +167,12 @@ class TestFacultyService:
 
     @pytest.mark.asyncio
     async def test_update_faculty_success(
-        self, service, mock_faculties_repo, mock_audits_repo, mock_faculty, current_user
+        self,
+        service,
+        mock_faculties_repo,
+        mock_audit_service,
+        mock_faculty,
+        current_user,
     ):
         """Test update succeeds when faculty exists."""
 
@@ -177,7 +187,7 @@ class TestFacultyService:
 
         assert result is not None
         mock_faculties_repo.update_faculty.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_faculty_not_found(
@@ -213,7 +223,12 @@ class TestFacultyService:
 
     @pytest.mark.asyncio
     async def test_delete_faculty_success(
-        self, service, mock_faculties_repo, mock_audits_repo, mock_faculty, current_user
+        self,
+        service,
+        mock_faculties_repo,
+        mock_audit_service,
+        mock_faculty,
+        current_user,
     ):
         """Test delete succeeds when no departments."""
 
@@ -224,7 +239,7 @@ class TestFacultyService:
 
         assert result is not None
         mock_faculties_repo.delete_faculty.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_delete_faculty_not_found(

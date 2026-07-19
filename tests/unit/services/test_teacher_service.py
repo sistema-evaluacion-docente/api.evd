@@ -36,12 +36,12 @@ class TestTeacherService:
         return MagicMock()
 
     @pytest.fixture
-    def mock_audits_repo(self):
-        """Mock AuditsRepository."""
+    def mock_audit_service(self):
+        """Mock AuditService."""
 
-        repo = MagicMock()
-        repo.create = AsyncMock()
-        return repo
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
 
     @pytest.fixture
     def mock_periods_repo(self):
@@ -66,7 +66,7 @@ class TestTeacherService:
         self,
         mock_teachers_repo,
         mock_users_repo,
-        mock_audits_repo,
+        mock_audit_service,
         mock_periods_repo,
         mock_user_service,
     ):
@@ -75,7 +75,7 @@ class TestTeacherService:
         return TeacherService(
             mock_teachers_repo,
             mock_users_repo,
-            mock_audits_repo,
+            mock_audit_service,
             mock_periods_repo,
             mock_user_service,
         )
@@ -160,7 +160,12 @@ class TestTeacherService:
 
     @pytest.mark.asyncio
     async def test_create_teacher_success(
-        self, service, mock_teachers_repo, mock_audits_repo, mock_teacher, current_user
+        self,
+        service,
+        mock_teachers_repo,
+        mock_audit_service,
+        mock_teacher,
+        current_user,
     ):
         """Test create succeeds with valid data."""
 
@@ -177,7 +182,7 @@ class TestTeacherService:
 
         assert result is not None
         mock_teachers_repo.create.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_teacher_duplicate_code_raises(
@@ -199,7 +204,7 @@ class TestTeacherService:
         mock_teachers_repo,
         mock_users_repo,
         mock_user_service,
-        mock_audits_repo,
+        mock_audit_service,
         mock_teacher,
         current_user,
     ):
@@ -218,7 +223,7 @@ class TestTeacherService:
 
         assert result is not None
         mock_user_service.create_user_with_roles.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_create_with_user_duplicate_code_raises(
@@ -239,7 +244,12 @@ class TestTeacherService:
 
     @pytest.mark.asyncio
     async def test_update_teacher_success(
-        self, service, mock_teachers_repo, mock_audits_repo, mock_teacher, current_user
+        self,
+        service,
+        mock_teachers_repo,
+        mock_audit_service,
+        mock_teacher,
+        current_user,
     ):
         """Test update succeeds when teacher exists."""
 
@@ -252,7 +262,7 @@ class TestTeacherService:
 
         assert result is not None
         mock_teachers_repo.update_teacher.assert_called_once()
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_update_teacher_not_found(
@@ -270,7 +280,12 @@ class TestTeacherService:
 
     @pytest.mark.asyncio
     async def test_delete_teacher_success(
-        self, service, mock_teachers_repo, mock_audits_repo, mock_teacher, current_user
+        self,
+        service,
+        mock_teachers_repo,
+        mock_audit_service,
+        mock_teacher,
+        current_user,
     ):
         """Test delete succeeds when teacher exists."""
 
@@ -280,7 +295,7 @@ class TestTeacherService:
 
         assert result is not None
         mock_teachers_repo.delete_teacher.assert_called_once_with(1)
-        mock_audits_repo.create.assert_called_once()
+        mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_delete_teacher_not_found(
