@@ -46,12 +46,15 @@ class AuditsRepository(BaseRepository[AuditModel]):
 
         if filters.search is not None:
             term = filters.search.strip()
+
             if term:
                 like_term = f"%{term}%"
+
                 query = query.filter(
                     or_(
                         AuditModel.element.ilike(like_term),
                         AuditModel.description.ilike(like_term),
+                        AuditModel.table_name.ilike(like_term),
                     )
                 )
 
@@ -72,7 +75,7 @@ class AuditsRepository(BaseRepository[AuditModel]):
         if not audit:
             return None
 
-        element_data = get_audit(str(audit.element), self.db) if audit.element else None
+        # element_data = get_audit(str(audit.element), self.db) if audit.element else None
 
         return {
             "id": audit.id,
@@ -82,7 +85,7 @@ class AuditsRepository(BaseRepository[AuditModel]):
             "operation": audit.operation,
             "element": audit.element,
             "description": audit.description,
-            "element_data": element_data,
+            "element_data": None,  # element_data,
             "created_at": audit.created_at,
             "updated_at": audit.updated_at,
         }
