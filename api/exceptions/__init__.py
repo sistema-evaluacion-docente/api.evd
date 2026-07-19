@@ -28,7 +28,7 @@ class UserAlreadyExistsError(AppException):
     def __init__(self, email: str):
         super().__init__(
             code="USER_ALREADY_EXISTS",
-            message=f"A user with email '{email}' already exists",
+            message=f"Un usuario con el correo '{email}' ya existe",
             status_code=409,
         )
 
@@ -37,9 +37,9 @@ class UserNotFoundError(AppException):
     """Raised when a user is not found."""
 
     def __init__(self, identifier: str = ""):
-        message = "User not found"
+        message = "Usuario no encontrado"
         if identifier:
-            message = f"User '{identifier}' not found"
+            message = f"Usuario '{identifier}' no encontrado"
         super().__init__(
             code="USER_NOT_FOUND",
             message=message,
@@ -50,7 +50,7 @@ class UserNotFoundError(AppException):
 class PermissionDeniedError(AppException):
     """Raised when a user lacks permission for an action."""
 
-    def __init__(self, message: str = "You do not have permission for this action"):
+    def __init__(self, message: str = "No tienes permiso para realizar esta acción"):
         super().__init__(
             code="PERMISSION_DENIED",
             message=message,
@@ -64,7 +64,7 @@ class InvalidRoleError(AppException):
     def __init__(self, roles: list[str]):
         super().__init__(
             code="INVALID_ROLE",
-            message=f"Unknown roles: {', '.join(roles)}",
+            message=f"Roles desconocidos: {', '.join(roles)}",
             status_code=400,
         )
 
@@ -72,7 +72,7 @@ class InvalidRoleError(AppException):
 class AuthenticationError(AppException):
     """Raised when authentication fails."""
 
-    def __init__(self, message: str = "Authentication failed"):
+    def __init__(self, message: str = "Autenticación fallida"):
         super().__init__(
             code="AUTHENTICATION_FAILED",
             message=message,
@@ -86,7 +86,7 @@ class ResourceNotFoundError(AppException):
     def __init__(self, resource: str, identifier: str | int):
         super().__init__(
             code="RESOURCE_NOT_FOUND",
-            message=f"{resource} with identifier '{identifier}' not found",
+            message=f"{resource} con identificador '{identifier}' no encontrado",
             status_code=404,
         )
 
@@ -97,7 +97,7 @@ class ResourceAlreadyExistsError(AppException):
     def __init__(self, resource: str, field: str, value: str):
         super().__init__(
             code="RESOURCE_ALREADY_EXISTS",
-            message=f"A {resource} with {field} '{value}' already exists",
+            message=f"Un {resource} con {field} '{value}' ya existe",
             status_code=409,
         )
 
