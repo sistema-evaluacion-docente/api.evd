@@ -1,142 +1,99 @@
-"""
-Audit repository
-"""
+"""Repository for audit-related database operations."""
 
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.audit import AuditModel
-from api.schemas.audit import AuditCreate, AuditUpdate
-from api.serializers.audits import audit_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.audit import AuditFilters
 from api.utils.get_audit import get_audit
 
 
-class AuditsRepository:
-    """
-    Class audit repository
-    """
+class AuditsRepository(BaseRepository[AuditModel]):
+    """Repository for audit-related database operations."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(AuditModel, db)
 
-    async def create(self, data: AuditCreate):
-        """
-        Create an audit log
-        """
+    def search(
+        self,
+        filters: AuditFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[AuditModel], int]:
+        """Search for audits based on filters and pagination parameters."""
 
-        audit = AuditModel(
-            user_id=data.user_id,
-            table_name=data.table_name,
-            operation=data.operation,
-            element=data.element,
-            description=data.description,
+        query = self.db.query(AuditModel).options(joinedload(AuditModel.user))
+
+        if filters.actor_id is not None:
+            query = query.filter(AuditModel.user_id == filters.actor_id)
+
+        if filters.entity_name is not None:
+            query = query.filter(AuditModel.table_name == filters.entity_name)
+
+        if filters.operation is not None:
+            query = query.filter(AuditModel.operation == filters.operation)
+
+        if filters.date_from is not None:
+            query = query.filter(AuditModel.created_at >= filters.date_from)
+
+        if filters.date_to is not None:
+            query = query.filter(AuditModel.created_at <= filters.date_to)
+
+        if filters.search is not None:
+            term = filters.search.strip()
+            if term:
+                like_term = f"%{term}%"
+                query = query.filter(
+                    or_(
+                        AuditModel.element.ilike(like_term),
+                        AuditModel.description.ilike(like_term),
+                    )
+                )
+
+        query = query.order_by(AuditModel.created_at.desc())
+
+        return self.paginate(query, pagination)
+
+    def get_by_id_with_element_data(self, audit_id: int) -> dict | None:
+        """Get an audit by ID with element_data resolved."""
+
+        audit = (
+            self.db.query(AuditModel)
+            .options(joinedload(AuditModel.user))
+            .filter(AuditModel.id == audit_id)
+            .first()
         )
 
-        self.db.add(audit)
-        self.db.commit()
-        self.db.refresh(audit)
+        if not audit:
+            return None
 
-        return audit_to_dict(audit)
-
-    async def get_all(
-        self,
-        page: int = 1,
-        limit: int = 10,
-        table_name: str | None = None,
-        operation: str | None = None,
-        search: str | None = None,
-    ):
-        """
-        Get paginated audit logs
-        """
-
-        offset = (page - 1) * limit
-        query = self.db.query(AuditModel)
-
-        if table_name:
-            query = query.filter(AuditModel.table_name == table_name)
-        if operation:
-            query = query.filter(AuditModel.operation == operation)
-        if search:
-            query = query.filter(
-                or_(
-                    AuditModel.element.ilike(f"%{search}%"),
-                    AuditModel.description.ilike(f"%{search}%"),
-                )
-            )
-
-        total = query.count()
-
-        audits = query.order_by(AuditModel.id.desc()).offset(offset).limit(limit).all()
+        element_data = get_audit(str(audit.element), self.db) if audit.element else None
 
         return {
-            "items": [audit_to_dict(audit) for audit in audits],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": (total + limit - 1) // limit,
+            "id": audit.id,
+            "user_id": audit.user_id,
+            "user": audit.user,
+            "table_name": audit.table_name,
+            "operation": audit.operation,
+            "element": audit.element,
+            "description": audit.description,
+            "element_data": element_data,
+            "created_at": audit.created_at,
+            "updated_at": audit.updated_at,
         }
 
-    async def get_by_id(self, audit_id: int):
-        """
-        Get audit log by id
-        """
+    def create_audit(self, data: dict) -> AuditModel:
+        """Create a new audit log."""
 
-        audit = self.db.query(AuditModel).filter(AuditModel.id == audit_id).first()
-
-        if not audit:
-            return None
-
-        element_data = await get_audit(str(audit.element), self.db)
-
-        result = audit_to_dict(audit)
-        result = {**result, "element_data": element_data}
-
-        return result
-
-    async def update(self, audit_id: int, data: AuditUpdate):
-        """
-        Update audit log by id
-        """
-
-        audit = self.db.query(AuditModel).filter(AuditModel.id == audit_id).first()
-
-        if not audit:
-            return None
-
-        for field, value in data.model_dump().items():
-            if value is not None:
-                setattr(audit, field, value)
-
-        self.db.commit()
-        self.db.refresh(audit)
-
-        return audit_to_dict(audit)
-
-    async def delete(self, audit_id: int):
-        """
-        Delete audit log by id
-        """
-
-        audit = self.db.query(AuditModel).filter(AuditModel.id == audit_id).first()
-
-        if not audit:
-            return None
-
-        audit_dict = audit_to_dict(audit)
-        self.db.delete(audit)
-        self.db.commit()
-
-        return audit_dict
+        return self.create(data)
 
 
 def get_audits_repository(db: Annotated[Session, Depends(get_db)]):
-    """
-    Get audits repository
-    """
+    """Dependency injection for AuditsRepository."""
 
     return AuditsRepository(db)
