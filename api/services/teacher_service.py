@@ -8,10 +8,8 @@ import openpyxl
 from api.core.pagination import PaginationParams
 from api.exceptions import ResourceAlreadyExistsError
 from api.repositories.academic_periods import AcademicPeriodsRepository
-from api.repositories.audits import AuditsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
-from api.schemas.audit import AuditCreate
 from api.schemas.pagination import build_paginated_response
 from api.schemas.teacher import (
     TeacherCreate,
@@ -22,6 +20,7 @@ from api.schemas.teacher import (
 from api.schemas.user import UserCreate
 from api.serializers.teachers import teacher_to_dict
 from api.serializers.users import user_to_dict
+from api.services.audit_service import AuditService
 from api.services.user_service import UserService
 
 
@@ -32,13 +31,13 @@ class TeacherService:
         self,
         teachers_repository: TeachersRepository,
         users_repository: UsersRepository,
-        audits_repository: AuditsRepository,
+        audit_service: AuditService,
         academic_periods_repository: AcademicPeriodsRepository,
         user_service: UserService,
     ):
         self.teachers_repository = teachers_repository
         self.users_repository = users_repository
-        self.audits_repository = audits_repository
+        self.audit_service = audit_service
         self.academic_periods_repository = academic_periods_repository
         self.user_service = user_service
 
@@ -105,18 +104,16 @@ class TeacherService:
 
         result = self._enrich_teacher_to_dict(teacher)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="teachers",
-                operation="CREATE",
-                element=f"Teacher {teacher.id}",
-                description=(
-                    f"Se creó el profesor con código {data.institutional_code}, "
-                    f"departamento {data.department_id}, "
-                    f"tipo contrato: {data.contract_type}"
-                ),
-            )
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="teachers",
+            entity_id=teacher.id,
+            actor_id=current_user.get("id"),
+            description=(
+                f"Se creó el profesor con código {data.institutional_code}, "
+                f"departamento {data.department_id}, "
+                f"tipo contrato: {data.contract_type}"
+            ),
         )
 
         return result
@@ -159,19 +156,17 @@ class TeacherService:
 
         result = self._enrich_teacher_to_dict(teacher)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="teachers",
-                operation="CREATE",
-                element=f"Teacher {result.get('id')}",
-                description=(
-                    f"Se creó el profesor con código {data.institutional_code}, "
-                    f"departamento {data.department_id}, "
-                    f"tipo contrato: {data.contract_type}, "
-                    f"usuario: {data.email}"
-                ),
-            )
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="teachers",
+            entity_id=result.get("id"),
+            actor_id=current_user.get("id"),
+            description=(
+                f"Se creó el profesor con código {data.institutional_code}, "
+                f"departamento {data.department_id}, "
+                f"tipo contrato: {data.contract_type}, "
+                f"usuario: {data.email}"
+            ),
         )
 
         return result
@@ -211,14 +206,12 @@ class TeacherService:
         else:
             desc += ": No se realizaron cambios"
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="teachers",
-                operation="UPDATE",
-                element=f"Teacher {teacher_id}",
-                description=desc,
-            )
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="teachers",
+            entity_id=teacher_id,
+            actor_id=current_user.get("id"),
+            description=desc,
         )
 
         return result
@@ -235,14 +228,12 @@ class TeacherService:
 
         self.teachers_repository.delete_teacher(teacher_id)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="teachers",
-                operation="DELETE",
-                element=f"Teacher {teacher_id}",
-                description=f"Se eliminó el profesor con código {old_data.get('institutional_code')}",
-            )
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name="teachers",
+            entity_id=teacher_id,
+            actor_id=current_user.get("id"),
+            description=f"Se eliminó el profesor con código {old_data.get('institutional_code')}",
         )
 
         return old_data
@@ -400,20 +391,18 @@ class TeacherService:
             except Exception as e:
                 errors.append({"fila": row, "razon": f"Error inesperado: {str(e)}"})
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="teachers",
-                operation="BULK_CREATE",
-                element=f"Departamento {department_id}",
-                description=(
-                    f"Importación masiva de docentes. "
-                    f"Total filas: {len(data_rows)}, "
-                    f"Creados: {len(created)}, "
-                    f"Omitidos: {len(skipped)}, "
-                    f"Errores: {len(errors)}"
-                ),
-            )
+        await self.audit_service.log(
+            action="BULK_CREATE",
+            entity_name="teachers",
+            entity_id=department_id,
+            actor_id=current_user.get("id"),
+            description=(
+                f"Importación masiva de docentes. "
+                f"Total filas: {len(data_rows)}, "
+                f"Creados: {len(created)}, "
+                f"Omitidos: {len(skipped)}, "
+                f"Errores: {len(errors)}"
+            ),
         )
 
         return {

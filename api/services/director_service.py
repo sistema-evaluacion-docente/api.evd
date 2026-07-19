@@ -6,11 +6,9 @@ from api.exceptions import (
     ResourceNotFoundError,
     ValidationError,
 )
-from api.repositories.audits import AuditsRepository
 from api.repositories.departments import DepartmentsRepository
 from api.repositories.directors import DirectorsRepository
 from api.repositories.users import UsersRepository
-from api.schemas.audit import AuditCreate
 from api.schemas.director import (
     DirectorCreate,
     DirectorFilters,
@@ -19,6 +17,7 @@ from api.schemas.director import (
     DepartmentSummary,
 )
 from api.schemas.user import RoleName, UserCreate
+from api.services.audit_service import AuditService
 from api.services.user_service import UserService
 from api.serializers.directors import director_to_dict
 
@@ -31,13 +30,13 @@ class DirectorService:
         directors_repository: DirectorsRepository,
         users_repository: UsersRepository,
         departments_repository: DepartmentsRepository,
-        audits_repository: AuditsRepository,
+        audit_service: AuditService,
         user_service: UserService,
     ):
         self.directors_repository = directors_repository
         self.users_repository = users_repository
         self.departments_repository = departments_repository
-        self.audits_repository = audits_repository
+        self.audit_service = audit_service
         self.user_service = user_service
 
     async def get_all(
@@ -148,14 +147,12 @@ class DirectorService:
             }
         )
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user["id"],
-                table_name="directors",
-                operation="CREATE",
-                element=f"Director {director.id}",
-                description=f"Se creó el director para el departamento {department.name}",
-            )
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="directors",
+            entity_id=director.id,
+            actor_id=current_user["id"],
+            description=f"Se creó el director para el departamento {department.name}",
         )
 
         return await self.get_by_id(director.id)
@@ -194,14 +191,12 @@ class DirectorService:
 
         director = self.directors_repository.update_director(director, data)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user["id"],
-                table_name="directors",
-                operation="UPDATE",
-                element=f"Director {director_id}",
-                description=f"Se actualizó el director {director_id}",
-            )
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="directors",
+            entity_id=director_id,
+            actor_id=current_user["id"],
+            description=f"Se actualizó el director {director_id}",
         )
 
         return await self.get_by_id(director.id)
@@ -217,14 +212,12 @@ class DirectorService:
         director_dict = director_to_dict(director)
         self.directors_repository.delete_director(director)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user["id"],
-                table_name="directors",
-                operation="DELETE",
-                element=f"Director {director_id}",
-                description=f"Se eliminó el director {director_id}",
-            )
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name="directors",
+            entity_id=director_id,
+            actor_id=current_user["id"],
+            description=f"Se eliminó el director {director_id}",
         )
 
         return director_dict
@@ -246,14 +239,12 @@ class DirectorService:
 
         director = self.directors_repository.assign_director(user_id, department_id)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user["id"],
-                table_name="directors",
-                operation="ASSIGN",
-                element=f"Director {director.id}",
-                description=f"Se asignó el usuario {user_id} como director del departamento {department.name}",
-            )
+        await self.audit_service.log(
+            action="ASSIGN",
+            entity_name="directors",
+            entity_id=director.id,
+            actor_id=current_user["id"],
+            description=f"Se asignó el usuario {user_id} como director del departamento {department.name}",
         )
 
         return await self.get_by_id(director.id)

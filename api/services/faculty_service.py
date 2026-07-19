@@ -1,18 +1,15 @@
-"""
-Faculty service module.
-"""
+"""Faculty service module."""
 
 from api.core.pagination import PaginationParams
 from api.exceptions import (
     ResourceAlreadyExistsError,
     ValidationError,
 )
-from api.repositories.audits import AuditsRepository
 from api.repositories.faculties import FacultiesRepository
 from api.repositories.users import UsersRepository
-from api.schemas.audit import AuditCreate
 from api.schemas.faculty import FacultyCreate, FacultyFilters, FacultyUpdate
 from api.serializers.faculties import faculty_to_dict
+from api.services.audit_service import AuditService
 
 
 class FacultyService:
@@ -22,11 +19,11 @@ class FacultyService:
         self,
         faculties_repository: FacultiesRepository,
         users_repository: UsersRepository,
-        audits_repository: AuditsRepository,
+        audit_service: AuditService,
     ):
         self.faculties_repository = faculties_repository
         self.users_repository = users_repository
-        self.audits_repository = audits_repository
+        self.audit_service = audit_service
 
     async def get_all(
         self, filters: FacultyFilters, pagination: PaginationParams
@@ -73,14 +70,12 @@ class FacultyService:
 
         faculty = self.faculties_repository.create_faculty(data)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="faculties",
-                operation="CREATE",
-                element=f"Faculty {faculty.id}",
-                description=f"Se creó la facultad {faculty.name} (código: {faculty.code})",
-            )
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="faculties",
+            entity_id=faculty.id,
+            actor_id=current_user.get("id"),
+            description=f"Se creó la facultad {faculty.name} (código: {faculty.code})",
         )
 
         result = faculty_to_dict(faculty)
@@ -120,14 +115,12 @@ class FacultyService:
         else:
             desc += ": No se realizaron cambios"
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="faculties",
-                operation="UPDATE",
-                element=f"Faculty {faculty_id}",
-                description=desc,
-            )
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="faculties",
+            entity_id=faculty_id,
+            actor_id=current_user.get("id"),
+            description=desc,
         )
 
         result = faculty_to_dict(updated)
@@ -150,14 +143,12 @@ class FacultyService:
         faculty_data = faculty_to_dict(faculty)
         self.faculties_repository.delete_faculty(faculty)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="faculties",
-                operation="DELETE",
-                element=f"Faculty {faculty_id}",
-                description=f"Se eliminó la facultad {faculty_data['name']} (código: {faculty_data['code']})",
-            )
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name="faculties",
+            entity_id=faculty_id,
+            actor_id=current_user.get("id"),
+            description=f"Se eliminó la facultad {faculty_data['name']} (código: {faculty_data['code']})",
         )
 
         return faculty_data

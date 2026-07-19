@@ -8,9 +8,8 @@ from api.exceptions import (
     PermissionDeniedError,
     UserNotFoundError,
 )
-from api.repositories.audits import AuditsRepository
+from api.services.audit_service import AuditService
 from api.repositories.users import UsersRepository
-from api.schemas.audit import AuditCreate
 from api.schemas.pagination import build_paginated_response
 from api.schemas.user import (
     RoleName,
@@ -29,10 +28,10 @@ class UserService:
     def __init__(
         self,
         users_repository: UsersRepository,
-        audits_repository: AuditsRepository,
+        audit_service: AuditService,
     ):
         self.users_repository = users_repository
-        self.audits_repository = audits_repository
+        self.audit_service = audit_service
 
     async def login(self, current_user) -> dict | None:
         """Handle user login and return user details."""
@@ -152,15 +151,12 @@ class UserService:
         result = self._build_user_response(user)
 
         if is_new:
-            await self.audits_repository.create(
-                AuditCreate(
-                    user_id=requester["id"],
-                    table_name="users",
-                    operation="CREATE",
-                    element=f"User {user.id}",
-                    description=f"Creación del usuario {data.email}",
-                    created_at=None,
-                )
+            await self.audit_service.log(
+                action="CREATE",
+                entity_name="users",
+                entity_id=user.id,
+                actor_id=requester["id"],
+                description=f"Creación del usuario {data.email}",
             )
 
         return result

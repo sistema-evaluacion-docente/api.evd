@@ -2,10 +2,8 @@
 
 from api.core.pagination import PaginationParams
 from api.exceptions import ResourceAlreadyExistsError, ValidationError
-from api.repositories.audits import AuditsRepository
 from api.repositories.departments import DepartmentsRepository
 from api.repositories.users import UsersRepository
-from api.schemas.audit import AuditCreate
 from api.schemas.department import (
     DepartmentCreate,
     DepartmentFilters,
@@ -14,6 +12,7 @@ from api.schemas.department import (
 )
 from api.schemas.pagination import build_paginated_response
 from api.serializers.departments import department_to_dict
+from api.services.audit_service import AuditService
 
 
 class DepartmentService:
@@ -23,11 +22,11 @@ class DepartmentService:
         self,
         departments_repository: DepartmentsRepository,
         users_repository: UsersRepository,
-        audits_repository: AuditsRepository,
+        audit_service: AuditService,
     ):
         self.departments_repository = departments_repository
         self.users_repository = users_repository
-        self.audits_repository = audits_repository
+        self.audit_service = audit_service
 
     async def get_all(
         self,
@@ -95,17 +94,15 @@ class DepartmentService:
         result["director"] = None
         result["teacher_count"] = 0
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="departments",
-                operation="CREATE",
-                element=f"Department {department.id}",
-                description=(
-                    f"Se creó el departamento {data.name} "
-                    f"(código: {data.code}, facultad ID: {data.faculty_id})"
-                ),
-            )
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="departments",
+            entity_id=department.id,
+            actor_id=current_user.get("id"),
+            description=(
+                f"Se creó el departamento {data.name} "
+                f"(código: {data.code}, facultad ID: {data.faculty_id})"
+            ),
         )
 
         return result
@@ -149,14 +146,12 @@ class DepartmentService:
         else:
             desc += ": No se realizaron cambios"
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="departments",
-                operation="UPDATE",
-                element=f"Department {department_id}",
-                description=desc,
-            )
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="departments",
+            entity_id=department_id,
+            actor_id=current_user.get("id"),
+            description=desc,
         )
 
         return result
@@ -182,14 +177,12 @@ class DepartmentService:
         old_data = department_to_dict(department)
         self.departments_repository.delete_department(department_id)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=current_user.get("id"),
-                table_name="departments",
-                operation="DELETE",
-                element=f"Department {department_id}",
-                description=f"Se eliminó el departamento {old_data.get('name')} (código: {old_data.get('code')})",
-            )
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name="departments",
+            entity_id=department_id,
+            actor_id=current_user.get("id"),
+            description=f"Se eliminó el departamento {old_data.get('name')} (código: {old_data.get('code')})",
         )
 
         return old_data
