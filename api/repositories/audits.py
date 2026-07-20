@@ -90,24 +90,15 @@ class AuditsRepository(BaseRepository[AuditModel]):
             "updated_at": audit.updated_at,
         }
 
-    def create_audit(self, data: dict) -> AuditModel:
+    def create_audit(self, data) -> AuditModel:
         """Create a new audit log."""
-
-        return self.create(data)
-
-    async def create(self, data) -> AuditModel:
-        """Create a new audit log (async version)."""
 
         if hasattr(data, "model_dump"):
             data = data.model_dump()
         elif hasattr(data, "dict"):
             data = data.dict()
 
-        obj = AuditModel(**data)
-
-        self.db.add(obj)
-        self.db.commit()
-        return obj
+        return self.create(data)
 
 
 def get_audits_repository(db: Annotated[Session, Depends(get_db)]):
