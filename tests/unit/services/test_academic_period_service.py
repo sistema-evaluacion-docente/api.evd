@@ -272,22 +272,6 @@ class TestAcademicPeriodService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_activate_period_another_already_active_raises(
-        self, service, mock_academic_periods_repo, mock_period
-    ):
-        """Test activate raises when another period is already active."""
-
-        active_period = MagicMock(spec=AcademicPeriodModel)
-        active_period.id = 2
-        active_period.code = "2023-2"
-
-        mock_academic_periods_repo.get.return_value = mock_period
-        mock_academic_periods_repo.get_active.return_value = active_period
-
-        with pytest.raises(ValidationError):
-            await service.activate(1, {"id": 99})
-
-    @pytest.mark.asyncio
     async def test_close_period_success(
         self,
         service,
@@ -319,18 +303,6 @@ class TestAcademicPeriodService:
         result = await service.close(999, current_user)
 
         assert result is None
-
-    @pytest.mark.asyncio
-    async def test_close_period_not_active_raises(
-        self, service, mock_academic_periods_repo, mock_period
-    ):
-        """Test close raises when period is not active."""
-
-        mock_period.active = False
-        mock_academic_periods_repo.get.return_value = mock_period
-
-        with pytest.raises(ValidationError):
-            await service.close(1, {"id": 99})
 
     @pytest.mark.asyncio
     async def test_delete_period_success(

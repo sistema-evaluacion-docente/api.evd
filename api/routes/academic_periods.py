@@ -85,7 +85,7 @@ async def activate_academic_period(
     current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Activate an academic period. Fails if another period is already active."""
+    """Activate an academic period."""
 
     period = await controller.activate(period_id, current_user)
 

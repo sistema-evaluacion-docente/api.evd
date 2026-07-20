@@ -1,7 +1,10 @@
 """Service for academic period-related business operations."""
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ResourceNotFoundError, ValidationError
+from api.exceptions import (
+    ResourceAlreadyExistsError,
+    ValidationError,
+)
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.evaluations import EvaluationsRepository
 from api.schemas.academic_period import (
@@ -109,7 +112,13 @@ class AcademicPeriodService:
         result = academic_period_to_dict(updated)
 
         changes = []
-        for field in ("name", "start_date", "end_date", "evaluation_end_date", "final_evaluation_date"):
+        for field in (
+            "name",
+            "start_date",
+            "end_date",
+            "evaluation_end_date",
+            "final_evaluation_date",
+        ):
             new_val = payload.get(field)
             if new_val is not None and new_val != old_data.get(field):
                 old_val = old_data.get(field)
@@ -132,20 +141,12 @@ class AcademicPeriodService:
         return result
 
     async def activate(self, period_id: int, current_user: dict) -> dict | None:
-        """Activate an academic period. Fails if another period is already active."""
+        """Activate an academic period."""
 
         period = self.academic_periods_repository.get(period_id)
 
         if not period:
             return None
-
-        active_period = self.academic_periods_repository.get_active()
-
-        if active_period and active_period.id != period_id:
-            raise ValidationError(
-                f"Ya existe un periodo activo ({active_period.code}). "
-                "Debe cerrarlo antes de activar otro."
-            )
 
         activated = self.academic_periods_repository.activate_period(period)
         result = academic_period_to_dict(activated)
@@ -161,15 +162,12 @@ class AcademicPeriodService:
         return result
 
     async def close(self, period_id: int, current_user: dict) -> dict | None:
-        """Close (deactivate) an academic period. Only the active period can be closed."""
+        """Close (deactivate) an academic period."""
 
         period = self.academic_periods_repository.get(period_id)
 
         if not period:
             return None
-
-        if not period.active:
-            raise ValidationError("Solo el periodo activo puede ser cerrado")
 
         closed = self.academic_periods_repository.close_period(period)
         result = academic_period_to_dict(closed)
