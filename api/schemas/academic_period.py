@@ -1,13 +1,11 @@
-"""
-Schemas for request and response bodies related to academic periods.
-"""
+"""Schemas for request and response bodies related to academic periods."""
 
+from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Optional
+from typing import Annotated, Optional
 
-from pydantic import BaseModel
-
-from api.schemas.pagination import Pagination
+from fastapi import Depends, Query
+from pydantic import BaseModel, model_validator
 
 
 class AcademicPeriodCreate(BaseModel):
@@ -20,6 +18,19 @@ class AcademicPeriodCreate(BaseModel):
     evaluation_end_date: Optional[date] = None
     final_evaluation_date: Optional[date] = None
 
+    @model_validator(mode="after")
+    def validate_dates(self):
+        """Validate that end_date is after start_date."""
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValueError("end_date debe ser posterior a start_date")
+        if self.evaluation_end_date and self.end_date:
+            if self.evaluation_end_date > self.end_date:
+                raise ValueError("evaluation_end_date no puede ser posterior a end_date")
+        if self.final_evaluation_date and self.evaluation_end_date:
+            if self.final_evaluation_date > self.evaluation_end_date:
+                raise ValueError("final_evaluation_date no puede ser posterior a evaluation_end_date")
+        return self
+
 
 class AcademicPeriodUpdate(BaseModel):
     """Schema for updating an academic period."""
@@ -30,11 +41,18 @@ class AcademicPeriodUpdate(BaseModel):
     evaluation_end_date: Optional[date] = None
     final_evaluation_date: Optional[date] = None
 
-
-class AcademicPeriodStatusUpdate(BaseModel):
-    """Schema for activating/deactivating an academic period."""
-
-    active: bool
+    @model_validator(mode="after")
+    def validate_dates(self):
+        """Validate that end_date is after start_date."""
+        if self.start_date and self.end_date and self.end_date <= self.start_date:
+            raise ValueError("end_date debe ser posterior a start_date")
+        if self.evaluation_end_date and self.end_date:
+            if self.evaluation_end_date > self.end_date:
+                raise ValueError("evaluation_end_date no puede ser posterior a end_date")
+        if self.final_evaluation_date and self.evaluation_end_date:
+            if self.final_evaluation_date > self.evaluation_end_date:
+                raise ValueError("final_evaluation_date no puede ser posterior a evaluation_end_date")
+        return self
 
 
 class AcademicPeriodOut(BaseModel):
@@ -52,24 +70,24 @@ class AcademicPeriodOut(BaseModel):
     updated_at: datetime
 
 
-class AcademicPeriodDetailResponse(BaseModel):
-    """Schema for single academic period response envelope."""
+@dataclass
+class AcademicPeriodFilters:
+    """Dataclass to hold academic period filters extracted from query parameters."""
 
-    status: int
-    message: str
-    data: Optional[AcademicPeriodOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    active: bool | None = None
 
 
-class AcademicPeriodListResponse(BaseModel):
-    """Schema for academic periods list response envelope."""
+def academic_period_filters(
+    search: str | None = Query(default=None, min_length=1),
+    active: bool | None = Query(default=None),
+) -> AcademicPeriodFilters:
+    """Dependency function to extract academic period filters from query parameters."""
 
-    status: int
-    message: str
-    data: list[AcademicPeriodOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return AcademicPeriodFilters(
+        search=search,
+        active=active,
+    )
+
+
+AcademicPeriodFiltersDep = Annotated[AcademicPeriodFilters, Depends(academic_period_filters)]

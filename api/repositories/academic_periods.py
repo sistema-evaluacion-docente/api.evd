@@ -1,63 +1,80 @@
-"""
-Academic periods repository
-"""
+"""Repository for academic period-related database operations."""
 
+from datetime import date
 from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_period import AcademicPeriodModel
-from api.schemas.academic_period import (
-    AcademicPeriodCreate,
-    AcademicPeriodStatusUpdate,
-    AcademicPeriodUpdate,
-)
-from api.serializers.academic_periods import academic_period_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.academic_period import AcademicPeriodFilters
 
 
-class AcademicPeriodsRepository:
-    """Academic periods repository"""
+class AcademicPeriodsRepository(BaseRepository[AcademicPeriodModel]):
+    """Repository for academic period-related database operations."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(AcademicPeriodModel, db)
 
-    async def create(self, data: AcademicPeriodCreate) -> AcademicPeriodModel:
-        """Create a new academic period."""
+    def get_by_code(self, code: str) -> AcademicPeriodModel | None:
+        """Get an academic period by code."""
 
-        period = AcademicPeriodModel(
-            code=data.code,
-            name=data.name,
-            start_date=data.start_date,
-            end_date=data.end_date,
-            evaluation_end_date=data.evaluation_end_date,
-            final_evaluation_date=data.final_evaluation_date,
-            active=True,
+        return (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.code == code)
+            .first()
         )
 
-        self.db.add(period)
-        self.db.flush()
-        self.db.commit()
-        self.db.refresh(period)
+    def get_active(self) -> AcademicPeriodModel | None:
+        """Get the currently active academic period."""
 
-        return period
+        return (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.active == True)
+            .first()
+        )
 
-    async def get_all(
+    def overlaps_with(
         self,
-        search: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict:
-        """Get all academic periods with pagination and optional search filter."""
+        start_date: date,
+        end_date: date,
+        exclude_id: int | None = None,
+    ) -> bool:
+        """Check if a date range overlaps with any existing period."""
+
+        query = self.db.query(AcademicPeriodModel).filter(
+            or_(
+                AcademicPeriodModel.start_date.between(start_date, end_date),
+                AcademicPeriodModel.end_date.between(start_date, end_date),
+                (AcademicPeriodModel.start_date <= start_date)
+                & (AcademicPeriodModel.end_date >= end_date),
+            )
+        )
+
+        if exclude_id:
+            query = query.filter(AcademicPeriodModel.id != exclude_id)
+
+        return query.count() > 0
+
+    def search(
+        self,
+        filters: AcademicPeriodFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[AcademicPeriodModel], int]:
+        """Search for academic periods based on filters and pagination parameters."""
 
         query = self.db.query(AcademicPeriodModel)
 
-        if search:
-            term = search.strip()
+        if filters.search:
+            term = filters.search.strip()
+
             if term:
                 like_term = f"%{term}%"
+
                 query = query.filter(
                     or_(
                         AcademicPeriodModel.code.ilike(like_term),
@@ -65,40 +82,70 @@ class AcademicPeriodsRepository:
                     )
                 )
 
-        total = query.count()
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
+        if filters.active is not None:
+            query = query.filter(AcademicPeriodModel.active == filters.active)
 
-        periods = (
-            query.order_by(AcademicPeriodModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
+        query = query.order_by(AcademicPeriodModel.created_at.desc())
 
-        return {
-            "items": [academic_period_to_dict(p) for p in periods],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-        }
+        return self.paginate(query, pagination)
 
-    async def get_by_id(self, period_id: int) -> dict | None:
-        """Get an academic period by ID."""
+    def create_period(self, data: dict) -> AcademicPeriodModel:
+        """Create a new academic period."""
 
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
+        return self.create(data)
+
+    def update_period(
+        self, period: AcademicPeriodModel, data: dict
+    ) -> AcademicPeriodModel:
+        """Update an academic period's fields."""
+
+        for field, value in data.items():
+            if value is not None:
+                setattr(period, field, value)
+
+        self.db.commit()
+        self.db.refresh(period)
+
+        return period
+
+    def activate_period(self, period: AcademicPeriodModel) -> AcademicPeriodModel:
+        """Activate an academic period."""
+
+        period.active = True
+        self.db.commit()
+        self.db.refresh(period)
+
+        return period
+
+    def deactivate_all(self) -> None:
+        """Deactivate all academic periods."""
+
+        self.db.query(AcademicPeriodModel).update({AcademicPeriodModel.active: False})
+        self.db.commit()
+
+    def close_period(self, period: AcademicPeriodModel) -> AcademicPeriodModel:
+        """Close (deactivate) an academic period."""
+
+        period.active = False
+        self.db.commit()
+        self.db.refresh(period)
+
+        return period
+
+    def delete_period(self, period_id: int) -> AcademicPeriodModel | None:
+        """Delete an academic period by ID."""
+
+        period = self.get(period_id)
 
         if not period:
             return None
 
-        return academic_period_to_dict(period)
+        self.db.delete(period)
+        self.db.commit()
 
-    async def get_previous_period_code(self, code: str) -> str | None:
+        return period
+
+    def get_previous_period_code(self, code: str) -> str | None:
         """Get the previous academic period code from a code like '2025-2'."""
 
         parts = code.split("-")
@@ -118,123 +165,10 @@ class AcademicPeriodsRepository:
 
         return f"{prev_year}-{prev_semester}"
 
-    async def get_by_code(self, code: str) -> AcademicPeriodModel | None:
-        """Get an academic period by code."""
 
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.code == code)
-            .first()
-        )
-
-        if not period:
-            return None
-
-        return period
-
-    async def update(self, period_id: int, data: AcademicPeriodUpdate) -> dict | None:
-        """Update an academic period's fields."""
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
-
-        if not period:
-            return None
-
-        payload = data.model_dump(exclude_unset=True)
-
-        for field, value in payload.items():
-            setattr(period, field, value)
-
-        self.db.commit()
-        self.db.refresh(period)
-
-        return academic_period_to_dict(period)
-
-    async def set_active(self, period_id: int) -> dict | None:
-        """Activate a period and deactivate all others atomically."""
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
-
-        if not period:
-            return None
-
-        self.db.query(AcademicPeriodModel).update({AcademicPeriodModel.active: False})
-        setattr(period, "active", True)
-
-        self.db.commit()
-        self.db.refresh(period)
-
-        return academic_period_to_dict(period)
-
-    async def close(self, period_id: int) -> dict | None:
-        """Close (deactivate) an academic period."""
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
-
-        if not period:
-            return None
-
-        setattr(period, "active", False)
-
-        self.db.commit()
-        self.db.refresh(period)
-
-        return academic_period_to_dict(period)
-
-    async def update_status(
-        self,
-        period_id: int,
-        data: AcademicPeriodStatusUpdate,
-    ) -> dict | None:
-        """Activate/deactivate an academic period by ID."""
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
-
-        if not period:
-            return None
-
-        setattr(period, "active", data.active)
-
-        self.db.commit()
-        self.db.refresh(period)
-
-        return academic_period_to_dict(period)
-
-    async def delete(self, period_id: int) -> bool:
-        """Delete an academic period by ID. Returns True if deleted, False if not found."""
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
-
-        if not period:
-            return False
-
-        self.db.delete(period)
-        self.db.commit()
-
-        return True
-
-
-def get_academic_periods_repository(db: Annotated[Session, Depends(get_db)]):
-    """Get academic periods repository"""
+def get_academic_periods_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> AcademicPeriodsRepository:
+    """Dependency injection for AcademicPeriodsRepository."""
 
     return AcademicPeriodsRepository(db)
