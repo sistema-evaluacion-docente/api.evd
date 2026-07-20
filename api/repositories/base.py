@@ -29,11 +29,19 @@ class BaseRepository(Generic[ModelType]):
         return self.db.query(self.model).offset(skip).limit(limit).all()
 
     def create(self, data: dict) -> ModelType:
-        """Create a new record in the database."""
+        """
+        Create a new record in the database.
+        """
+
+        if hasattr(data, "model_dump"):
+            data = data.model_dump()
+        elif hasattr(data, "dict"):
+            data = data.dict()
 
         obj = self.model(**data)
         self.db.add(obj)
         self.db.flush()
+
         return obj
 
     def delete(self, id: int) -> None:

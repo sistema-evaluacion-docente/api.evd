@@ -95,6 +95,20 @@ class AuditsRepository(BaseRepository[AuditModel]):
 
         return self.create(data)
 
+    async def create(self, data) -> AuditModel:
+        """Create a new audit log (async version)."""
+
+        if hasattr(data, "model_dump"):
+            data = data.model_dump()
+        elif hasattr(data, "dict"):
+            data = data.dict()
+
+        obj = AuditModel(**data)
+
+        self.db.add(obj)
+        self.db.commit()
+        return obj
+
 
 def get_audits_repository(db: Annotated[Session, Depends(get_db)]):
     """Dependency injection for AuditsRepository."""

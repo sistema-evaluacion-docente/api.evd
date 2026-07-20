@@ -195,7 +195,7 @@ class AcademicPeriodsController:
             AuditCreate(
                 user_id=await self._resolve_user_id(current_user),
                 table_name="academic_periods",
-                operation="UPDATE_STATUS",
+                operation="UPDATE",
                 element=f"AcademicPeriod {period_id}",
                 description=f"Se cambió el estado del período académico {period.get('code', '')} de {'activo' if period.get('active') else 'inactivo'} a {'activo' if data.active else 'inactivo'}",
             )
