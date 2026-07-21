@@ -998,7 +998,6 @@ class StatsRepository:
             "column_averages": column_averages,
         }
 
-
     async def get_teacher_vs_department(
         self, teacher_id: int, academic_period_id: int
     ) -> dict | None:
@@ -1037,7 +1036,8 @@ class StatsRepository:
             )
             .join(
                 EvaluationScoreModel,
-                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
             )
             .join(
                 AcademicGroupModel,
@@ -1066,7 +1066,8 @@ class StatsRepository:
             )
             .join(
                 EvaluationScoreModel,
-                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
             )
             .join(
                 EvaluationModel,
@@ -1132,7 +1133,6 @@ class StatsRepository:
             "department_overall_average": dept_overall,
             "dimensions": dimensions,
         }
-
 
     async def get_subjects(
         self, academic_period_id: int, department_id: int | None = None
@@ -1217,8 +1217,7 @@ class StatsRepository:
                     )
                     .join(
                         EvaluationScoreModel,
-                        EvaluationScoreModel.academic_group_id
-                        == AcademicGroupModel.id,
+                        EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
                     )
                     .join(
                         EvaluationModel,
@@ -1235,8 +1234,7 @@ class StatsRepository:
                     )
                 prev_rows = prev_q.group_by(CourseModel.id).all()
                 prev_avg_by_course = {
-                    r.course_id: float(r.avg) if r.avg else None
-                    for r in prev_rows
+                    r.course_id: float(r.avg) if r.avg else None for r in prev_rows
                 }
 
         qs_q = (
@@ -1324,9 +1322,7 @@ class StatsRepository:
 
         from api.models.user import UserModel as UserModelLocal
 
-        course = (
-            self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
-        )
+        course = self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
         if not course:
             return None
 
