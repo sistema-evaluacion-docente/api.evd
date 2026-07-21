@@ -57,6 +57,7 @@ from api.routes import (
     faculties,
     health,
     settings,
+    stats,
     teachers,
     users,
 )
@@ -128,7 +129,7 @@ app.include_router(users.router)
 app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
-# app.include_router(stats.router)
+app.include_router(stats.router)
 # app.include_router(admin_dashboard.router)
 # app.include_router(improvement_plans.router)
 # app.include_router(comparison.router)
