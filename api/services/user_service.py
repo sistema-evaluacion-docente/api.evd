@@ -238,6 +238,9 @@ class UserService:
         if payload:
             self.users_repository.update_fields(user, payload)
 
+        self.users_repository.commit()
+        self.users_repository.refresh(user)
+
         return self._build_user_response(user)
 
     async def replace_roles(
