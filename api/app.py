@@ -62,7 +62,7 @@ from api.routes import (
     teachers,
     users,
 )
-from api.routes import ws_evaluations, ws_dev_logs
+from api.routes import ws_dev_logs
 
 _ = (
     academic_group,
@@ -133,7 +133,7 @@ app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
-app.include_router(ws_evaluations.router)
+# app.include_router(ws_evaluations.router)
 app.include_router(ws_dev_logs.router)
 # app.include_router(admin_dashboard.router)
 # app.include_router(improvement_plans.router)
