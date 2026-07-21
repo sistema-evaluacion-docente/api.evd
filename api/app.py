@@ -20,6 +20,7 @@ from api.exceptions.handlers import (
     http_exception_handler,
     validation_exception_handler,
 )
+from api.middlewares.dev_logs_middleware import DevLogsMiddleware
 from api.models import (
     academic_group,
     academic_period,
@@ -61,6 +62,7 @@ from api.routes import (
     teachers,
     users,
 )
+from api.routes import ws_evaluations, ws_dev_logs
 
 _ = (
     academic_group,
@@ -108,6 +110,7 @@ app.add_middleware(
 )
 
 app.add_middleware(ResponseEnvelopeMiddleware)
+app.add_middleware(DevLogsMiddleware)
 
 app.add_exception_handler(AppException, app_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
@@ -130,6 +133,8 @@ app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
+app.include_router(ws_evaluations.router)
+app.include_router(ws_dev_logs.router)
 # app.include_router(admin_dashboard.router)
 # app.include_router(improvement_plans.router)
 # app.include_router(comparison.router)
