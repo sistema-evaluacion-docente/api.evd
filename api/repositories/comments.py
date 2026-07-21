@@ -5,111 +5,35 @@ Comments repository
 from typing import Annotated
 
 from fastapi.params import Depends
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
+from api.models.academic_period import AcademicPeriodModel
 from api.models.comment import CommentModel
 from api.models.course import CourseModel
 from api.models.evaluation import EvaluationModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.repositories.base import BaseRepository
+from api.schemas.comment import CommentFilters
 from api.serializers.comments import comment_to_dict
 
 
-class CommentsRepository:
+class CommentsRepository(BaseRepository[CommentModel]):
     """Comments repository"""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(CommentModel, db)
 
-    async def create(
+    def search(
         self,
-        teacher_id: int | None,
-        evaluation_id: int | None,
-        academic_groups_id: int | None,
-        original_text: str,
-    ) -> dict:
-        """Create a new comment."""
-
-        comment = CommentModel(
-            teacher_id=teacher_id,
-            evaluation_id=evaluation_id,
-            academic_groups_id=academic_groups_id,
-            original_text=original_text,
-            risk_level=None,
-            pedagogical_category_id=None,
-        )
-
-        self.db.add(comment)
-        self.db.commit()
-        self.db.refresh(comment)
-
-        return comment_to_dict(comment)
-
-    async def get_by_id(self, comment_id: int) -> dict | None:
-        """Get a comment by ID."""
-
-        comment = (
-            self.db.query(CommentModel).filter(
-                CommentModel.id == comment_id).first()
-        )
-
-        if not comment:
-            return None
-
-        return comment_to_dict(comment)
-
-    async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
-        """Get all comments for a given evaluation with teacher and course info."""
-
-        results = (
-            self.db.query(
-                CommentModel,
-                AcademicGroupModel.group_name,
-                UserModel.name.label("teacher_name"),
-                UserModel.avatar_url.label("teacher_avatar_url"),
-                CourseModel.name.label("course_name"),
-            )
-            .outerjoin(
-                AcademicGroupModel,
-                CommentModel.academic_groups_id == AcademicGroupModel.id,
-            )
-            .outerjoin(
-                TeacherModel,
-                CommentModel.teacher_id == TeacherModel.id,
-            )
-            .outerjoin(
-                UserModel,
-                TeacherModel.user_id == UserModel.id,
-            )
-            .outerjoin(
-                CourseModel,
-                AcademicGroupModel.course_id == CourseModel.id,
-            )
-            .filter(CommentModel.evaluation_id == evaluation_id)
-            .all()
-        )
-
-        return [
-            comment_to_dict(
-                comment,
-                group_name=group_name,
-                teacher_name=teacher_name,
-                teacher_avatar_url=teacher_avatar_url,
-                course_name=course_name,
-            )
-            for comment, group_name, teacher_name, teacher_avatar_url, course_name in results
-        ]
-
-    async def get_by_evaluation_paginated(
-        self,
-        evaluation_id: int,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-    ) -> dict:
-        """Get comments for a given evaluation with pagination and search."""
+        filters: CommentFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[dict], int]:
+        """Search comments with filters and pagination."""
 
         base_query = (
             self.db.query(
@@ -135,11 +59,41 @@ class CommentsRepository:
                 CourseModel,
                 AcademicGroupModel.course_id == CourseModel.id,
             )
-            .filter(CommentModel.evaluation_id == evaluation_id)
         )
 
-        if search:
-            search_pattern = f"%{search}%"
+        if filters.evaluation_id is not None:
+            base_query = base_query.filter(
+                CommentModel.evaluation_id == filters.evaluation_id
+            )
+
+        if filters.teacher_id is not None:
+            base_query = base_query.filter(
+                CommentModel.teacher_id == filters.teacher_id
+            )
+
+        if filters.academic_groups_id is not None:
+            base_query = base_query.filter(
+                CommentModel.academic_groups_id == filters.academic_groups_id
+            )
+
+        if filters.academic_period_id is not None:
+            base_query = base_query.join(
+                EvaluationModel,
+                CommentModel.evaluation_id == EvaluationModel.id,
+            ).filter(EvaluationModel.academic_period_id == filters.academic_period_id)
+
+        if filters.risk_level is not None:
+            base_query = base_query.filter(
+                CommentModel.risk_level == filters.risk_level
+            )
+
+        if filters.pedagogical_category_id is not None:
+            base_query = base_query.filter(
+                CommentModel.pedagogical_category_id == filters.pedagogical_category_id
+            )
+
+        if filters.search:
+            search_pattern = f"%{filters.search}%"
             base_query = base_query.filter(
                 (UserModel.name.ilike(search_pattern))
                 | (UserModel.email.ilike(search_pattern))
@@ -147,46 +101,72 @@ class CommentsRepository:
             )
 
         total = base_query.count()
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
 
         results = (
             base_query.order_by(CommentModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
+            .offset(pagination.offset)
+            .limit(pagination.limit)
             .all()
         )
 
-        return {
-            "comments": [
-                comment_to_dict(
-                    comment,
-                    group_name=group_name,
-                    teacher_name=teacher_name,
-                    teacher_avatar_url=teacher_avatar_url,
-                    course_name=course_name,
-                )
-                for comment, group_name, teacher_name, teacher_avatar_url, course_name in results
-            ],
-            "total": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-        }
+        items = [
+            comment_to_dict(
+                comment,
+                group_name=group_name,
+                teacher_name=teacher_name,
+                teacher_avatar_url=teacher_avatar_url,
+                course_name=course_name,
+            )
+            for comment, group_name, teacher_name, teacher_avatar_url, course_name in results
+        ]
 
-    async def get_by_teacher(self, teacher_id: int) -> list[dict]:
-        """Get all comments for a given teacher across all evaluations."""
+        return items, total
 
-        comments = (
-            self.db.query(CommentModel)
-            .filter(CommentModel.teacher_id == teacher_id)
-            .order_by(CommentModel.created_at.desc())
-            .all()
+    def get_by_id_enriched(self, comment_id: int) -> dict | None:
+        """Get a comment by ID with enriched teacher/course info."""
+
+        result = (
+            self.db.query(
+                CommentModel,
+                AcademicGroupModel.group_name,
+                UserModel.name.label("teacher_name"),
+                UserModel.avatar_url.label("teacher_avatar_url"),
+                CourseModel.name.label("course_name"),
+            )
+            .outerjoin(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            )
+            .outerjoin(
+                TeacherModel,
+                CommentModel.teacher_id == TeacherModel.id,
+            )
+            .outerjoin(
+                UserModel,
+                TeacherModel.user_id == UserModel.id,
+            )
+            .outerjoin(
+                CourseModel,
+                AcademicGroupModel.course_id == CourseModel.id,
+            )
+            .filter(CommentModel.id == comment_id)
+            .first()
         )
 
-        return [comment_to_dict(c) for c in comments]
+        if not result:
+            return None
 
-    async def count_by_department_and_period(
+        comment, group_name, teacher_name, teacher_avatar_url, course_name = result
+
+        return comment_to_dict(
+            comment,
+            group_name=group_name,
+            teacher_name=teacher_name,
+            teacher_avatar_url=teacher_avatar_url,
+            course_name=course_name,
+        )
+
+    def count_by_department_and_period(
         self,
         department_id: int,
         academic_period_id: int,
@@ -206,7 +186,8 @@ class CommentsRepository:
             base_filters.append(CommentModel.risk_level == risk_level)
         if pedagogical_category_id is not None:
             base_filters.append(
-                CommentModel.pedagogical_category_id == pedagogical_category_id)
+                CommentModel.pedagogical_category_id == pedagogical_category_id
+            )
         if teacher_id is not None:
             base_filters.append(CommentModel.teacher_id == teacher_id)
 
@@ -227,7 +208,8 @@ class CommentsRepository:
                 prev_filters.append(CommentModel.risk_level == risk_level)
             if pedagogical_category_id is not None:
                 prev_filters.append(
-                    CommentModel.pedagogical_category_id == pedagogical_category_id)
+                    CommentModel.pedagogical_category_id == pedagogical_category_id
+                )
             if teacher_id is not None:
                 prev_filters.append(CommentModel.teacher_id == teacher_id)
 
@@ -241,91 +223,6 @@ class CommentsRepository:
         return {
             "current_count": current_count,
             "previous_count": previous_count,
-        }
-
-    async def get_by_academic_group(self, academic_groups_id: int) -> list[dict]:
-        """Get all comments for a given academic group."""
-
-        comments = (
-            self.db.query(CommentModel)
-            .filter(CommentModel.academic_groups_id == academic_groups_id)
-            .all()
-        )
-
-        return [comment_to_dict(c) for c in comments]
-
-    async def get_by_period(
-        self,
-        academic_period_id: int,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-        risk_level: int | None = None,
-        pedagogical_category_id: int | None = None,
-        teacher_id: int | None = None,
-    ) -> dict | None:
-        """Get comments for a specific academic period with pagination and optional filters."""
-
-        from api.models.academic_period import AcademicPeriodModel
-        from api.models.teacher import TeacherModel
-        from api.models.user import UserModel
-
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == academic_period_id)
-            .first()
-        )
-        if not period:
-            return None
-
-        base_query = (
-            self.db.query(CommentModel)
-            .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
-            .filter(EvaluationModel.academic_period_id == academic_period_id)
-        )
-
-        if search:
-            search_pattern = f"%{search}%"
-            base_query = base_query.outerjoin(
-                TeacherModel, CommentModel.teacher_id == TeacherModel.id
-            ).outerjoin(UserModel, TeacherModel.user_id == UserModel.id).filter(
-                (UserModel.name.ilike(search_pattern))
-                | (UserModel.email.ilike(search_pattern))
-            )
-
-        if risk_level is not None:
-            base_query = base_query.filter(
-                CommentModel.risk_level == risk_level)
-
-        if pedagogical_category_id is not None:
-            base_query = base_query.filter(
-                CommentModel.pedagogical_category_id == pedagogical_category_id
-            )
-
-        if teacher_id is not None:
-            base_query = base_query.filter(
-                CommentModel.teacher_id == teacher_id)
-
-        total = base_query.count()
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
-
-        comments = (
-            base_query.order_by(CommentModel.created_at.desc())
-            .offset(offset)
-            .limit(limit)
-            .all()
-        )
-
-        return {
-            "period_id": academic_period_id,
-            "period_code": period.code,
-            "period_name": period.name,
-            "comment_count": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
-            "comments": [comment_to_dict(c) for c in comments],
         }
 
 
