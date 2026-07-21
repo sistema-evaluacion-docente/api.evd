@@ -39,10 +39,14 @@ class UserService:
         if current_user is None:
             return None
 
-        user = self.users_repository.get_by_uid(current_user.uid)
+        user = self.users_repository.get_by_email(current_user.email)
 
         if not user:
             return None
+
+        # update uid, first time login
+        if not user.uid:
+            self.users_repository.set_uid(user, current_user.uid)
 
         return self._build_user_response(user)
 
