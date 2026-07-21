@@ -30,7 +30,6 @@ class DirectorCreate(BaseModel):
 
     email: str
     name: Optional[str] = None
-    username: Optional[str] = None
     uid: Optional[str] = None
     avatar_url: Optional[str] = None
     institutional_code: str

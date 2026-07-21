@@ -38,11 +38,6 @@ class UsersRepository(BaseRepository[UserModel]):
 
         return self.db.query(UserModel).filter(UserModel.email == email).first()
 
-    def get_by_username(self, username: str) -> UserModel | None:
-        """Retrieve a user by their username."""
-
-        return self.db.query(UserModel).filter(UserModel.username == username).first()
-
     def search(
         self,
         filters: UserFilters,
@@ -62,7 +57,6 @@ class UsersRepository(BaseRepository[UserModel]):
                     or_(
                         UserModel.uid.ilike(like_term),
                         UserModel.email.ilike(like_term),
-                        UserModel.username.ilike(like_term),
                         UserModel.name.ilike(like_term),
                     )
                 )
@@ -240,7 +234,6 @@ class UsersRepository(BaseRepository[UserModel]):
             create_fields = {
                 "uid": data.get("uid"),
                 "email": data["email"],
-                "username": data.get("username"),
                 "name": data.get("name"),
                 "active": data.get("active", True),
                 "avatar_url": data.get("avatar_url"),

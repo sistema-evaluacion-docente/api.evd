@@ -106,7 +106,6 @@ class UserService:
         user_data = {
             "uid": data.uid,
             "email": data.email,
-            "username": data.username,
             "name": data.name,
             "active": data.active,
             "avatar_url": data.avatar_url,
@@ -174,7 +173,6 @@ class UserService:
         user_data = {
             "uid": data.uid,
             "email": data.email,
-            "username": data.username,
             "name": data.name,
             "active": data.active,
             "avatar_url": data.avatar_url,

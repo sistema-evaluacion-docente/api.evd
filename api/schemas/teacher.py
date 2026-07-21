@@ -43,7 +43,6 @@ class TeacherCreateWithUser(BaseModel):
     institutional_code: str
     department_id: Optional[int] = None
     contract_type: Optional[str] = None
-    username: Optional[str] = None
     active: Optional[bool] = True
 
     @field_validator("institutional_code")

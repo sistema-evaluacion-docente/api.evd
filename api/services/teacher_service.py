@@ -139,7 +139,6 @@ class TeacherService:
 
         user_data = UserCreate(
             email=data.email,
-            username=data.username or data.email.split("@")[0],
             name=data.name,
             active=data.active,
             institutional_code=data.institutional_code,
@@ -366,7 +365,6 @@ class TeacherService:
             try:
                 user_data = UserCreate(
                     email=row["email"],
-                    username=row["email"].split("@")[0],
                     name=row["nombre"],
                     active=True,
                     institutional_code=row["codigo_institucional"],

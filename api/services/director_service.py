@@ -139,7 +139,6 @@ class DirectorService:
         user_data = UserCreate(
             email=data.email,
             name=data.name,
-            username=data.username,
             uid=data.uid,
             avatar_url=data.avatar_url,
             institutional_code=data.institutional_code,

@@ -12,7 +12,6 @@ def user_to_dict(
         "id": user.id,
         "uid": user.uid,
         "email": user.email,
-        "username": user.username,
         "department_id": department_id,
         "name": user.name,
         "active": user.active,

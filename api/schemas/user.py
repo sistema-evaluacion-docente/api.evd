@@ -26,7 +26,6 @@ class UserCreate(BaseModel):
 
     uid: Optional[str] = None
     email: str
-    username: Optional[str] = None
     name: Optional[str] = None
     active: Optional[bool] = True
     avatar_url: Optional[str] = None
@@ -57,7 +56,6 @@ class UserOut(BaseModel):
     id: int
     uid: Optional[str]
     email: str
-    username: Optional[str]
     department_id: Optional[int]
     name: Optional[str]
     active: Optional[bool]
