@@ -65,11 +65,12 @@ class TestUserService:
     async def test_login_success(self, service, mock_users_repo, mock_user):
         """Test login returns user data when user exists."""
 
-        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_users_repo.get_by_email.return_value = mock_user
         mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
         mock_users_repo.get_teacher_by_user_id.return_value = None
 
         current_user = MagicMock()
+        current_user.email = "test@example.com"
         current_user.uid = "test-uid-123"
 
         result = await service.login(current_user)
@@ -81,10 +82,10 @@ class TestUserService:
     async def test_login_user_not_found(self, service, mock_users_repo):
         """Test login returns None when user not found."""
 
-        mock_users_repo.get_by_uid.return_value = None
+        mock_users_repo.get_by_email.return_value = None
 
         current_user = MagicMock()
-        current_user.uid = "nonexistent-uid"
+        current_user.email = "nonexistent@example.com"
 
         result = await service.login(current_user)
 
