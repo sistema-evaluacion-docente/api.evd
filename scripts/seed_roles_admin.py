@@ -151,7 +151,6 @@ def seed_roles() -> dict[str, int]:
 def seed_admin(role_ids: dict[str, int]) -> None:
     admin_uid = require_env("SEED_ADMIN_UID")
     admin_email = require_env("SEED_ADMIN_EMAIL")
-    admin_username = os.getenv("SEED_ADMIN_USERNAME", "admin")
     admin_name = os.getenv("SEED_ADMIN_NAME", "System Admin")
     admin_avatar_url = os.getenv("SEED_ADMIN_AVATAR_URL")
     admin_roles = parse_admin_roles()
@@ -164,7 +163,6 @@ def seed_admin(role_ids: dict[str, int]) -> None:
             admin_user = UserModel(
                 uid=admin_uid,
                 email=admin_email,
-                username=admin_username,
                 name=admin_name,
                 active=True,
                 avatar_url=admin_avatar_url,
@@ -178,7 +176,6 @@ def seed_admin(role_ids: dict[str, int]) -> None:
                 .update(
                     {
                         UserModel.email: admin_email,
-                        UserModel.username: admin_username,
                         UserModel.name: admin_name,
                         UserModel.active: True,
                         UserModel.avatar_url: admin_avatar_url,
