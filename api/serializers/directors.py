@@ -8,6 +8,7 @@ def director_to_dict(director: DirectorsModel) -> dict:
 
     return {
         "id": director.id,
+        "institutional_code": director.institutional_code,
         "user_id": director.user_id,
         "department_id": director.department_id,
         "active": director.active,

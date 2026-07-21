@@ -33,6 +33,17 @@ class DirectorsRepository(BaseRepository[DirectorsModel]):
             .first()
         )
 
+    def get_by_institutional_code(
+        self, institutional_code: str
+    ) -> DirectorsModel | None:
+        """Get a director by institutional code."""
+
+        return (
+            self.db.query(DirectorsModel)
+            .filter(DirectorsModel.institutional_code == institutional_code)
+            .first()
+        )
+
     def get_by_user_id(self, user_id: int) -> DirectorsModel | None:
         """Get director activo by user_id."""
 

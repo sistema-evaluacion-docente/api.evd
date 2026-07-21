@@ -127,6 +127,15 @@ class DirectorService:
         if existing_director:
             raise ValidationError("Este departamento ya tiene un director asignado")
 
+        existing_code = self.directors_repository.get_by_institutional_code(
+            data.institutional_code
+        )
+
+        if existing_code:
+            raise ResourceAlreadyExistsError(
+                "Director", "institutional_code", data.institutional_code
+            )
+
         user_data = UserCreate(
             email=data.email,
             name=data.name,
@@ -144,6 +153,7 @@ class DirectorService:
             {
                 "user_id": user["id"],
                 "department_id": data.department_id,
+                "institutional_code": data.institutional_code,
             }
         )
 
@@ -177,6 +187,19 @@ class DirectorService:
             if existing_director:
                 raise ResourceAlreadyExistsError(
                     "Director", "department_id", str(data.department_id)
+                )
+
+        if (
+            data.institutional_code is not None
+            and data.institutional_code != director.institutional_code
+        ):
+            existing_code = self.directors_repository.get_by_institutional_code(
+                data.institutional_code
+            )
+
+            if existing_code:
+                raise ResourceAlreadyExistsError(
+                    "Director", "institutional_code", data.institutional_code
                 )
 
         if data.user_id is not None and data.user_id != director.user_id:

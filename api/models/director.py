@@ -4,7 +4,7 @@ Director model
 
 import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from api.database import Base
@@ -19,6 +19,9 @@ class DirectorsModel(Base):
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
+    )
+    institutional_code: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True, index=True
     )
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True
