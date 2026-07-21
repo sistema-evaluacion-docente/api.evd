@@ -35,6 +35,10 @@ class TeacherModel(Base):
         "UserModel", back_populates="teacher", uselist=False
     )
 
+    academic_groups: Mapped[list["AcademicGroupModel"]] = relationship(
+        "AcademicGroupModel", back_populates="teacher"
+    )
+
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
