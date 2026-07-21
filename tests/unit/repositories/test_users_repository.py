@@ -188,7 +188,6 @@ class TestUsersRepository:
         user_data = {
             "uid": "new-uid",
             "email": "new@example.com",
-            "username": "newuser",
             "name": "New User",
             "active": True,
         }

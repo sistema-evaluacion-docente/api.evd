@@ -54,7 +54,6 @@ class TestUserService:
         user.id = 1
         user.uid = "test-uid-123"
         user.email = "test@example.com"
-        user.username = "testuser"
         user.name = "Test User"
         user.active = True
         user.avatar_url = None
@@ -163,7 +162,6 @@ class TestUserService:
 
         data = UserCreate(
             email="new@example.com",
-            username="newuser",
             name="New User",
             roles=[RoleName.DOCENTE],
         )
@@ -201,7 +199,6 @@ class TestUserService:
 
         data = UserCreate(
             email="teacher@example.com",
-            username="teacher",
             name="Teacher",
             roles=[RoleName.DOCENTE],
         )
@@ -226,7 +223,6 @@ class TestUserService:
 
         data = UserCreate(
             email="admin@example.com",
-            username="admin",
             name="Admin",
             roles=[RoleName.ADMIN],
         )
@@ -250,7 +246,6 @@ class TestUserService:
 
         data = UserCreate(
             email="new@example.com",
-            username="newuser",
             name="New User",
             roles=[RoleName.DOCENTE],
         )
@@ -279,9 +274,8 @@ class TestUserService:
 
         data = UserCreate(
             email="new@example.com",
-            username="newuser",
             name="New User",
-            roles=[RoleName.DOCENTE],  # Valid enum but repo returns empty
+            roles=[RoleName.DOCENTE],
         )
 
         with pytest.raises(InvalidRoleError):
@@ -454,7 +448,6 @@ class TestUserService:
 
         data = UserCreate(
             email="teacher@example.com",
-            username="teacher",
             name="Teacher",
             roles=[RoleName.DOCENTE],
         )

@@ -27,7 +27,6 @@ def mock_user_model():
     user.id = 1
     user.uid = "test-uid-123"
     user.email = "test@example.com"
-    user.username = "testuser"
     user.name = "Test User"
     user.active = True
     user.avatar_url = None
@@ -52,7 +51,6 @@ def sample_user_data():
     return {
         "uid": "test-uid-123",
         "email": "test@example.com",
-        "username": "testuser",
         "name": "Test User",
         "active": True,
         "avatar_url": None,
@@ -66,7 +64,6 @@ def sample_user_create():
     return UserCreate(
         uid="test-uid-123",
         email="test@example.com",
-        username="testuser",
         name="Test User",
         active=True,
         roles=[RoleName.DOCENTE],

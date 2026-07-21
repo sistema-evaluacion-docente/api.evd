@@ -110,7 +110,6 @@ class TestUsersController:
         current_user = MagicMock()
         data = UserCreate(
             email="test@example.com",
-            username="testuser",
             name="Test User",
             roles=[RoleName.DOCENTE],
         )
