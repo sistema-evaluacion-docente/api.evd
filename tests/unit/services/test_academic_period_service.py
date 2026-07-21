@@ -317,7 +317,7 @@ class TestAcademicPeriodService:
         """Test delete succeeds when no evaluations exist."""
 
         mock_academic_periods_repo.get.return_value = mock_period
-        mock_evaluations_repo.has_evaluations_for_period = AsyncMock(return_value=False)
+        mock_evaluations_repo.has_evaluations_for_period = MagicMock(return_value=False)
         mock_academic_periods_repo.delete_period.return_value = mock_period
 
         result = await service.delete(1, current_user)
@@ -345,7 +345,7 @@ class TestAcademicPeriodService:
         """Test delete raises when period has evaluations."""
 
         mock_academic_periods_repo.get.return_value = mock_period
-        mock_evaluations_repo.has_evaluations_for_period = AsyncMock(return_value=True)
+        mock_evaluations_repo.has_evaluations_for_period = MagicMock(return_value=True)
 
         with pytest.raises(ValidationError):
             await service.delete(1, {"id": 99})
