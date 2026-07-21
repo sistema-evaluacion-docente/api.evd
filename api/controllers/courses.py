@@ -1,110 +1,52 @@
-"""
-Courses controller
-"""
+"""Courses controller — thin delegation to CourseService."""
 
 from fastapi.param_functions import Depends
 
-from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.repositories.courses import CoursesRepository, get_courses_repository
-from api.repositories.users import UsersRepository, get_users_repository
-from api.schemas.audit import AuditCreate
-from api.schemas.course import CourseCreate, CourseUpdate
+from api.core.pagination import PaginationParams
+from api.dependencies.courses import get_course_service
+from api.schemas.course import CourseCreate, CourseFilters, CourseUpdate
+from api.services.course_service import CourseService
 
 
 class CoursesController:
-    """Courses controller"""
+    """Controller for course-related operations."""
 
-    def __init__(
+    def __init__(self, service: CourseService):
+        self.service = service
+
+    async def get_all(
         self,
-        repository: CoursesRepository,
-        audits_repository: AuditsRepository,
-        users_repository: UsersRepository,
+        filters: CourseFilters,
+        pagination: PaginationParams,
     ):
-        self.repository = repository
-        self.audits_repository = audits_repository
-        self.users_repository = users_repository
+        """Retrieve all courses based on filters and pagination."""
 
-    async def _resolve_user_id(self, current_user) -> int | None:
-        user = self.users_repository.get_by_uid(current_user.uid)
-        return user.id if user else None
+        return await self.service.get_all(filters, pagination)
 
-    async def create(self, data: CourseCreate, current_user) -> dict:
-        """Create a new course, rejecting duplicate codes."""
+    async def get_by_id(self, course_id: int):
+        """Retrieve a course by ID."""
 
-        existing = await self.repository.get_by_code(data.code)
+        return await self.service.get_by_id(course_id)
 
-        if existing:
-            raise ValueError(
-                f"A course with code '{data.code}' already exists"
-            )
+    async def create(self, data: CourseCreate, current_user: dict):
+        """Create a new course."""
 
-        course = await self.repository.create(data)
+        return await self.service.create(data, current_user)
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="courses",
-                operation="CREATE",
-                element=f"Course {course.get('id')}",
-                description=f"Se creó el curso {data.code} (nombre: {data.name}, departamento: {data.department_id})",
-                created_at=None,
-            )
-        )
+    async def update(self, course_id: int, data: CourseUpdate, current_user: dict):
+        """Update a course."""
 
-        return course
+        return await self.service.update(course_id, data, current_user)
 
-    async def get_all(self) -> list[dict]:
-        """Get all courses."""
+    async def delete(self, course_id: int, current_user: dict):
+        """Delete a course."""
 
-        return await self.repository.get_all()
-
-    async def get_by_id(self, course_id: int) -> dict | None:
-        """Get a course by ID."""
-
-        return await self.repository.get_by_id(course_id)
-
-    async def update(
-        self, course_id: int, data: CourseUpdate, current_user
-    ) -> dict | None:
-        """Update a course's fields."""
-
-        course = await self.repository.get_by_id(course_id)
-
-        if not course:
-            return None
-
-        updated = await self.repository.update(course_id, data)
-
-        changes = []
-        for field in ("name", "department_id"):
-            new_val = getattr(data, field, None)
-            if new_val is not None and new_val != course.get(field):
-                old_val = course.get(field)
-                changes.append(f"{field} cambió de {old_val} a {new_val}")
-        desc = "Se actualizó el curso #" + str(course_id)
-        if changes:
-            desc += ": " + "; ".join(changes)
-        else:
-            desc += ": No se realizaron cambios"
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="courses",
-                operation="UPDATE",
-                element=f"Course {course_id}",
-                description=desc,
-                created_at=None,
-            )
-        )
-
-        return updated
+        return await self.service.delete(course_id, current_user)
 
 
 def get_courses_controller(
-    repository: CoursesRepository = Depends(get_courses_repository),
-    audits_repository: AuditsRepository = Depends(get_audits_repository),
-    users_repository: UsersRepository = Depends(get_users_repository),
+    service: CourseService = Depends(get_course_service),
 ):
-    """Get courses controller"""
+    """Dependency injection for CoursesController."""
 
-    return CoursesController(repository, audits_repository, users_repository)
+    return CoursesController(service)

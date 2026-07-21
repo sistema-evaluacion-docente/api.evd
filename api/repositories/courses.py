@@ -1,102 +1,118 @@
-"""
-Courses repository
-"""
+"""Repository for course-related database operations."""
 
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy.orm import Session
+from sqlalchemy import or_
+from sqlalchemy.orm import Session, joinedload
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
+from api.models.academic_group import AcademicGroupModel
 from api.models.course import CourseModel
-from api.schemas.course import CourseCreate, CourseUpdate
-from api.serializers.courses import course_to_dict
+from api.repositories.base import BaseRepository
+from api.schemas.course import CourseFilters
 
 
-class CoursesRepository:
-    """Courses repository"""
+class CoursesRepository(BaseRepository[CourseModel]):
+    """Repository for course-related database operations."""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(CourseModel, db)
 
-    async def create(self, data: CourseCreate) -> dict:
-        """Create a new course."""
+    @staticmethod
+    def _eager_options():
+        """Eager-load department to avoid N+1 queries."""
 
-        course = CourseModel(
-            code=data.code,
-            name=data.name,
-            department_id=data.department_id,
-        )
+        return (joinedload(CourseModel.department),)
 
-        self.db.add(course)
-        self.db.commit()
-        self.db.refresh(course)
+    def get_by_id(self, course_id: int) -> CourseModel | None:
+        """Get a course by ID with its relationships loaded."""
 
-        return course_to_dict(course)
-
-    async def get_all(self) -> list[dict]:
-        """Get all courses ordered by creation date descending."""
-
-        courses = (
+        return (
             self.db.query(CourseModel)
-            .order_by(CourseModel.created_at.desc())
-            .all()
-        )
-
-        return [course_to_dict(c) for c in courses]
-
-    async def get_by_id(self, course_id: int) -> dict | None:
-        """Get a course by ID."""
-
-        course = (
-            self.db.query(CourseModel)
+            .options(*self._eager_options())
             .filter(CourseModel.id == course_id)
             .first()
         )
 
-        if not course:
-            return None
-
-        return course_to_dict(course)
-
-    async def get_by_code(self, code: str) -> dict | None:
+    def get_by_code(self, code: str) -> CourseModel | None:
         """Get a course by code."""
 
-        course = (
+        return (
             self.db.query(CourseModel)
+            .options(*self._eager_options())
             .filter(CourseModel.code == code)
             .first()
         )
 
-        if not course:
-            return None
+    def search(
+        self,
+        filters: CourseFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[CourseModel], int]:
+        """Search for courses based on filters and pagination parameters."""
 
-        return course_to_dict(course)
+        query = self.db.query(CourseModel).options(*self._eager_options())
 
-    async def update(self, course_id: int, data: CourseUpdate) -> dict | None:
-        """Update a course's fields."""
+        if filters.search:
+            term = filters.search.strip()
 
-        course = (
-            self.db.query(CourseModel)
-            .filter(CourseModel.id == course_id)
-            .first()
+            if term:
+                like_term = f"%{term}%"
+
+                query = query.filter(
+                    or_(
+                        CourseModel.code.ilike(like_term),
+                        CourseModel.name.ilike(like_term),
+                    )
+                )
+
+        if filters.department_id is not None:
+            query = query.filter(CourseModel.department_id == filters.department_id)
+
+        query = query.order_by(CourseModel.created_at.desc())
+
+        return self.paginate(query, pagination)
+
+    def count_academic_groups(self, course_id: int) -> int:
+        """Count academic groups associated with a course."""
+
+        return (
+            self.db.query(AcademicGroupModel)
+            .filter(AcademicGroupModel.course_id == course_id)
+            .count()
         )
 
-        if not course:
-            return None
+    def update_course(self, course: CourseModel, data: dict) -> CourseModel:
+        """Update a course's fields."""
 
-        payload = data.model_dump(exclude_unset=True)
-
-        for field, value in payload.items():
-            setattr(course, field, value)
+        for field, value in data.items():
+            if value is not None:
+                setattr(course, field, value)
 
         self.db.commit()
         self.db.refresh(course)
 
-        return course_to_dict(course)
+        return course
+
+    def delete_course(self, course_id: int) -> CourseModel | None:
+        """Delete a course by ID."""
+
+        course = self.get(course_id)
+
+        if not course:
+            return None
+
+        self.db.delete(course)
+        self.db.commit()
+
+        return course
 
 
-def get_courses_repository(db: Annotated[Session, Depends(get_db)]):
-    """Get courses repository"""
+def get_courses_repository(
+    db: Annotated[Session, Depends(get_db)],
+) -> CoursesRepository:
+    """Dependency injection for CoursesRepository."""
 
     return CoursesRepository(db)
