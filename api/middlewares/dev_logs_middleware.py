@@ -94,13 +94,13 @@ class DevLogsMiddleware:
                 if isinstance(parsed, dict):
                     if record_id is None and "id" in parsed:
                         record_id = parsed["id"]
-                    detail = json.dumps(parsed, ensure_ascii=False)[:2000]
+                    detail = json.dumps(parsed, ensure_ascii=False)[:10000]
                 elif isinstance(parsed, list):
-                    detail = json.dumps(parsed, ensure_ascii=False)[:2000]
+                    detail = json.dumps(parsed, ensure_ascii=False)[:10000]
                 else:
-                    detail = str(parsed)[:2000]
+                    detail = str(parsed)[:10000]
             except (json.JSONDecodeError, UnicodeDecodeError):
-                detail = raw_body.decode("utf-8", errors="replace")[:2000]
+                detail = raw_body.decode("utf-8", errors="replace")[:10000]
 
         await dev_logs_collector.emit_response(
             method=method,
