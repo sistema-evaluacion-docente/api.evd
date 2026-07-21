@@ -16,7 +16,7 @@ from api.schemas.director import (
     UserSummary,
     DepartmentSummary,
 )
-from api.schemas.user import RoleName, UserCreate
+from api.schemas.user import RoleName, UserCreate, UserUpdate
 from api.services.audit_service import AuditService
 from api.services.user_service import UserService
 from api.serializers.directors import director_to_dict
@@ -236,6 +236,12 @@ class DirectorService:
 
         if not user:
             raise ResourceNotFoundError("User", user_id)
+
+        current_roles = self.users_repository.get_user_role_names(user.id)
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value not in current_roles:
+            new_roles = current_roles + [RoleName.DIRECTOR_DE_DEPARTAMENTO.value]
+            await self.user_service.update_user(user.uid, UserUpdate(roles=new_roles))
 
         director = self.directors_repository.assign_director(user_id, department_id)
 
