@@ -65,7 +65,12 @@ class TestDirectorsController:
     async def test_create_delegates_to_service(self, controller, mock_service):
         """Test create delegates to service."""
         current_user = {"id": 99}
-        data = DirectorCreate(email="test@example.com", name="Test", department_id=1)
+        data = DirectorCreate(
+            email="test@example.com",
+            name="Test",
+            institutional_code="12345",
+            department_id=1,
+        )
         mock_service.create.return_value = {"id": 1, "user_id": 10, "department_id": 1}
 
         result = await controller.create(data, current_user)

@@ -72,6 +72,7 @@ class TestDirectorService:
         """Mock DirectorsModel instance."""
         director = MagicMock(spec=DirectorsModel)
         director.id = 1
+        director.institutional_code = "12345"
         director.user_id = 10
         director.department_id = 1
         director.active = True
@@ -171,6 +172,7 @@ class TestDirectorService:
 
         mock_users_repo.get_by_email.return_value = None
         mock_directors_repo.get_by_department_id.return_value = None
+        mock_directors_repo.get_by_institutional_code.return_value = None
         mock_user_service.create_user_with_roles.return_value = {"id": 10}
         mock_directors_repo.create.return_value = mock_director
         mock_directors_repo.get.return_value = mock_director
@@ -186,6 +188,7 @@ class TestDirectorService:
         data = DirectorCreate(
             email="test@example.com",
             name="Test User",
+            institutional_code="12345",
             department_id=1,
         )
 
@@ -205,6 +208,7 @@ class TestDirectorService:
         data = DirectorCreate(
             email="test@example.com",
             name="Test User",
+            institutional_code="12345",
             department_id=999,
         )
 
@@ -222,6 +226,7 @@ class TestDirectorService:
         data = DirectorCreate(
             email="existing@example.com",
             name="Test User",
+            institutional_code="12345",
             department_id=1,
         )
 
@@ -245,6 +250,7 @@ class TestDirectorService:
         data = DirectorCreate(
             email="test@example.com",
             name="Test User",
+            institutional_code="12345",
             department_id=1,
         )
 
@@ -266,6 +272,7 @@ class TestDirectorService:
         mock_directors_repo.get.return_value = mock_director
         mock_directors_repo.update_director.return_value = mock_director
         mock_directors_repo.get_by_department_id.return_value = None
+        mock_directors_repo.get_by_institutional_code.return_value = None
         mock_directors_repo.get_by_user_id.return_value = None
 
         # Mock user con valores reales
