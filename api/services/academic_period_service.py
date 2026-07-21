@@ -190,13 +190,13 @@ class AcademicPeriodService:
         if not period:
             return None
 
-        has_evaluations = await self.evaluations_repository.has_evaluations_for_period(
+        has_evaluations = self.evaluations_repository.has_evaluations_for_period(
             period_id
         )
 
         if has_evaluations:
             raise ValidationError(
-                f"No se puede eliminar el periodo '{period.code}' porque tiene evaluaciones asociadas. "
+                f"No se puede eliminar el periodo '{period.name}' porque tiene evaluaciones asociadas. "
                 "Se recomienda desactivar el periodo en su lugar."
             )
 
