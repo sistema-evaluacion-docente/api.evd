@@ -44,7 +44,6 @@ class UserService:
         if not user:
             return None
 
-        # update uid, first time login
         if not user.uid:
             self.users_repository.set_uid(user, current_user.uid)
 
