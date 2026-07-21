@@ -5,8 +5,11 @@ Receives the already-parsed dict from parse_pdf so that the route can
 validate period/department before queuing the task — no double-parsing.
 """
 
+import asyncio
 import logging
 
+from api.core.websockets.connection_manager import connection_manager
+from api.core.websockets.events import EvaluationProgressEvent
 from api.database import SessionLocal
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
@@ -22,6 +25,26 @@ from api.models.teacher import TeacherModel
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 
 logger = logging.getLogger(__name__)
+
+
+def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
+    try:
+        event = EvaluationProgressEvent(
+            evaluation_id=evaluation_id,
+            stage=stage,
+            **kwargs,
+        )
+
+        try:
+            asyncio.get_running_loop()
+
+            asyncio.ensure_future(
+                connection_manager.broadcast(f"eval:{evaluation_id}", event)
+            )
+        except RuntimeError:
+            asyncio.run(connection_manager.broadcast(f"eval:{evaluation_id}", event))
+    except Exception:
+        logger.debug("Failed to broadcast WS progress for evaluation %d", evaluation_id)
 
 
 def process_evaluation(evaluation_id: int, parsed: dict) -> None:
@@ -146,6 +169,15 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             evaluation.ai_status = "PENDING"
 
         db.commit()
+
+        _broadcast_progress(
+            evaluation_id,
+            stage="UPLOADING",
+            status="COMPLETED",
+            ai_status="PENDING",
+            count=len(parsed["teachers"]),
+        )
+
         logger.info("Evaluation %d processed successfully", evaluation_id)
 
     except Exception as exc:
@@ -163,6 +195,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             if evaluation:
                 evaluation.status = "FAILED"
                 db.commit()
+
+                _broadcast_progress(
+                    evaluation_id,
+                    stage="UPLOADING",
+                    status="FAILED",
+                )
         except Exception:
             pass
 
@@ -185,11 +223,19 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             .first()
         )
         if not evaluation:
-            logger.error("analyze_evaluation_comments: evaluation %d not found", evaluation_id)
+            logger.error(
+                "analyze_evaluation_comments: evaluation %d not found", evaluation_id
+            )
             return
 
         evaluation.ai_status = "ANALYZING"
         db.commit()
+
+        _broadcast_progress(
+            evaluation_id,
+            stage="ANALYZING",
+            ai_status="ANALYZING",
+        )
 
         comments = (
             db.query(CommentModel)
@@ -209,7 +255,11 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             risk_label = result.get("risk_label")
             if risk_label is not None:
                 if risk_label not in risk_cache:
-                    row = db.query(RiskLevelModel).filter(RiskLevelModel.name == risk_label).first()
+                    row = (
+                        db.query(RiskLevelModel)
+                        .filter(RiskLevelModel.name == risk_label)
+                        .first()
+                    )
                     risk_cache[risk_label] = row.id if row else None
                 comment.risk_level = risk_cache[risk_label]
                 comment.risk_score = result.get("risk_score")
@@ -228,12 +278,22 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
 
         evaluation.ai_status = "ANALYZED"
         db.commit()
+
+        _broadcast_progress(
+            evaluation_id,
+            stage="ANALYZING",
+            ai_status="ANALYZED",
+        )
+
         logger.info("AI analysis completed for evaluation %d", evaluation_id)
 
     except Exception as exc:
         db.rollback()
         logger.error(
-            "AI analysis failed for evaluation %d: %s", evaluation_id, exc, exc_info=True
+            "AI analysis failed for evaluation %d: %s",
+            evaluation_id,
+            exc,
+            exc_info=True,
         )
         try:
             evaluation = (
@@ -241,9 +301,16 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                 .filter(EvaluationModel.id == evaluation_id)
                 .first()
             )
+
             if evaluation:
                 evaluation.ai_status = "FAILED"
                 db.commit()
+
+                _broadcast_progress(
+                    evaluation_id,
+                    stage="ANALYZING",
+                    ai_status="FAILED",
+                )
         except Exception:
             pass
 
