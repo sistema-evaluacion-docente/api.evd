@@ -17,7 +17,7 @@ from api.schemas.teacher import (
     TeacherFilters,
     TeacherUpdate,
 )
-from api.schemas.user import UserCreate
+from api.schemas.user import RoleName, TokenUser, UserCreate
 from api.serializers.teachers import teacher_to_dict
 from api.serializers.users import user_to_dict
 from api.services.audit_service import AuditService
@@ -260,8 +260,22 @@ class TeacherService:
             department_id, academic_period_id, previous_period_id
         )
 
-    async def get_history(self, teacher_id: int) -> dict | None:
+    async def get_history(
+        self, current_user: TokenUser, teacher_id: int
+    ) -> dict | None:
         """Get teacher's historical averages across all periods."""
+
+        user = self.users_repository.get_by_uid(current_user.uid)
+        teacher = self.teachers_repository.get_by_id(teacher_id)
+        roles = self.users_repository.get_user_role_names(user.id) if user else []
+
+        if not user or not teacher:
+            raise ValueError("Usuario no encontrado")
+
+        if RoleName.DOCENTE in roles and teacher.user_id != user.id:
+            raise PermissionError(
+                "El docente no tiene permiso para acceder a este historial"
+            )
 
         return self.teachers_repository.get_history(teacher_id)
 

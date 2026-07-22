@@ -5,7 +5,7 @@ from fastapi import Depends, File, HTTPException, Query, UploadFile
 from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
-from api.middlewares.auth import require_roles
+from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.evaluation_summary import TeacherHistoryOut
 from api.schemas.teacher import (
     BulkUploadResult,
@@ -131,12 +131,17 @@ async def count_teachers(
 @router.get("/{teacher_id}/history", response_model=TeacherHistoryOut)
 async def get_teacher_history(
     teacher_id: int,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(get_current_user),
+    _=Depends(
+        require_roles(
+            [RoleName.DOCENTE, RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+        )
+    ),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Return the historical average score of a teacher across all evaluated periods."""
 
-    history = await controller.get_history(teacher_id)
+    history = await controller.get_history(current_user, teacher_id)
 
     if not history:
         raise HTTPException(status_code=404, detail="Teacher not found")
