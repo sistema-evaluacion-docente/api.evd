@@ -23,6 +23,8 @@ from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.models.user_role import UserRoleModel
+from api.models.role import RoleModel
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 
 logger = logging.getLogger(__name__)
@@ -136,6 +138,16 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 )
                 db.add(user)
                 db.flush()
+
+                # Assign DOCENTE role to the new user
+                docente_role = (
+                    db.query(RoleModel).filter(RoleModel.name == "DOCENTE").first()
+                )
+
+                if docente_role:
+                    user_role = UserRoleModel(user_id=user.id, role_id=docente_role.id)
+                    db.add(user_role)
+                    db.flush()
 
                 _broadcast_log(
                     evaluation_id,
