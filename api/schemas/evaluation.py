@@ -2,12 +2,12 @@
 Schemas for request and response bodies related to evaluations.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
-
-from api.schemas.pagination import Pagination
 
 
 class EvaluationStatusUpdate(BaseModel):
@@ -35,24 +35,39 @@ class EvaluationOut(BaseModel):
     updated_at: datetime
 
 
-class EvaluationDetailResponse(BaseModel):
-    """Schema for single evaluation response envelope."""
+@dataclass
+class EvaluationFilters:
+    """Dataclass to hold evaluation filters extracted from query parameters."""
 
-    status: int
-    message: str
-    data: Optional[EvaluationOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    period_id: int | None = None
+    department_id: int | None = None
+    status: str | None = None
+    ai_status: str | None = None
+    active: bool | None = None
+    sort_by: str | None = None
 
 
-class EvaluationListResponse(BaseModel):
-    """Schema for evaluations list response envelope."""
+def evaluation_filters(
+    search: str | None = Query(default=None, min_length=1),
+    period_id: int | None = Query(default=None),
+    department_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    ai_status: str | None = Query(default=None),
+    active: bool | None = Query(default=None),
+    sort_by: str | None = Query(default=None),
+) -> EvaluationFilters:
+    """Dependency function to extract evaluation filters from query parameters."""
 
-    status: int
-    message: str
-    data: list[EvaluationOut]
-    error: Optional[str] = None
-    timestamp: datetime
-    pagination: Optional[Pagination] = None
-    path: str
+    return EvaluationFilters(
+        search=search,
+        period_id=period_id,
+        department_id=department_id,
+        status=status,
+        ai_status=ai_status,
+        active=active,
+        sort_by=sort_by,
+    )
+
+
+EvaluationFiltersDep = Annotated[EvaluationFilters, Depends(evaluation_filters)]

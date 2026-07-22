@@ -34,10 +34,12 @@ class UserModel(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, index=True, nullable=False
     )
-    username: Mapped[str] = mapped_column(String(255), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[Optional[bool]] = mapped_column(Boolean, default=True)
     avatar_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    institutional_code: Mapped[Optional[str]] = mapped_column(
+        String(255), nullable=True, unique=True, index=True
+    )
 
     teacher: Mapped[Optional["TeacherModel"]] = relationship(
         "TeacherModel", back_populates="user", uselist=False

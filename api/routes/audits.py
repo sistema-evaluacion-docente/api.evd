@@ -1,84 +1,40 @@
-"""
-Routes for audit log operations.
-"""
+"""Routes for audit log operations."""
 
-from datetime import datetime, timezone
-
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, HTTPException
 
 from api.controllers.audits import AuditsController, get_audits_controller
+from api.core.pagination import PaginationDep
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import require_roles
-from api.schemas.audit import AuditDetailResponse, AuditListResponse
+from api.schemas.audit import AuditFiltersDep, AuditOut
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/audits", tags=["Audits"])
+router = EnvelopeRouter(prefix="/audits", tags=["Audits"])
 
 
-@router.get(
-    "/",
-    response_model=AuditListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/", response_model=list[AuditOut])
 async def get_audits(
-    page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
-    table_name: str | None = Query(None, description="Filter by table name"),
-    operation: str | None = Query(None, description="Filter by operation"),
-    search: str | None = Query(
-        None, description="Search in element, description, user_id"
-    ),
-    _: dict = Depends(require_roles([RoleName.ADMIN])),
+    filters: AuditFiltersDep,
+    pagination: PaginationDep,
+    _=Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
-    """Endpoint to get paginated audit logs."""
+    """List all audit logs with pagination and filters."""
 
-    audits = await controller.get_all(
-        page=page,
-        limit=limit,
-        table_name=table_name,
-        operation=operation,
-        search=search,
-    )
-
-    return {
-        "data": audits["items"],
-        "pagination": {
-            "total": audits["total"],
-            "page": audits["page"],
-            "limit": audits["limit"],
-            "pages": audits["pages"],
-        },
-        "error": None,
-        "status": 200,
-        "timestamp": datetime.now(timezone.utc),
-    }
+    return await controller.get_all(filters, pagination)
 
 
-@router.get(
-    "/{audit_id}",
-    response_model=AuditDetailResponse,
-    responses={404: {"model": AuditDetailResponse}, 403: {"description": "Forbidden"}},
-)
+@router.get("/{audit_id}", response_model=AuditOut)
 async def get_audit_by_id(
     audit_id: int,
-    _: dict = Depends(require_roles([RoleName.ADMIN])),
+    _=Depends(require_roles([RoleName.ADMIN])),
     controller: AuditsController = Depends(get_audits_controller),
 ):
-    """Endpoint to get an audit log by ID."""
+    """Get an audit log by ID."""
 
     audit = await controller.get_by_id(audit_id)
 
     if not audit:
-        return {
-            "data": None,
-            "error": "Audit log not found",
-            "status": 404,
-            "timestamp": datetime.now(timezone.utc),
-        }
+        raise HTTPException(status_code=404, detail="Audit log not found")
 
-    return {
-        "data": audit,
-        "error": None,
-        "status": 200,
-        "timestamp": datetime.now(timezone.utc),
-    }
+    return audit

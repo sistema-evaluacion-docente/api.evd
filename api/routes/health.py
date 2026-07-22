@@ -2,11 +2,11 @@
 Routes for get the health status of the application
 """
 
-from fastapi import APIRouter
+from api.core.router import EnvelopeRouter
 
 from api.schemas.response import HealthResponseSchema
 
-router = APIRouter(prefix="/health", tags=["Health"])
+router = EnvelopeRouter(prefix="/health", tags=["Health"])
 
 
 @router.get("/", response_model=HealthResponseSchema)

@@ -1,468 +1,94 @@
-"""
-Teachers controller
-"""
+"""Teachers controller — thin delegation to TeacherService."""
 
-import csv
-import io
-
-import openpyxl
 from fastapi.param_functions import Depends
 
-from api.repositories.academic_periods import (
-    AcademicPeriodsRepository,
-    get_academic_periods_repository,
+from api.core.pagination import PaginationParams
+from api.dependencies.teachers import get_teacher_service
+from api.schemas.teacher import (
+    TeacherCreate,
+    TeacherCreateWithUser,
+    TeacherFilters,
+    TeacherUpdate,
 )
-from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.repositories.teachers import TeachersRepository, get_teachers_repository
-from api.repositories.users import UsersRepository, get_users_repository
-from api.schemas.audit import AuditCreate
-from api.schemas.teacher import TeacherCreate, TeacherCreateWithUser, TeacherUpdate
-from api.schemas.user import UserCreate
+from api.schemas.user import TokenUser
+from api.services.teacher_service import TeacherService
 
 
 class TeachersController:
-    """Teachers controller"""
+    """Controller for teacher-related operations."""
 
-    def __init__(
-        self,
-        repository: TeachersRepository,
-        audits_repository: AuditsRepository,
-        users_repository: UsersRepository,
-        academic_periods_repository: AcademicPeriodsRepository,
-    ):
-        self.repository = repository
-        self.audits_repository = audits_repository
-        self.users_repository = users_repository
-        self.academic_periods_repository = academic_periods_repository
-
-    async def _resolve_user_id(self, current_user) -> int | None:
-        if isinstance(current_user, dict):
-            return current_user.get("id")
-
-        user = await self.users_repository.get_by_uid(current_user.uid)
-
-        return user["id"] if user else None
-
-    async def _enrich_teacher(self, teacher: dict) -> dict:
-        """Attach user data to a teacher dict if user_id exists."""
-
-        if teacher.get("user_id"):
-            users = await self.users_repository.get_by_ids([teacher["user_id"]])
-
-            if users:
-                teacher["user"] = users[0]
-
-        return teacher
-
-    async def _enrich_teachers(self, teachers: list[dict]) -> list[dict]:
-        """Attach user data to a list of teacher dicts."""
-
-        user_ids = [t["user_id"] for t in teachers if t.get("user_id")]
-
-        if not user_ids:
-            return teachers
-
-        users = await self.users_repository.get_by_ids(user_ids)
-        users_map = {u["id"]: u for u in users}
-
-        for teacher in teachers:
-            if teacher.get("user_id") and teacher["user_id"] in users_map:
-                teacher["user"] = users_map[teacher["user_id"]]
-
-        return teachers
-
-    async def create(self, data: TeacherCreate, current_user) -> dict:
-        """Create a new teacher, rejecting duplicate institutional codes."""
-
-        existing = await self.repository.get_by_institutional_code(
-            data.institutional_code
-        )
-
-        if existing:
-            raise ValueError(
-                f"A teacher with institutional code '{data.institutional_code}' already exists"
-            )
-
-        teacher = await self.repository.create(data)
-        teacher = await self._enrich_teacher(teacher)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="teachers",
-                operation="CREATE",
-                element=f"Teacher {teacher.get('id')}",
-                description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, activo: {data.active}",
-                created_at=None,
-            )
-        )
-
-        return teacher
-
-    async def create_with_user(self, data: TeacherCreateWithUser, current_user) -> dict:
-        """Create a user and then a teacher linked to that user."""
-
-        existing = await self.repository.get_by_institutional_code(
-            data.institutional_code
-        )
-
-        if existing:
-            raise ValueError(
-                f"A teacher with institutional code '{data.institutional_code}' already exists"
-            )
-
-        existing_user = await self.users_repository.get_by_email(data.email)
-
-        if existing_user:
-            raise ValueError(
-                f"A user with email '{data.email}' already exists"
-            )
-
-        user_data = UserCreate(
-            email=data.email,
-            username=data.username or data.email.split("@")[0],
-            name=data.name,
-            active=data.active,
-            institutional_code=data.institutional_code,
-            contract_type=data.contract_type,
-        )
-
-        created_user = await self.users_repository.save(user_data, department_id=data.department_id)
-
-        teacher = await self.repository.get_by_institutional_code(
-            data.institutional_code
-        )
-
-        teacher = await self._enrich_teacher(teacher)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="teachers",
-                operation="CREATE",
-                element=f"Teacher {teacher.get('id')}",
-                description=f"Se creó el profesor con código {data.institutional_code}, departamento {data.department_id}, tipo contrato: {data.contract_type}, usuario: {data.email}",
-                created_at=None,
-            )
-        )
-
-        return teacher
-
-    async def upload_excel(
-        self, file_bytes: bytes, filename: str, department_id: int, current_user
-    ) -> dict:
-        """Parse an Excel or CSV file and bulk-create teachers for the given department."""
-
-        is_csv = filename.lower().endswith(".csv")
-
-        if is_csv:
-            rows = self._parse_csv(file_bytes)
-        else:
-            rows = self._parse_excel(file_bytes)
-
-        if len(rows) < 2:
-            file_type = "CSV" if is_csv else "Excel"
-
-            raise ValueError(
-                f"El archivo {file_type} debe contener al menos un encabezado y una fila de datos"
-            )
-
-        header = [str(c).strip().lower() if c else "" for c in rows[0]]
-        expected = {"nombre", "email", "codigo", "contrato"}
-        actual = set(header)
-
-        if not expected.issubset(actual):
-            missing = expected - actual
-
-            raise ValueError(
-                f"Faltan columnas requeridas en el archivo: {', '.join(sorted(missing))}"
-            )
-
-        col_idx = {name: i for i, name in enumerate(header)}
-
-        data_rows = []
-
-        for row in rows[1:]:
-            if not any(row):
-                continue
-
-            nombre = (
-                str(row[col_idx["nombre"]]).strip() if row[col_idx["nombre"]] else ""
-            )
-            email = str(row[col_idx["email"]]).strip() if row[col_idx["email"]] else ""
-            codigo = (
-                str(row[col_idx["codigo"]]).strip() if row[col_idx["codigo"]] else ""
-            )
-            contrato = (
-                str(row[col_idx["contrato"]]).strip()
-                if row[col_idx["contrato"]]
-                else ""
-            )
-
-            data_rows.append(
-                {
-                    "nombre": nombre,
-                    "email": email,
-                    "codigo_institucional": codigo,
-                    "tipo_contrato": contrato or None,
-                }
-            )
-
-        codes = [
-            r["codigo_institucional"] for r in data_rows if r["codigo_institucional"]
-        ]
-
-        existing_teachers = await self.repository.get_by_institutional_codes(codes)
-        existing_codes = {t["institutional_code"] for t in existing_teachers}
-
-        created = []
-        skipped = []
-        errors = []
-
-        for row in data_rows:
-            if not row["nombre"] or not row["email"] or not row["codigo_institucional"]:
-                errors.append(
-                    {
-                        "fila": row,
-                        "razon": "Faltan campos obligatorios (nombre, email, codigo institucional)",
-                    }
-                )
-                continue
-
-            if row["codigo_institucional"] in existing_codes:
-                skipped.append(
-                    {
-                        "fila": row,
-                        "razon": f"El código institucional '{row['codigo_institucional']}' ya existe",
-                    }
-                )
-                continue
-
-            existing_user = await self.users_repository.get_by_email(row["email"])
-            if existing_user:
-                skipped.append(
-                    {
-                        "fila": row,
-                        "razon": f"El email '{row['email']}' ya está registrado",
-                    }
-                )
-                continue
-
-            try:
-                user_data = UserCreate(
-                    email=row["email"],
-                    username=row["email"].split("@")[0],
-                    name=row["nombre"],
-                    department_id=department_id,
-                    active=True,
-                    institutional_code=row["codigo_institucional"],
-                    contract_type=row["tipo_contrato"],
-                )
-
-                await self.users_repository.save(user_data)
-
-                created.append(
-                    {
-                        "nombre": row["nombre"],
-                        "email": row["email"],
-                        "codigo_institucional": row["codigo_institucional"],
-                        "tipo_contrato": row["tipo_contrato"],
-                    }
-                )
-
-                existing_codes.add(row["codigo_institucional"])
-
-            except ValueError as e:
-                skipped.append(
-                    {
-                        "fila": row,
-                        "razon": str(e),
-                    }
-                )
-            except Exception as e:
-                errors.append(
-                    {
-                        "fila": row,
-                        "razon": f"Error inesperado: {str(e)}",
-                    }
-                )
-
-        total_count = len(data_rows)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="teachers",
-                operation="BULK_CREATE",
-                element=f"Departamento {department_id}",
-                description=(
-                    f"Importación masiva de docentes. "
-                    f"Total filas: {total_count}, "
-                    f"Creados: {len(created)}, "
-                    f"Omitidos: {len(skipped)}, "
-                    f"Errores: {len(errors)}"
-                ),
-                created_at=None,
-            )
-        )
-
-        return {
-            "created": created,
-            "skipped": skipped,
-            "errors": errors,
-        }
+    def __init__(self, service: TeacherService):
+        self.service = service
 
     async def get_all(
         self,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-        academic_period_id: int | None = None,
-        active: bool | None = None,
-        department_id: int | None = None,
-    ) -> tuple[list[dict], int]:
-        """Get all teachers with pagination and search."""
+        filters: TeacherFilters,
+        pagination: PaginationParams,
+    ):
+        """Retrieve all teachers based on filters and pagination."""
 
-        teachers, total = await self.repository.get_all(
-            page=page,
-            limit=limit,
-            search=search,
-            academic_period_id=academic_period_id,
-            active=active,
-            department_id=department_id,
+        return await self.service.get_all(filters, pagination)
+
+    async def get_all_with_averages(
+        self,
+        filters: TeacherFilters,
+        pagination: PaginationParams,
+        academic_period_id: int,
+    ):
+        """Retrieve teachers with averages for a given academic period."""
+
+        return await self.service.get_all_with_averages(
+            filters, pagination, academic_period_id
         )
 
-        return await self._enrich_teachers(teachers), total
+    async def get_by_id(self, teacher_id: int):
+        """Retrieve a teacher by ID."""
 
-    async def get_history(self, teacher_id: int) -> dict | None:
-        """Get teacher's historical averages across all periods."""
+        return await self.service.get_by_id(teacher_id)
 
-        return await self.repository.get_history(teacher_id)
+    async def create(self, data: TeacherCreate, current_user: dict):
+        """Create a new teacher."""
 
-    async def get_by_id(self, teacher_id: int) -> dict | None:
-        """Get a teacher by ID."""
+        return await self.service.create(data, current_user)
 
-        teacher = await self.repository.get_by_id(teacher_id)
-        if not teacher:
-            return None
-        return await self._enrich_teacher(teacher)
+    async def create_with_user(self, data: TeacherCreateWithUser, current_user: dict):
+        """Create a teacher with user information."""
 
-    async def delete(self, teacher_id: int, current_user) -> dict | None:
-        """Delete a teacher by ID."""
+        return await self.service.create_with_user(data, current_user)
 
-        teacher = await self.repository.get_by_id(teacher_id)
+    async def update(self, teacher_id: int, data: TeacherUpdate, current_user: dict):
+        """Update a teacher."""
 
-        if not teacher:
-            return None
+        return await self.service.update(teacher_id, data, current_user)
 
-        deleted = await self.repository.delete(teacher_id)
+    async def delete(self, teacher_id: int, current_user: dict):
+        """Delete a teacher."""
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="teachers",
-                operation="DELETE",
-                element=f"Teacher {teacher_id}",
-                description=f"Se eliminó el profesor con código {teacher.get('institutional_code')}",
-                created_at=None,
-            )
+        return await self.service.delete(teacher_id, current_user)
+
+    async def count_by_department(self, department_id: int, academic_period_id: int):
+        """Count teachers in a department."""
+
+        return await self.service.count_by_department(department_id, academic_period_id)
+
+    async def get_history(self, current_user: TokenUser, teacher_id: int):
+        """Get teacher's historical averages."""
+
+        return await self.service.get_history(current_user, teacher_id)
+
+    async def upload_excel(
+        self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
+    ):
+        """Bulk-upload teachers from an Excel/CSV file."""
+
+        return await self.service.upload_excel(
+            file_bytes, filename, department_id, current_user
         )
-
-        return deleted
-
-    async def count_by_department(
-        self, department_id: int, academic_period_id: int
-    ) -> dict:
-        """Count teachers in a specific department for current and previous period."""
-
-        period = await self.academic_periods_repository.get_by_id(academic_period_id)
-
-        previous_period_id = None
-        if period:
-            prev_code = await self.academic_periods_repository.get_previous_period_code(
-                period["code"]
-            )
-            if prev_code:
-                prev_period = await self.academic_periods_repository.get_by_code(
-                    prev_code
-                )
-                if prev_period:
-                    previous_period_id = prev_period["id"]
-
-        return await self.repository.count_by_department(
-            department_id, academic_period_id, previous_period_id
-        )
-
-    async def update(
-        self, teacher_id: int, data: TeacherUpdate, current_user
-    ) -> dict | None:
-        """Update a teacher's fields."""
-
-        teacher = await self.repository.get_by_id(teacher_id)
-
-        if not teacher:
-            return None
-
-        updated = await self.repository.update(teacher_id, data)
-        updated = await self._enrich_teacher(updated)
-
-        changes = []
-        for field in (
-            "institutional_code",
-            "department_id",
-            "contract_type",
-            "user_id",
-            "active",
-        ):
-            new_val = getattr(data, field, None)
-            if new_val is not None and new_val != teacher.get(field):
-                old_val = teacher.get(field)
-                changes.append(f"{field} cambió de {old_val} a {new_val}")
-        desc = "Se actualizó el profesor #" + str(teacher_id)
-        if changes:
-            desc += ": " + "; ".join(changes)
-        else:
-            desc += ": No se realizaron cambios"
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="teachers",
-                operation="UPDATE",
-                element=f"Teacher {teacher_id}",
-                description=desc,
-                created_at=None,
-            )
-        )
-
-        return updated
-
-    def _parse_excel(self, file_bytes: bytes) -> list[tuple]:
-        """Parse Excel file and return rows as list of tuples."""
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True)
-        ws = wb.active
-
-        if not ws:
-            raise ValueError("El archivo Excel está vacío o no tiene hojas")
-
-        return list(ws.iter_rows(values_only=True))
-
-    def _parse_csv(self, file_bytes: bytes) -> list[tuple]:
-        """Parse CSV file and return rows as list of tuples."""
-        text = file_bytes.decode("utf-8-sig")
-        reader = csv.reader(io.StringIO(text))
-        return [tuple(row) for row in reader]
 
 
 def get_teachers_controller(
-    repository: TeachersRepository = Depends(get_teachers_repository),
-    audits_repository: AuditsRepository = Depends(get_audits_repository),
-    users_repository: UsersRepository = Depends(get_users_repository),
-    academic_periods_repository: AcademicPeriodsRepository = Depends(
-        get_academic_periods_repository
-    ),
+    service: TeacherService = Depends(get_teacher_service),
 ):
-    """Get teachers controller"""
+    """Dependency injection for TeachersController."""
 
-    return TeachersController(
-        repository, audits_repository, users_repository, academic_periods_repository
-    )
+    return TeachersController(service)

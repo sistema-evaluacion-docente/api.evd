@@ -2,29 +2,31 @@
 Routes for user-related operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends
 
 from api.controllers.users import UsersController, get_users_controller
+from api.core.pagination import PaginationDep
 from api.middlewares.auth import get_current_user, require_roles
-from api.schemas.pagination import Pagination
-from api.schemas.response import ResponseSchema
 from api.schemas.user import (
     RoleName,
     UserCreate,
-    UserDetailResponse,
-    UserListResponse,
+    UserFiltersDep,
+    UserOut,
     UserRolesUpdate,
     UserStatusUpdate,
     UserUpdate,
 )
+from api.exceptions import AuthenticationError
+from api.exceptions import UserNotFoundError
+from api.core.router import EnvelopeRouter
 
-router = APIRouter(prefix="/users", tags=["Users"])
+router = EnvelopeRouter(prefix="/users", tags=["Users"])
 
 
 @router.post(
     "/",
-    response_model=UserDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    status_code=201,
+    response_model=UserOut,
 )
 async def create_user(
     payload: UserCreate,
@@ -32,136 +34,95 @@ async def create_user(
     _=Depends(require_roles([RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to create a new user. ADMIN can create any role, DIRECTOR can only create DOCENTE."""
+    """
+    Create a new user. ADMIN can create any role, DIRECTOR can only create DOCENTE.
+    """
 
-    try:
-        user = await controller.create_user(payload, current_user)
-    except ValueError as e:
-        return ResponseSchema(
-            status=400, message=str(e), path="/users"
-        )
-
-    if not user:
-        return ResponseSchema(
-            status=400, message="Error creating user", path="/users"
-        )
-
-    return ResponseSchema(
-        status=201,
-        message="User created successfully",
-        data=user,
-        path="/users",
-    )
+    return await controller.create_user(payload, current_user)
 
 
-@router.get(
-    "/",
-    response_model=UserListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/", response_model=list[UserOut])
 async def get_all_users(
-    search: str | None = Query(default=None, min_length=1),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
+    filters: UserFiltersDep,
+    pagination: PaginationDep,
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to get all users."""
+    """
+    Get all users with pagination and optional search.
 
-    users = await controller.get_all(search=search, page=page, limit=limit)
+    Response: ResponseEnvelope[list[UserOut]]
+    """
 
-    if users is None:
-        return ResponseSchema(status=400, message="Error getting users", path="/users")
-
-    return ResponseSchema(
-        status=200,
-        data=users["items"],
-        pagination=Pagination(
-            limit=users["limit"],
-            total=users["total"],
-            pages=users["pages"],
-            page=users["page"],
-        ),
-        message="Users found",
-        path="/users",
-    )
+    return await controller.get_all(filters, pagination)
 
 
 @router.get(
     "/auth",
-    response_model=UserDetailResponse,
-    responses={401: {"model": ResponseSchema}},
+    response_model=UserOut,
 )
 async def login_user(
     current_user=Depends(get_current_user),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to verify user login."""
+    """
+    Verify user login and return user data.
+
+    Response: ResponseEnvelope[UserOut]
+    """
 
     user = await controller.login(current_user)
 
     if not user:
-        return ResponseSchema(
-            status=401,
-            message="Autenticación fallida",
-            path="/users/auth"
-        )
+        raise AuthenticationError("Autenticación fallida")
 
-    return ResponseSchema(
-        status=200, message="Autenticación exitosa", data=user, path="/users/auth"
-    )
+    return user
 
 
 @router.get(
     "/{uid}",
-    response_model=UserDetailResponse,
-    responses={401: {"model": ResponseSchema}},
+    response_model=UserOut,
 )
 async def get_user_by_uid(
     uid: str,
     _=Depends(get_current_user),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to get user information by UID."""
+    """
+    Get user information by Firebase UID.
+
+    Response: ResponseEnvelope[UserOut]
+    """
 
     user = await controller.get_by_uid(uid)
 
     if not user:
-        return ResponseSchema(
-            status=401, message="User not found", path=f"/users/{uid}"
-        )
+        raise UserNotFoundError(uid)
 
-    return ResponseSchema(
-        status=200, message="User found", data=user, path=f"/users/{uid}"
-    )
+    return user
 
 
 @router.put(
     "/",
-    response_model=UserDetailResponse,
-    responses={400: {"model": ResponseSchema}},
+    response_model=UserOut,
 )
 async def update_user(
     payload: UserUpdate,
     current_user=Depends(get_current_user),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to update user information."""
+    """
+    Update the authenticated user's profile.
 
-    user = await controller.update(payload, current_user)
+    Response: ResponseEnvelope[UserOut]
+    """
 
-    if not user:
-        return ResponseSchema(status=400, message="Error updating user", path="/users")
-
-    return ResponseSchema(
-        status=200, message="User updated successfully", data=user, path="/users"
-    )
+    return await controller.update(payload, current_user)
 
 
 @router.put(
     "/{uid}/roles",
-    response_model=UserDetailResponse,
-    responses={400: {"model": ResponseSchema}},
+    response_model=UserOut,
 )
 async def replace_user_roles(
     uid: str,
@@ -170,30 +131,18 @@ async def replace_user_roles(
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to replace all roles for a user."""
+    """
+    Replace all roles for a user. ADMIN only.
 
-    try:
-        result = await controller.replace_roles(uid, payload, current_user)
+    Response: ResponseEnvelope[UserOut]
+    """
 
-        if not result:
-            return ResponseSchema(
-                status=400, message="Error updating roles", path=f"/users/{uid}/roles"
-            )
-    except ValueError as e:
-        return ResponseSchema(status=400, message=str(e), path=f"/users/{uid}/roles")
-
-    return ResponseSchema(
-        status=200,
-        message="Roles updated successfully",
-        data=result,
-        path=f"/users/{uid}/roles",
-    )
+    return await controller.replace_roles(uid, payload, current_user)
 
 
 @router.patch(
     "/{uid}/status",
-    response_model=UserDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    response_model=UserOut,
 )
 async def update_user_status(
     uid: str,
@@ -201,20 +150,10 @@ async def update_user_status(
     _=Depends(require_roles([RoleName.ADMIN])),
     controller: UsersController = Depends(get_users_controller),
 ):
-    """Endpoint to activate/deactivate a user."""
+    """
+    Activate or deactivate a user. ADMIN only.
 
-    result = await controller.update_status(uid, payload)
+    Response: ResponseEnvelope[UserOut]
+    """
 
-    if not result:
-        return ResponseSchema(
-            status=400,
-            message="Error updating user status",
-            path=f"/users/{uid}/status",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="User status updated successfully",
-        data=result,
-        path=f"/users/{uid}/status",
-    )
+    return await controller.update_status(uid, payload)

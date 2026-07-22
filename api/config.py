@@ -8,6 +8,7 @@ load_dotenv()
 
 PORT = os.getenv("PORT", "5000")
 DATABASE_URL = os.getenv("DATABASE_URL")
+DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 # Comma-separated list of allowed CORS origins. Defaults to the local dev
 # frontends. A literal "*" is supported but is handled specially in app.py
 # because "*" is invalid together with allow_credentials=True.
@@ -44,6 +45,7 @@ class Config:
     """Configuration class for the application."""
 
     PORT = int(PORT)
+    DEBUG = DEBUG
     ALLOWED_ORIGINS = ALLOWED_ORIGINS
 
     FIREBASE_CREDENTIALS = FIREBASE_CREDENTIALS

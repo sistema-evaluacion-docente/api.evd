@@ -21,7 +21,6 @@ class TeacherModel(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
     )
-    institutional_code: Mapped[str] = mapped_column(String(255), nullable=False)
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id"), nullable=True
     )
@@ -33,6 +32,10 @@ class TeacherModel(Base):
 
     user: Mapped[Optional["UserModel"]] = relationship(
         "UserModel", back_populates="teacher", uselist=False
+    )
+
+    academic_groups: Mapped[list["AcademicGroupModel"]] = relationship(
+        "AcademicGroupModel", back_populates="teacher"
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(

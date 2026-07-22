@@ -5,7 +5,7 @@ Course model
 import datetime
 
 from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -21,6 +21,9 @@ class CourseModel(Base):
     code = Column(String(255), unique=True, nullable=False)
     name = Column(String(255), nullable=True)
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
+
+    department = relationship("DepartmentModel")
+    academic_groups = relationship("AcademicGroupModel", back_populates="course")
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

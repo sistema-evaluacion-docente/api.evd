@@ -1,146 +1,70 @@
-"""
-Settings controller
-"""
+"""Settings controller — thin delegation to SettingService."""
 
 from fastapi.param_functions import Depends
 
-from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.repositories.settings import (
-    SettingsRepository,
-    get_settings_repository,
+from api.core.pagination import PaginationParams
+from api.dependencies.settings import get_setting_service
+from api.schemas.setting import (
+    SettingCreate,
+    SettingFilters,
+    SettingUpdate,
 )
-from api.repositories.users import UsersRepository, get_users_repository
-from api.schemas.audit import AuditCreate
-from api.schemas.setting import SettingCreate, SettingUpdate
+from api.services.settings_service import SettingService
 
 
 class SettingsController:
-    def __init__(
-        self,
-        repository: SettingsRepository,
-        audits_repository: AuditsRepository,
-        users_repository: UsersRepository,
-    ):
-        self.repository = repository
-        self.audits_repository = audits_repository
-        self.users_repository = users_repository
+    """Controller for setting-related operations."""
 
-    async def _resolve_user_id(self, current_user) -> int | None:
-        user = await self.users_repository.get_by_uid(current_user.uid)
-        return user["id"] if user else None
-
-    async def create(self, data: SettingCreate, current_user) -> dict | None:
-        existing = await self.repository.get_by_key(data.key)
-
-        if existing:
-            raise ValueError(f"A setting with key '{data.key}' already exists")
-
-        setting = await self.repository.create(data)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="settings",
-                operation="CREATE",
-                element=f"Setting {setting.get('id')}",
-                description=f"Se creó la configuración {data.key} con valor {data.value} (tipo: {data.value_type})",
-                created_at=None,
-            )
-        )
-
-        return setting
+    def __init__(self, service: SettingService):
+        self.service = service
 
     async def get_all(
         self,
-        search: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict | None:
-        try:
-            return await self.repository.get_all(search=search, page=page, limit=limit)
-        except ValueError as e:
-            print(e)
-            return None
+        filters: SettingFilters,
+        pagination: PaginationParams,
+    ):
+        """Retrieve all settings based on filters and pagination."""
 
-    async def get_by_id(self, setting_id: int) -> dict | None:
-        return await self.repository.get_by_id(setting_id)
+        return await self.service.get_all(filters, pagination)
 
-    async def get_by_key(self, key: str) -> dict | None:
-        return await self.repository.get_by_key(key)
+    async def get_by_id(self, setting_id: int):
+        """Retrieve a setting by ID."""
 
-    async def update(
-        self, setting_id: int, data: SettingUpdate, current_user
-    ) -> dict | None:
-        setting = await self.repository.get_by_id(setting_id)
+        return await self.service.get_by_id(setting_id)
 
-        if not setting:
-            return None
+    async def get_by_key(self, key: str):
+        """Retrieve a setting by key."""
 
-        result = await self.repository.update(
-            setting_id, data, changed_by=current_user.uid
-        )
+        return await self.service.get_by_key(key)
 
-        await self.repository.add_history(
-            key=setting["key"],
-            old_value=result["old_value"],
-            new_value=data.value,
-            changed_by=current_user.uid,
-            change_reason=data.change_reason,
-        )
+    async def create(self, data: SettingCreate, current_user: dict):
+        """Create a new setting."""
 
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="settings",
-                operation="UPDATE",
-                element=f"Setting {setting_id}",
-                description=f"Se actualizó la configuración {setting.get('key')}: valor cambió de {setting.get('value')} a {data.value}",
-                created_at=None,
-            )
-        )
+        return await self.service.create(data, current_user)
 
-        return result["setting"]
+    async def update(self, setting_id: int, data: SettingUpdate, current_user: dict):
+        """Update a setting."""
 
-    async def delete(self, setting_id: int, current_user) -> dict | None:
-        setting = await self.repository.get_by_id(setting_id)
+        return await self.service.update(setting_id, data, current_user)
 
-        if not setting:
-            return None
+    async def delete(self, setting_id: int, current_user: dict):
+        """Delete a setting."""
 
-        deleted = await self.repository.delete(setting_id)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="settings",
-                operation="DELETE",
-                element=f"Setting {setting_id}",
-                description=f"Se eliminó la configuración {setting.get('key')} con valor {setting.get('value')}",
-                created_at=None,
-            )
-        )
-
-        return deleted
+        return await self.service.delete(setting_id, current_user)
 
     async def get_history(
         self,
-        setting_id: int | None = None,
         key: str | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict | None:
-        try:
-            return await self.repository.get_history(
-                setting_id=setting_id, key=key, page=page, limit=limit
-            )
-        except ValueError as e:
-            print(e)
-            return None
+        pagination: PaginationParams | None = None,
+    ):
+        """Retrieve setting history."""
+
+        return await self.service.get_history(key, pagination)
 
 
 def get_settings_controller(
-    repository: SettingsRepository = Depends(get_settings_repository),
-    audits_repository: AuditsRepository = Depends(get_audits_repository),
-    users_repository: UsersRepository = Depends(get_users_repository),
+    service: SettingService = Depends(get_setting_service),
 ):
-    return SettingsController(repository, audits_repository, users_repository)
+    """Dependency injection for SettingsController."""
+
+    return SettingsController(service)

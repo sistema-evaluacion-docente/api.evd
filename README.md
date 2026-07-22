@@ -42,3 +42,53 @@ Visist [https://chartdb.byandrev.dev](https://chartdb.byandrev.dev) and import t
    - `SEED_ADMIN_ROLES` (comma-separated, default `ADMIN`)
 4. Run seed script:
    - `python scripts/seed_roles_admin.py`
+
+# Tests
+
+Este directorio contiene los tests automatizados del proyecto.
+
+## Estructura
+
+```
+tests/
+├── conftest.py                 # Fixtures compartidos
+├── unit/                       # Tests unitarios (mocks)
+│   ├── repositories/           # Tests de la capa de repositorios
+│   │   └── test_users_repository.py
+│   ├── services/               # Tests de la capa de servicios
+│   │   └── test_user_service.py
+│   ├── controllers/            # Tests de la capa de controladores
+│   │   └── test_users_controller.py
+│   ├── test_middleware.py      # Tests del middleware de envelope
+│   └── test_exceptions.py     # Tests de los exception handlers
+└── integration/                # Tests de integración (requieren DB)
+    └── test_users_routes.py    # Tests de rutas HTTP
+```
+
+## Tests
+
+```bash
+# Ejecutar todos los tests
+pytest
+
+# Ejecutar con verbose
+pytest -v
+
+# Ejecutar solo tests unitarios
+pytest tests/unit/
+
+# Ejecutar solo tests de integración
+pytest tests/integration/
+
+# Ejecutar un archivo específico
+pytest tests/unit/services/test_user_service.py
+
+# Ejecutar con coverage
+pytest --cov=api --cov-report=html
+```
+
+## Notas
+
+- Los tests de integración con autenticación están skippeados porque requieren una DB real
+- Para tests de integración completos, se recomienda usar pytest-postgresql o testcontainers
+- Los tests unitarios mockean todas las dependencias externas

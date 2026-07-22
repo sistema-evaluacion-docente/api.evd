@@ -4,54 +4,31 @@ Comments controller
 
 from fastapi.param_functions import Depends
 
-from api.repositories.academic_periods import (
-    AcademicPeriodsRepository,
-    get_academic_periods_repository,
-)
-from api.repositories.comments import CommentsRepository, get_comments_repository
+from api.core.pagination import PaginationParams
+from api.dependencies.comments import get_comment_service
+from api.schemas.comment import CommentFilters
+from api.services.comment_service import CommentService
 
 
 class CommentsController:
     """Comments controller"""
 
-    def __init__(
-        self,
-        repository: CommentsRepository,
-        academic_periods_repository: AcademicPeriodsRepository,
-    ):
-        self.repository = repository
-        self.academic_periods_repository = academic_periods_repository
+    def __init__(self, service: CommentService):
+        self.service = service
 
-    async def get_by_id(self, comment_id: int) -> dict | None:
+    async def get_all(
+        self,
+        filters: CommentFilters,
+        pagination: PaginationParams,
+    ):
+        """Retrieve all comments based on filters and pagination."""
+
+        return await self.service.get_all(filters, pagination)
+
+    async def get_by_id(self, comment_id: int):
         """Get a comment by ID."""
 
-        return await self.repository.get_by_id(comment_id)
-
-    async def get_by_evaluation(self, evaluation_id: int) -> list[dict]:
-        """Get all comments for a given evaluation."""
-
-        return await self.repository.get_by_evaluation(evaluation_id)
-
-    async def get_by_evaluation_paginated(
-        self,
-        evaluation_id: int,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-    ) -> dict:
-        """Get comments for a given evaluation with pagination and search."""
-
-        return await self.repository.get_by_evaluation_paginated(
-            evaluation_id,
-            page=page,
-            limit=limit,
-            search=search,
-        )
-
-    async def get_by_teacher(self, teacher_id: int) -> list[dict]:
-        """Get all comments for a given teacher."""
-
-        return await self.repository.get_by_teacher(teacher_id)
+        return await self.service.get_by_id(comment_id)
 
     async def count_by_department_and_period(
         self,
@@ -60,69 +37,21 @@ class CommentsController:
         risk_level: int | None = None,
         pedagogical_category_id: int | None = None,
         teacher_id: int | None = None,
-    ) -> dict:
+    ):
         """Count comments by department for current and previous academic period."""
 
-        period = await self.academic_periods_repository.get_by_id(academic_period_id)
-
-        previous_period_id = None
-
-        if period:
-            prev_code = await self.academic_periods_repository.get_previous_period_code(
-                period["code"]
-            )
-
-            if prev_code:
-                prev_period = await self.academic_periods_repository.get_by_code(
-                    prev_code
-                )
-
-                if prev_period:
-                    previous_period_id = prev_period["id"]
-
-        return await self.repository.count_by_department_and_period(
+        return await self.service.count_by_department_and_period(
             department_id,
             academic_period_id,
-            previous_period_id,
             risk_level,
             pedagogical_category_id,
             teacher_id,
         )
 
-    async def get_by_academic_group(self, academic_groups_id: int) -> list[dict]:
-        """Get all comments for a given academic group."""
-
-        return await self.repository.get_by_academic_group(academic_groups_id)
-
-    async def get_by_period(
-        self,
-        academic_period_id: int,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-        risk_level: int | None = None,
-        pedagogical_category_id: int | None = None,
-        teacher_id: int | None = None,
-    ) -> dict | None:
-        """Get comments for a specific academic period with pagination and optional filters."""
-
-        return await self.repository.get_by_period(
-            academic_period_id,
-            page=page,
-            limit=limit,
-            search=search,
-            risk_level=risk_level,
-            pedagogical_category_id=pedagogical_category_id,
-            teacher_id=teacher_id,
-        )
-
 
 def get_comments_controller(
-    repository: CommentsRepository = Depends(get_comments_repository),
-    academic_periods_repository: AcademicPeriodsRepository = Depends(
-        get_academic_periods_repository
-    ),
+    service: CommentService = Depends(get_comment_service),
 ):
     """Get comments controller"""
 
-    return CommentsController(repository, academic_periods_repository)
+    return CommentsController(service)

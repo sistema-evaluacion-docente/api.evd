@@ -4,17 +4,18 @@ Routes for teacher comparison operations.
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.comparison import (
     ComparisonController,
     get_comparison_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user
 from api.schemas.comparison import TeacherSemesterComparisonResponse
 from api.schemas.response import ResponseSchema
 
-router = APIRouter(prefix="/comparison", tags=["Comparison"])
+router = EnvelopeRouter(prefix="/comparison", tags=["Comparison"])
 
 
 @router.get(

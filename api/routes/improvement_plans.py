@@ -5,13 +5,14 @@ Routes for improvement plan operations (Plan de Seguimiento Docente).
 import os
 import uuid
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
 
 from api.config import config
 from api.controllers.improvement_plans import (
     ImprovementPlansController,
     get_improvement_plans_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.improvement_plan import (
     ImprovementPlanClose,
@@ -25,7 +26,7 @@ from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.utils.file_validation import validate_file_size
 
-router = APIRouter(prefix="/improvement-plans", tags=["Improvement Plans"])
+router = EnvelopeRouter(prefix="/improvement-plans", tags=["Improvement Plans"])
 
 DIRECTOR_OR_ADMIN = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 ANY_ROLE = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO, RoleName.DOCENTE]

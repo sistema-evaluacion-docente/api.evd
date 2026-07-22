@@ -1,29 +1,32 @@
-"""
-Schemas for request and response bodies related to settings.
-"""
+"""Schemas for request and response bodies related to settings."""
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
-
-from api.schemas.pagination import Pagination
 
 
 class SettingCreate(BaseModel):
+    """Schema for creating a setting."""
+
     key: str
     value: str
-    value_type: str = "NUMBER"
+    value_type: str = "STRING"
     description: Optional[str] = None
-    change_reason: Optional[str] = None
 
 
 class SettingUpdate(BaseModel):
+    """Schema for updating a setting."""
+
     value: str
     change_reason: Optional[str] = None
 
 
 class SettingOut(BaseModel):
+    """Schema for outputting a setting."""
+
     id: int
     key: str
     value: str
@@ -36,6 +39,8 @@ class SettingOut(BaseModel):
 
 
 class SettingHistoryOut(BaseModel):
+    """Schema for outputting a setting history entry."""
+
     id: int
     key: str
     old_value: Optional[str]
@@ -45,30 +50,24 @@ class SettingHistoryOut(BaseModel):
     changed_at: datetime
 
 
-class SettingDetailResponse(BaseModel):
-    status: int
-    message: str
-    data: Optional[SettingOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+@dataclass
+class SettingFilters:
+    """Dataclass to hold setting filters extracted from query parameters."""
+
+    search: str | None = None
+    value_type: str | None = None
 
 
-class SettingListResponse(BaseModel):
-    status: int
-    message: str
-    data: list[SettingOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+def setting_filters(
+    search: str | None = Query(default=None, min_length=1),
+    value_type: str | None = Query(default=None),
+) -> SettingFilters:
+    """Dependency function to extract setting filters from query parameters."""
+
+    return SettingFilters(
+        search=search,
+        value_type=value_type,
+    )
 
 
-class SettingHistoryListResponse(BaseModel):
-    status: int
-    message: str
-    data: list[SettingHistoryOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+SettingFiltersDep = Annotated[SettingFilters, Depends(setting_filters)]

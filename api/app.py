@@ -3,16 +3,24 @@ FastAPI EVD API
 """
 
 import os
-from datetime import datetime, timezone
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from starlette.responses import JSONResponse
 
 from api.config import config
+from api.core.middleware import ResponseEnvelopeMiddleware
 from api.database import Base, engine
+from api.exceptions import AppException
+from api.exceptions.handlers import (
+    app_exception_handler,
+    generic_exception_handler,
+    http_exception_handler,
+    validation_exception_handler,
+)
+from api.middlewares.dev_logs_middleware import DevLogsMiddleware
 from api.models import (
     academic_group,
     academic_period,
@@ -29,8 +37,6 @@ from api.models import (
     improvement_plan_checkpoint,
     improvement_plan_evidence,
     improvement_plan_item,
-    pedagogical_category,
-    risk_level,
     role,
     setting,
     setting_history,
@@ -41,10 +47,8 @@ from api.models import (
 from api.routes import (
     academic_groups,
     academic_periods,
-    admin_dashboard,
     audits,
     comments,
-    comparison,
     courses,
     departments,
     directors,
@@ -53,12 +57,12 @@ from api.routes import (
     evaluations,
     faculties,
     health,
-    improvement_plans,
     settings,
     stats,
     teachers,
     users,
 )
+from api.routes import ws_dev_logs, ws_evaluations
 
 _ = (
     academic_group,
@@ -94,9 +98,6 @@ app.mount(
     f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads"
 )
 
-# "*" cannot be combined with allow_credentials=True (Starlette would then omit
-# the Access-Control-Allow-Origin header on preflight). When a wildcard is
-# configured, echo any origin via a regex instead so credentials keep working.
 _allow_all_origins = "*" in config.ALLOWED_ORIGINS
 
 app.add_middleware(
@@ -108,22 +109,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.add_middleware(ResponseEnvelopeMiddleware)
+app.add_middleware(DevLogsMiddleware)
 
-@app.exception_handler(StarletteHTTPException)
-async def custom_http_exception_handler(request: Request, exc: StarletteHTTPException):
-    if isinstance(exc.detail, dict):
-        response_body = exc.detail
-    else:
-        response_body = {
-            "message": exc.detail,
-            "error": exc.detail,
-            "status": exc.status_code,
-            "data": None,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        }
-
-    return JSONResponse(status_code=exc.status_code, content=response_body)
-
+app.add_exception_handler(AppException, app_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(Exception, generic_exception_handler)
 
 app.include_router(health.router)
 app.include_router(teachers.router)
@@ -140,7 +132,6 @@ app.include_router(users.router)
 app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
-# app.include_router(stats.router)
-# app.include_router(admin_dashboard.router)
-# app.include_router(improvement_plans.router)
-# app.include_router(comparison.router)
+app.include_router(stats.router)
+app.include_router(ws_evaluations.router)
+app.include_router(ws_dev_logs.router)

@@ -5,7 +5,7 @@ Director model
 import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -27,6 +27,8 @@ class DirectorsModel(Base):
         Integer, ForeignKey("departments.id"), nullable=False, unique=True, index=True
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    user: Mapped["UserModel"] = relationship("UserModel", uselist=False)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

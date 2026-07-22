@@ -1,31 +1,30 @@
-"""
-Stats controller
-"""
+"""Stats controller — thin delegation to StatsService."""
 
 from fastapi.param_functions import Depends
 
-from api.repositories.stats import StatsRepository, get_stats_repository
+from api.dependencies.stats import get_stats_service
+from api.services.stats_service import StatsService
 
 
 class StatsController:
     """Stats controller"""
 
-    def __init__(self, repository: StatsRepository):
-        self.repository = repository
+    def __init__(self, service: StatsService):
+        self.service = service
 
     async def get_department_averages_by_period(
         self, department_id: int | None = None
     ) -> list[dict]:
         """Get global average per department per academic period."""
 
-        return await self.repository.get_department_averages_by_period(department_id)
+        return await self.service.get_department_averages_by_period(department_id)
 
     async def get_department_average_with_previous(
         self, department_id: int, academic_period_id: int
     ) -> dict | None:
         """Get department average for a period with previous period comparison."""
 
-        return await self.repository.get_department_average_with_previous(
+        return await self.service.get_department_average_with_previous(
             department_id, academic_period_id
         )
 
@@ -34,7 +33,7 @@ class StatsController:
     ) -> dict:
         """Get top 5 and bottom 5 teachers by overall average score."""
 
-        return await self.repository.get_teacher_performance_ranking(academic_period_id)
+        return await self.service.get_teacher_performance_ranking(academic_period_id)
 
     async def get_teacher_ranking_paginated(
         self,
@@ -47,7 +46,7 @@ class StatsController:
     ) -> dict:
         """Get paginated teacher ranking by overall average score with search."""
 
-        return await self.repository.get_teacher_ranking_paginated(
+        return await self.service.get_teacher_ranking_paginated(
             academic_period_id=academic_period_id,
             department_id=department_id,
             page=page,
@@ -64,7 +63,7 @@ class StatsController:
     ) -> dict:
         """Get grade distribution histogram for teachers."""
 
-        return await self.repository.get_grade_distribution(
+        return await self.service.get_grade_distribution(
             academic_period_id, department_id, bin_size
         )
 
@@ -73,21 +72,21 @@ class StatsController:
     ) -> dict | None:
         """Get teacher average for a period with previous period comparison."""
 
-        return await self.repository.get_teacher_average_with_previous(
+        return await self.service.get_teacher_average_with_previous(
             teacher_id, academic_period_id
         )
 
     async def get_teacher_history(self, teacher_id: int) -> list[dict] | None:
         """Get teacher's historical averages across all periods."""
 
-        return await self.repository.get_teacher_history(teacher_id)
+        return await self.service.get_teacher_history(teacher_id)
 
     async def get_teacher_courses_by_period(
         self, teacher_id: int, academic_period_id: int
     ) -> list[dict] | None:
         """Get teacher's courses with averages for a given academic period."""
 
-        return await self.repository.get_teacher_courses_by_period(
+        return await self.service.get_teacher_courses_by_period(
             teacher_id, academic_period_id
         )
 
@@ -96,7 +95,7 @@ class StatsController:
     ) -> dict | None:
         """Get teacher comments grouped by subject for a period."""
 
-        return await self.repository.get_teacher_comments_by_subject(
+        return await self.service.get_teacher_comments_by_subject(
             teacher_id, academic_period_id
         )
 
@@ -105,16 +104,16 @@ class StatsController:
     ) -> dict | None:
         """Get teacher dimension averages for a period."""
 
-        return await self.repository.get_teacher_dimension_averages(
+        return await self.service.get_teacher_dimension_averages(
             teacher_id, academic_period_id
         )
-    
+
     async def get_teacher_vs_department(
         self, teacher_id: int, academic_period_id: int
     ) -> dict | None:
         """Compare teacher averages per dimension and question against the department."""
 
-        return await self.repository.get_teacher_vs_department(
+        return await self.service.get_teacher_vs_department(
             teacher_id, academic_period_id
         )
 
@@ -123,25 +122,26 @@ class StatsController:
     ) -> dict | None:
         """Get teacher evaluation matrix (per-course per-question averages)."""
 
-        return await self.repository.get_teacher_matrix(teacher_id, evaluation_id)
-    
+        return await self.service.get_teacher_matrix(teacher_id, evaluation_id)
+
     async def get_subjects(
         self, academic_period_id: int, department_id: int | None = None
     ) -> list[dict]:
         """Get subjects analytics for an academic period."""
 
-        return await self.repository.get_subjects(academic_period_id, department_id)
+        return await self.service.get_subjects(academic_period_id, department_id)
 
     async def get_subject_teachers(
         self, course_id: int, academic_period_id: int
     ) -> dict | None:
         """Get teachers for a subject with per-dimension averages."""
 
-        return await self.repository.get_subject_teachers(course_id, academic_period_id)
+        return await self.service.get_subject_teachers(course_id, academic_period_id)
+
 
 def get_stats_controller(
-    repository: StatsRepository = Depends(get_stats_repository),
+    service: StatsService = Depends(get_stats_service),
 ):
     """Get stats controller"""
 
-    return StatsController(repository)
+    return StatsController(service)

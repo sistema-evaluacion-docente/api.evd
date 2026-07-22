@@ -1,4 +1,4 @@
-"""Seed script to create default roles and an admin user.
+"""Seed script to create default roles, faculty, department and an admin user.
 
 Usage:
     python scripts/seed_roles_admin.py
@@ -8,11 +8,18 @@ Required env vars for admin user:
     SEED_ADMIN_EMAIL
 
 Optional env vars:
-    SEED_ADMIN_USERNAME (default: admin)
     SEED_ADMIN_NAME (default: System Admin)
     SEED_ADMIN_AVATAR_URL
-    SEED_ADMIN_DEPARTMENT_ID
-    SEED_ADMIN_ROLES (comma-separated, default: ADMIN)
+    SEED_ADMIN_INSTITUTIONAL_CODE (default: 1152185)
+    SEED_ADMIN_ROLES (comma-separated, default: ADMIN,DIRECTOR DE DEPARTAMENTO,DOCENTE)
+
+Creates:
+    - Roles: ADMIN, DIRECTOR DE DEPARTAMENTO, DOCENTE
+    - Faculty: Ingeniería (code: ING)
+    - Department: Sistemas (code: SIS)
+    - Admin user with all roles
+    - Teacher model linked to admin user
+    - Director model linked to admin user and department
 """
 
 from __future__ import annotations
@@ -31,13 +38,15 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from api.database import SessionLocal
 from api.models.department import DepartmentModel
+from api.models.director import DirectorsModel
+from api.models.faculty import FacultyModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 from api.schemas.user import RoleName
 
-_ = (DepartmentModel, RoleModel, TeacherModel, UserModel, UserRoleModel)
+_ = (DepartmentModel, DirectorsModel, FacultyModel, RoleModel, TeacherModel, UserModel, UserRoleModel)
 
 load_dotenv()
 
@@ -67,11 +76,18 @@ class SeedConfigError(ValueError):
 
 
 def parse_admin_roles() -> list[str]:
-    raw_roles = os.getenv("SEED_ADMIN_ROLES", RoleName.ADMIN.value)
+    raw_roles = os.getenv(
+        "SEED_ADMIN_ROLES",
+        f"{RoleName.ADMIN.value},{RoleName.DIRECTOR_DE_DEPARTAMENTO.value},{RoleName.DOCENTE.value}",
+    )
     roles = [role.strip() for role in raw_roles.split(",") if role.strip()]
 
     if not roles:
-        return [RoleName.ADMIN.value]
+        return [
+            RoleName.ADMIN.value,
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value,
+            RoleName.DOCENTE.value,
+        ]
 
     allowed = {role.value for role in RoleName}
     invalid = [role for role in roles if role not in allowed]
@@ -148,12 +164,46 @@ def seed_roles() -> dict[str, int]:
         db.close()
 
 
-def seed_admin(role_ids: dict[str, int]) -> None:
+def seed_faculty_and_department() -> int:
+    """Create default faculty and department. Returns department ID."""
+    db = SessionLocal()
+    try:
+        faculty = db.query(FacultyModel).filter(FacultyModel.code == "ING").first()
+        if not faculty:
+            faculty = FacultyModel(
+                name="Ingeniería",
+                code="ING",
+                active=True,
+            )
+            db.add(faculty)
+            db.flush()
+
+        department = db.query(DepartmentModel).filter(DepartmentModel.code == "SIS").first()
+        if not department:
+            department = DepartmentModel(
+                name="Sistemas",
+                code="SIS",
+                faculty_id=faculty.id,
+                active=True,
+            )
+            db.add(department)
+            db.flush()
+
+        db.commit()
+        return department.id
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
+def seed_admin(role_ids: dict[str, int], department_id: int) -> None:
     admin_uid = require_env("SEED_ADMIN_UID")
     admin_email = require_env("SEED_ADMIN_EMAIL")
-    admin_username = os.getenv("SEED_ADMIN_USERNAME", "admin")
     admin_name = os.getenv("SEED_ADMIN_NAME", "System Admin")
     admin_avatar_url = os.getenv("SEED_ADMIN_AVATAR_URL")
+    admin_institutional_code = os.getenv("SEED_ADMIN_INSTITUTIONAL_CODE", "1152185")
     admin_roles = parse_admin_roles()
 
     db = SessionLocal()
@@ -164,9 +214,9 @@ def seed_admin(role_ids: dict[str, int]) -> None:
             admin_user = UserModel(
                 uid=admin_uid,
                 email=admin_email,
-                username=admin_username,
                 name=admin_name,
                 active=True,
+                institutional_code=admin_institutional_code,
                 avatar_url=admin_avatar_url,
             )
             db.add(admin_user)
@@ -178,10 +228,10 @@ def seed_admin(role_ids: dict[str, int]) -> None:
                 .update(
                     {
                         UserModel.email: admin_email,
-                        UserModel.username: admin_username,
                         UserModel.name: admin_name,
                         UserModel.active: True,
                         UserModel.avatar_url: admin_avatar_url,
+                        UserModel.institutional_code: admin_institutional_code,
                     },
                     synchronize_session=False,
                 )
@@ -195,6 +245,34 @@ def seed_admin(role_ids: dict[str, int]) -> None:
                 raise SeedConfigError(f"Role not found in database: {role_name}")
             db.add(UserRoleModel(user_id=admin_user.id, role_id=role_id))
 
+        if RoleName.DOCENTE.value in admin_roles:
+            existing_teacher = (
+                db.query(TeacherModel)
+                .filter(TeacherModel.user_id == admin_user.id)
+                .first()
+            )
+            if not existing_teacher:
+                teacher = TeacherModel(
+                    user_id=admin_user.id,
+                    department_id=department_id,
+                    active=True,
+                )
+                db.add(teacher)
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value in admin_roles and department_id:
+            existing_director = (
+                db.query(DirectorsModel)
+                .filter(DirectorsModel.user_id == admin_user.id)
+                .first()
+            )
+            if not existing_director:
+                director = DirectorsModel(
+                    user_id=admin_user.id,
+                    department_id=department_id,
+                    active=True,
+                )
+                db.add(director)
+
         db.commit()
     except Exception:
         db.rollback()
@@ -205,5 +283,6 @@ def seed_admin(role_ids: dict[str, int]) -> None:
 
 if __name__ == "__main__":
     role_ids_by_name = seed_roles()
-    seed_admin(role_ids_by_name)
-    print("Seeding complete: roles and admin user are ready.")
+    department_id = seed_faculty_and_department()
+    seed_admin(role_ids_by_name, department_id)
+    print("Seeding complete: roles, faculty, department, admin user, teacher and director models are ready.")

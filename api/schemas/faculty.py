@@ -2,12 +2,12 @@
 Schemas for request and response bodies related to faculties.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
-
-from api.schemas.pagination import Pagination
 
 
 class FacultyCreate(BaseModel):
@@ -32,28 +32,29 @@ class FacultyOut(BaseModel):
     name: str
     code: str
     active: Optional[bool]
+    department_count: int = 0
     created_at: datetime
     updated_at: datetime
 
 
-class FacultyDetailResponse(BaseModel):
-    """Schema for single faculty response envelope."""
+@dataclass
+class FacultyFilters:
+    """Dataclass to hold faculty filters extracted from query parameters."""
 
-    status: int
-    message: str
-    data: Optional[FacultyOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    active: bool | None = None
 
 
-class FacultyListResponse(BaseModel):
-    """Schema for faculties list response envelope."""
+def faculty_filters(
+    search: str | None = Query(default=None, min_length=1),
+    active: bool | None = Query(default=None),
+) -> FacultyFilters:
+    """Dependency function to extract faculty filters from query parameters."""
 
-    status: int
-    message: str
-    data: list[FacultyOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return FacultyFilters(
+        search=search,
+        active=active,
+    )
+
+
+FacultyFiltersDep = Annotated[FacultyFilters, Depends(faculty_filters)]

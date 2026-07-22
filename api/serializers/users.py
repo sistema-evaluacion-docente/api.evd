@@ -3,18 +3,20 @@
 from api.models.user import UserModel
 
 
-def user_to_dict(user: UserModel, roles: list[str] | None = None, department_id: int | None = None) -> dict:
+def user_to_dict(
+    user: UserModel, roles: list[str] | None = None, department_id: int | None = None
+) -> dict:
     """Convert UserModel instance to dictionary."""
 
     return {
         "id": user.id,
         "uid": user.uid,
         "email": user.email,
-        "username": user.username,
         "department_id": department_id,
         "name": user.name,
         "active": user.active,
         "avatar_url": user.avatar_url,
+        "institutional_code": user.institutional_code,
         "roles": roles or [],
         "teacher_id": user.teacher.id if user.teacher else None,
         "created_at": user.created_at,

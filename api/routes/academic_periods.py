@@ -1,301 +1,127 @@
-"""
-Routes for academic period operations.
-"""
+"""Routes for academic period operations."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, HTTPException
 
 from api.controllers.academic_periods import (
     AcademicPeriodsController,
     get_academic_periods_controller,
 )
-from api.middlewares.auth import get_current_user, require_roles
+from api.core.pagination import PaginationDep
+from api.core.router import EnvelopeRouter
+from api.middlewares.auth import require_roles
 from api.schemas.academic_period import (
     AcademicPeriodCreate,
-    AcademicPeriodDetailResponse,
-    AcademicPeriodListResponse,
-    AcademicPeriodStatusUpdate,
+    AcademicPeriodFiltersDep,
+    AcademicPeriodOut,
     AcademicPeriodUpdate,
 )
-from api.schemas.pagination import Pagination
-from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/academic-periods", tags=["Academic Periods"])
+router = EnvelopeRouter(prefix="/academic-periods", tags=["Academic Periods"])
+
+_ROLES = [RoleName.ADMIN]
+_READ_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO, RoleName.DOCENTE]
 
 
-@router.get(
-    "/",
-    response_model=AcademicPeriodListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/", response_model=list[AcademicPeriodOut])
 async def get_all_academic_periods(
-    search: str | None = Query(default=None, min_length=1),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-    _=Depends(
-        require_roles(
-            [
-                RoleName.ADMIN,
-                RoleName.DIRECTOR_DE_DEPARTAMENTO,
-                RoleName.DOCENTE,
-            ]
-        )
-    ),
+    filters: AcademicPeriodFiltersDep,
+    pagination: PaginationDep,
+    _=Depends(require_roles(_READ_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to list all academic periods (any authenticated role)."""
+    """List all academic periods with pagination and filters."""
 
-    periods = await controller.get_all(search=search, page=page, limit=limit)
-
-    if periods is None:
-        return ResponseSchema(
-            status=400,
-            message="Error getting academic periods",
-            path="/academic-periods",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Academic periods found",
-        data=periods["items"],
-        pagination=Pagination(
-            limit=periods["limit"],
-            total=periods["total"],
-            pages=periods["pages"],
-            page=periods["page"],
-        ),
-        path="/academic-periods",
-    )
+    return await controller.get_all(filters, pagination)
 
 
-@router.get(
-    "/{period_id}",
-    response_model=AcademicPeriodDetailResponse,
-    responses={403: {"description": "Forbidden"}, 404: {"model": ResponseSchema}},
-)
+@router.get("/{period_id}", response_model=AcademicPeriodOut)
 async def get_academic_period_by_id(
     period_id: int,
-    _=Depends(
-        require_roles(
-            [
-                RoleName.ADMIN,
-                RoleName.DIRECTOR_DE_DEPARTAMENTO,
-                RoleName.DOCENTE,
-            ]
-        )
-    ),
+    _=Depends(require_roles(_READ_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to get an academic period by ID (any authenticated role)."""
+    """Get an academic period by ID."""
 
     period = await controller.get_by_id(period_id)
 
     if not period:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}",
-        )
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Academic period found",
-        data=period,
-        path=f"/academic-periods/{period_id}",
-    )
+    return period
 
 
-@router.post(
-    "/",
-    response_model=AcademicPeriodDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-    status_code=201,
-)
+@router.post("/", response_model=AcademicPeriodOut, status_code=201)
 async def create_academic_period(
     payload: AcademicPeriodCreate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to create a new academic period."""
+    """Create a new academic period."""
 
-    try:
-        period = await controller.create(payload, current_user)
-    except ValueError as e:
-        return ResponseSchema(
-            status=400,
-            message=str(e),
-            path="/academic-periods",
-        )
-
-    return ResponseSchema(
-        status=201,
-        message="Academic period created successfully",
-        data=period,
-        path="/academic-periods",
-    )
+    return await controller.create(payload, current_user)
 
 
-@router.put(
-    "/{period_id}",
-    response_model=AcademicPeriodDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.put("/{period_id}", response_model=AcademicPeriodOut)
 async def update_academic_period(
     period_id: int,
     payload: AcademicPeriodUpdate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to update an academic period."""
+    """Update an academic period."""
 
     period = await controller.update(period_id, payload, current_user)
 
     if not period:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}",
-        )
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Academic period updated successfully",
-        data=period,
-        path=f"/academic-periods/{period_id}",
-    )
+    return period
 
 
-@router.patch(
-    "/{period_id}/activate",
-    response_model=AcademicPeriodDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.patch("/{period_id}/activate", response_model=AcademicPeriodOut)
 async def activate_academic_period(
     period_id: int,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to activate an academic period (deactivates any currently active one)."""
+    """Activate an academic period."""
 
     period = await controller.activate(period_id, current_user)
 
     if not period:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}/activate",
-        )
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Academic period activated successfully",
-        data=period,
-        path=f"/academic-periods/{period_id}/activate",
-    )
+    return period
 
 
-@router.patch(
-    "/{period_id}/close",
-    response_model=AcademicPeriodDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.patch("/{period_id}/close", response_model=AcademicPeriodOut)
 async def close_academic_period(
     period_id: int,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to close the active academic period."""
+    """Close the active academic period."""
 
-    try:
-        period = await controller.close(period_id, current_user)
-    except ValueError as e:
-        return ResponseSchema(
-            status=400,
-            message=str(e),
-            path=f"/academic-periods/{period_id}/close",
-        )
+    period = await controller.close(period_id, current_user)
 
     if not period:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}/close",
-        )
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Academic period closed successfully",
-        data=period,
-        path=f"/academic-periods/{period_id}/close",
-    )
+    return period
 
 
-@router.patch(
-    "/{period_id}/status",
-    response_model=AcademicPeriodDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
-async def update_academic_period_status(
-    period_id: int,
-    payload: AcademicPeriodStatusUpdate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
-    controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
-):
-    """Endpoint to activate/deactivate an academic period."""
-
-    period = await controller.update_status(period_id, payload, current_user)
-
-    if not period:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}/status",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Academic period status updated successfully",
-        data=period,
-        path=f"/academic-periods/{period_id}/status",
-    )
-
-
-@router.delete(
-    "/{period_id}",
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.delete("/{period_id}", response_model=AcademicPeriodOut)
 async def delete_academic_period(
     period_id: int,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles([RoleName.ADMIN])),
+    current_user=Depends(require_roles(_ROLES)),
     controller: AcademicPeriodsController = Depends(get_academic_periods_controller),
 ):
-    """Endpoint to delete an academic period. Only allowed if no evaluations are associated."""
+    """Delete an academic period. Only allowed if no evaluations are associated."""
 
-    try:
-        deleted = await controller.delete(period_id, current_user)
-    except ValueError as e:
-        return ResponseSchema(
-            status=400,
-            message=str(e),
-            path=f"/academic-periods/{period_id}",
-        )
+    period = await controller.delete(period_id, current_user)
 
-    if not deleted:
-        return ResponseSchema(
-            status=404,
-            message="Academic period not found",
-            path=f"/academic-periods/{period_id}",
-        )
+    if not period:
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
 
-    return ResponseSchema(
-        status=200,
-        message="Academic period deleted successfully",
-        data=None,
-        path=f"/academic-periods/{period_id}",
-    )
+    return period

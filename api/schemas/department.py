@@ -2,12 +2,20 @@
 Schemas for request and response bodies related to departments.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
 
-from api.schemas.pagination import Pagination
+
+class DirectorSummary(BaseModel):
+    """Lightweight director info embedded in DepartmentOut."""
+
+    id: int
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class DepartmentCreate(BaseModel):
@@ -41,29 +49,33 @@ class DepartmentOut(BaseModel):
     name: str
     faculty_id: Optional[int]
     active: Optional[bool]
-    director: Optional[dict] = None
+    director: Optional[DirectorSummary] = None
+    teacher_count: int = 0
     created_at: datetime
     updated_at: datetime
 
 
-class DepartmentDetailResponse(BaseModel):
-    """Schema for single department response envelope."""
+@dataclass
+class DepartmentFilters:
+    """Dataclass to hold department filters extracted from query parameters."""
 
-    status: int
-    message: str
-    data: Optional[DepartmentOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    active: bool | None = None
+    faculty_id: int | None = None
 
 
-class DepartmentListResponse(BaseModel):
-    """Schema for departments list response envelope."""
+def department_filters(
+    search: str | None = Query(default=None, min_length=1),
+    active: bool | None = Query(default=None),
+    faculty_id: int | None = Query(default=None),
+) -> DepartmentFilters:
+    """Dependency function to extract department filters from query parameters."""
 
-    status: int
-    message: str
-    data: list[DepartmentOut]
-    pagination: Pagination
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return DepartmentFilters(
+        search=search,
+        active=active,
+        faculty_id=faculty_id,
+    )
+
+
+DepartmentFiltersDep = Annotated[DepartmentFilters, Depends(department_filters)]

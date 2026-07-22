@@ -5,18 +5,23 @@ Evaluations repository
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.comment import CommentModel
 from api.models.course import CourseModel
+from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.repositories.base import BaseRepository
+from api.schemas.evaluation import EvaluationFilters
 from api.serializers.comments import comment_to_dict
 from api.serializers.evaluations import evaluation_to_dict
 from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
@@ -24,21 +29,21 @@ from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
 QUESTION_TEXT: dict[str, str] = {q["code"]: q["text"] for q in QUESTIONS}
 
 
-class EvaluationsRepository:
+class EvaluationsRepository(BaseRepository[EvaluationModel]):
     """Evaluations repository"""
 
     def __init__(self, db: Session):
-        self.db = db
+        super().__init__(EvaluationModel, db)
 
-    async def create(
+    def create_evaluation(
         self,
-        user_id: str,
+        user_id: int | None,
         academic_period_id: int,
         department_id: int,
         pdf_url: str,
-        status: str = "PENDING",
-    ) -> dict:
-        """Create a new evaluation record."""
+        status: str = "PROCESSING",
+    ) -> EvaluationModel:
+        """Create a new evaluation record and return the model instance."""
 
         evaluation = EvaluationModel(
             user_id=user_id,
@@ -50,40 +55,42 @@ class EvaluationsRepository:
         )
 
         self.db.add(evaluation)
-        self.db.commit()
+        self.db.flush()
         self.db.refresh(evaluation)
+
+        return evaluation
+
+    def get_by_id(self, evaluation_id: int) -> EvaluationModel | None:
+        """Get an evaluation by ID."""
+
+        return (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.id == evaluation_id)
+            .first()
+        )
+
+    def get_by_id_as_dict(self, evaluation_id: int) -> dict | None:
+        """Get an evaluation by ID as a dict."""
+
+        evaluation = self.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
 
         return evaluation_to_dict(evaluation)
 
-    async def get_all(
+    def search(
         self,
-        page: int = 1,
-        limit: int = 10,
-        search: str | None = None,
-        period_id: int | None = None,
-        department_id: int | None = None,
-        sort_by: str | None = None,
+        filters: EvaluationFilters,
+        pagination: PaginationParams,
     ) -> tuple[list[dict], int]:
-        """Get all evaluations with optional filters."""
+        """Search evaluations with filters, pagination, and computed overall_average."""
 
-        filter_query = self.db.query(EvaluationModel).outerjoin(
+        count_query = self.db.query(EvaluationModel.id).outerjoin(
             EvaluationModel.academic_period
         )
-
-        if period_id is not None:
-            filter_query = filter_query.filter(
-                EvaluationModel.academic_period_id == period_id
-            )
-        if department_id is not None:
-            filter_query = filter_query.filter(
-                EvaluationModel.department_id == department_id
-            )
-
-        if search:
-            pattern = f"%{search}%"
-            filter_query = filter_query.filter(AcademicPeriodModel.name.ilike(pattern))
-
-        total = filter_query.count()
+        count_query = self._apply_filters(count_query, filters)
+        total = count_query.count()
 
         base_query = (
             self.db.query(
@@ -113,82 +120,68 @@ class EvaluationsRepository:
             )
         )
 
-        if period_id is not None:
-            base_query = base_query.filter(
-                EvaluationModel.academic_period_id == period_id
-            )
-        if department_id is not None:
-            base_query = base_query.filter(
-                EvaluationModel.department_id == department_id
-            )
-
-        if search:
-            pattern = f"%{search}%"
-            base_query = base_query.filter(AcademicPeriodModel.name.ilike(pattern))
+        base_query = self._apply_filters(base_query, filters)
 
         order_clause = EvaluationModel.created_at.desc()
-        if sort_by == "average_asc":
+        if filters.sort_by == "average_asc":
             order_clause = func.avg(EvaluationScoreModel.overall_average).asc()
-        elif sort_by == "average_desc":
+        elif filters.sort_by == "average_desc":
             order_clause = func.avg(EvaluationScoreModel.overall_average).desc()
 
         evaluations = (
             base_query.order_by(order_clause)
-            .offset((page - 1) * limit)
-            .limit(limit)
+            .offset(pagination.offset)
+            .limit(pagination.limit)
             .all()
         )
 
         result = []
         for e in evaluations:
-            eval_dict = {
-                "id": e.id,
-                "user_id": e.user_id,
-                "academic_period_id": e.academic_period_id,
-                "department_id": e.department_id,
-                "pdf_url": e.pdf_url,
-                "active": e.active,
-                "status": e.status,
-                "ai_status": e.ai_status,
-                "count": e.count,
-                "created_at": e.created_at,
-                "updated_at": e.updated_at,
-                "overall_average": (
-                    float(e.overall_average) if e.overall_average else None
-                ),
-                "academic_period_name": e.period_name,
-                "academic_period_code": e.period_code,
-            }
-            result.append(eval_dict)
+            result.append(
+                {
+                    "id": e.id,
+                    "user_id": e.user_id,
+                    "academic_period_id": e.academic_period_id,
+                    "department_id": e.department_id,
+                    "pdf_url": e.pdf_url,
+                    "active": e.active,
+                    "status": e.status,
+                    "ai_status": e.ai_status,
+                    "count": e.count,
+                    "created_at": e.created_at,
+                    "updated_at": e.updated_at,
+                    "overall_average": (
+                        float(e.overall_average) if e.overall_average else None
+                    ),
+                    "academic_period_name": e.period_name,
+                    "academic_period_code": e.period_code,
+                }
+            )
 
         return result, total
 
-    async def get_by_id(self, evaluation_id: int) -> dict | None:
-        """Get an evaluation by ID."""
+    def _apply_filters(self, query, filters: EvaluationFilters):
+        """Apply common filters to a query."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        if filters.period_id is not None:
+            query = query.filter(
+                EvaluationModel.academic_period_id == filters.period_id
+            )
+        if filters.department_id is not None:
+            query = query.filter(EvaluationModel.department_id == filters.department_id)
+        if filters.status is not None:
+            query = query.filter(EvaluationModel.status == filters.status)
+        if filters.ai_status is not None:
+            query = query.filter(EvaluationModel.ai_status == filters.ai_status)
+        if filters.active is not None:
+            query = query.filter(EvaluationModel.active == filters.active)
+        if filters.search:
+            pattern = f"%{filters.search}%"
+            query = query.filter(AcademicPeriodModel.name.ilike(pattern))
 
-        if not evaluation:
-            return None
+        return query
 
-        return evaluation_to_dict(evaluation)
-
-    async def has_evaluations_for_period(self, academic_period_id: int) -> bool:
-        """Check if any evaluations exist for a given academic period."""
-
-        count = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.academic_period_id == academic_period_id)
-            .count()
-        )
-
-        return count > 0
-
-    async def get_by_period_id(self, academic_period_id: int) -> dict | None:
+    def get_by_period_id(self, academic_period_id: int) -> dict | None:
         """Get an evaluation by academic period ID."""
 
         evaluation = (
@@ -202,7 +195,7 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
-    async def get_by_period_and_department(
+    def get_by_period_and_department(
         self, academic_period_id: int, department_id: int
     ) -> dict | None:
         """Get an evaluation by period and department combination."""
@@ -212,6 +205,7 @@ class EvaluationsRepository:
             .filter(
                 EvaluationModel.academic_period_id == academic_period_id,
                 EvaluationModel.department_id == department_id,
+                EvaluationModel.active == True,
             )
             .first()
         )
@@ -221,74 +215,64 @@ class EvaluationsRepository:
 
         return evaluation_to_dict(evaluation)
 
-    async def update_active_status(
-        self, evaluation_id: int, active: bool
-    ) -> dict | None:
+    def has_evaluations_for_period(self, academic_period_id: int) -> bool:
+        """Check if any evaluations exist for a given academic period."""
+
+        count = (
+            self.db.query(EvaluationModel)
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .count()
+        )
+
+        return count > 0
+
+    def update_active_status(self, evaluation_id: int, active: bool) -> dict | None:
         """Activate or deactivate an evaluation."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
 
-        setattr(evaluation, "active", active)
-
+        evaluation.active = active
         self.db.commit()
         self.db.refresh(evaluation)
 
         return evaluation_to_dict(evaluation)
 
-    async def update_status(
+    def update_status(
         self, evaluation_id: int, status: str, count: int | None = None
     ) -> dict | None:
         """Update the processing status and teacher count of an evaluation."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
 
-        setattr(evaluation, "status", status)
+        evaluation.status = status
 
         if count is not None:
-            setattr(evaluation, "count", count)
+            evaluation.count = count
 
         self.db.commit()
         self.db.refresh(evaluation)
 
         return evaluation_to_dict(evaluation)
 
-    async def delete(self, evaluation_id: int) -> None:
+    def delete_evaluation(self, evaluation_id: int) -> None:
         """Delete an evaluation record by ID."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
 
         if evaluation:
             self.db.delete(evaluation)
             self.db.commit()
 
-    async def get_teacher_comments(
-        self, evaluation_id: int, teacher_id: int
-    ) -> dict | None:
+    def get_teacher_comments(self, evaluation_id: int, teacher_id: int) -> dict | None:
         """Return comments grouped by course for a teacher within an evaluation."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
         if not evaluation:
             return None
 
@@ -297,8 +281,6 @@ class EvaluationsRepository:
         )
         if not teacher:
             return None
-
-        from api.models.comment import CommentModel
 
         rows = (
             self.db.query(CommentModel, AcademicGroupModel, CourseModel)
@@ -337,16 +319,10 @@ class EvaluationsRepository:
             "courses": list(grouped.values()),
         }
 
-    async def get_teacher_detail(
-        self, evaluation_id: int, teacher_id: int
-    ) -> dict | None:
+    def get_teacher_detail(self, evaluation_id: int, teacher_id: int) -> dict | None:
         """Return per-course and per-dimension scores for a teacher within an evaluation."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
         if not evaluation:
             return None
 
@@ -473,7 +449,7 @@ class EvaluationsRepository:
 
         return {
             "teacher_id": teacher_id,
-            "institutional_code": teacher.institutional_code,
+            "institutional_code": teacher_user.institutional_code if teacher_user else None,
             "name": teacher_user.name if teacher_user else None,
             "contract_type": teacher.contract_type,
             "evaluation_id": evaluation_id,
@@ -485,11 +461,10 @@ class EvaluationsRepository:
             "dimensions": overall_dims,
         }
 
-    async def get_teachers_by_period(
+    def get_teachers_by_period(
         self,
         academic_period_id: int,
-        page: int = 1,
-        limit: int = 10,
+        pagination: PaginationParams,
         search: str | None = None,
     ) -> dict | None:
         """Return all teachers with their average evaluation scores for a given academic period."""
@@ -502,12 +477,10 @@ class EvaluationsRepository:
         if not period:
             return None
 
-        from api.models.department import DepartmentModel
-
         base_query = (
             self.db.query(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
                 UserModel.avatar_url,
@@ -538,7 +511,7 @@ class EvaluationsRepository:
 
         base_query = base_query.group_by(
             TeacherModel.id,
-            TeacherModel.institutional_code,
+            UserModel.institutional_code,
             TeacherModel.contract_type,
             UserModel.name,
             UserModel.avatar_url,
@@ -547,13 +520,10 @@ class EvaluationsRepository:
 
         total = base_query.count()
 
-        pages = (total + limit - 1) // limit if total else 0
-        offset = (page - 1) * limit
-
         rows = (
             base_query.order_by(func.avg(EvaluationScoreModel.overall_average).desc())
-            .offset(offset)
-            .limit(limit)
+            .offset(pagination.offset)
+            .limit(pagination.limit)
             .all()
         )
 
@@ -576,20 +546,13 @@ class EvaluationsRepository:
             "period_code": period.code,
             "period_name": period.name,
             "teacher_count": total,
-            "page": page,
-            "limit": limit,
-            "pages": pages,
             "teachers": teachers,
         }
 
-    async def get_summary(self, evaluation_id: int) -> dict | None:
+    def get_summary(self, evaluation_id: int) -> dict | None:
         """Return aggregated statistics for an evaluation grouped by teacher."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
@@ -597,7 +560,7 @@ class EvaluationsRepository:
         rows = (
             self.db.query(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
                 func.count(EvaluationScoreModel.id).label("group_count"),
@@ -612,7 +575,7 @@ class EvaluationsRepository:
             .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
             )
@@ -652,14 +615,10 @@ class EvaluationsRepository:
             "ranking": ranking,
         }
 
-    async def get_dimension_averages(self, evaluation_id: int) -> list[dict] | None:
+    def get_dimension_averages(self, evaluation_id: int) -> list[dict] | None:
         """Return dimension-level averages aggregated across all groups for an evaluation."""
 
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(EvaluationModel.id == evaluation_id)
-            .first()
-        )
+        evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
@@ -718,6 +677,6 @@ class EvaluationsRepository:
 
 
 def get_evaluations_repository(db: Annotated[Session, Depends(get_db)]):
-    """Get evaluations repository"""
+    """Dependency injection for EvaluationsRepository."""
 
     return EvaluationsRepository(db)

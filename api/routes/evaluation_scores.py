@@ -2,12 +2,13 @@
 Routes for evaluation score operations.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import Depends, Query
 
 from api.controllers.evaluation_scores import (
     EvaluationScoresController,
     get_evaluation_scores_controller,
 )
+from api.core.router import EnvelopeRouter
 from api.middlewares.auth import require_roles
 from api.schemas.evaluation_score import (
     EvaluationScoreDetailResponse,
@@ -17,7 +18,7 @@ from api.schemas.pagination import Pagination
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 
-router = APIRouter(prefix="/evaluation-scores", tags=["Evaluation Scores"])
+router = EnvelopeRouter(prefix="/evaluation-scores", tags=["Evaluation Scores"])
 
 
 @router.get(

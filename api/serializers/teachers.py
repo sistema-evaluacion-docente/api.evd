@@ -8,7 +8,7 @@ def teacher_to_dict(teacher: TeacherModel) -> dict:
 
     return {
         "id": teacher.id,
-        "institutional_code": teacher.institutional_code,
+        "institutional_code": teacher.user.institutional_code if teacher.user else None,
         "department_id": teacher.department_id,
         "contract_type": teacher.contract_type,
         "user_id": teacher.user_id,

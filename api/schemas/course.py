@@ -2,10 +2,20 @@
 Schemas for request and response bodies related to courses.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
+
+
+class DepartmentSummary(BaseModel):
+    """Lightweight nested schema for the course's department."""
+
+    id: int
+    code: str
+    name: str
 
 
 class CourseCreate(BaseModel):
@@ -19,6 +29,7 @@ class CourseCreate(BaseModel):
 class CourseUpdate(BaseModel):
     """Schema for updating a course."""
 
+    code: Optional[str] = None
     name: Optional[str] = None
     department_id: Optional[int] = None
 
@@ -30,27 +41,29 @@ class CourseOut(BaseModel):
     code: str
     name: Optional[str]
     department_id: Optional[int]
+    department: Optional[DepartmentSummary] = None
     created_at: datetime
     updated_at: datetime
 
 
-class CourseDetailResponse(BaseModel):
-    """Schema for single course response envelope."""
+@dataclass
+class CourseFilters:
+    """Dataclass to hold course filters extracted from query parameters."""
 
-    status: int
-    message: str
-    data: Optional[CourseOut] = None
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    search: str | None = None
+    department_id: int | None = None
 
 
-class CourseListResponse(BaseModel):
-    """Schema for courses list response envelope."""
+def course_filters(
+    search: str | None = Query(default=None, min_length=1),
+    department_id: int | None = Query(default=None),
+) -> CourseFilters:
+    """Dependency function to extract course filters from query parameters."""
 
-    status: int
-    message: str
-    data: list[CourseOut]
-    error: Optional[str] = None
-    timestamp: datetime
-    path: str
+    return CourseFilters(
+        search=search,
+        department_id=department_id,
+    )
+
+
+CourseFiltersDep = Annotated[CourseFilters, Depends(course_filters)]

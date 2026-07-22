@@ -251,7 +251,7 @@ class StatsRepository:
         base_query = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -274,7 +274,7 @@ class StatsRepository:
             .join(UserModel, UserModel.id == TeacherModel.user_id)
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -343,7 +343,7 @@ class StatsRepository:
         base_query = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -381,7 +381,7 @@ class StatsRepository:
             base_query = base_query.filter(
                 (UserModel.name.ilike(search_pattern))
                 | (UserModel.email.ilike(search_pattern))
-                | (TeacherModel.institutional_code.ilike(search_pattern))
+                | (UserModel.institutional_code.ilike(search_pattern))
             )
 
         count_query = (
@@ -416,7 +416,7 @@ class StatsRepository:
             count_query = count_query.filter(
                 (UserModel.name.ilike(search_pattern))
                 | (UserModel.email.ilike(search_pattern))
-                | (TeacherModel.institutional_code.ilike(search_pattern))
+                | (UserModel.institutional_code.ilike(search_pattern))
             )
 
         total = count_query.scalar() or 0
@@ -426,7 +426,7 @@ class StatsRepository:
         results = (
             base_query.group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -998,7 +998,6 @@ class StatsRepository:
             "column_averages": column_averages,
         }
 
-
     async def get_teacher_vs_department(
         self, teacher_id: int, academic_period_id: int
     ) -> dict | None:
@@ -1037,7 +1036,8 @@ class StatsRepository:
             )
             .join(
                 EvaluationScoreModel,
-                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
             )
             .join(
                 AcademicGroupModel,
@@ -1066,7 +1066,8 @@ class StatsRepository:
             )
             .join(
                 EvaluationScoreModel,
-                EvaluationScoreModel.id == EvaluationQuestionScoreModel.evaluation_score_id,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
             )
             .join(
                 EvaluationModel,
@@ -1132,7 +1133,6 @@ class StatsRepository:
             "department_overall_average": dept_overall,
             "dimensions": dimensions,
         }
-
 
     async def get_subjects(
         self, academic_period_id: int, department_id: int | None = None
@@ -1217,8 +1217,7 @@ class StatsRepository:
                     )
                     .join(
                         EvaluationScoreModel,
-                        EvaluationScoreModel.academic_group_id
-                        == AcademicGroupModel.id,
+                        EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
                     )
                     .join(
                         EvaluationModel,
@@ -1235,8 +1234,7 @@ class StatsRepository:
                     )
                 prev_rows = prev_q.group_by(CourseModel.id).all()
                 prev_avg_by_course = {
-                    r.course_id: float(r.avg) if r.avg else None
-                    for r in prev_rows
+                    r.course_id: float(r.avg) if r.avg else None for r in prev_rows
                 }
 
         qs_q = (
@@ -1324,9 +1322,7 @@ class StatsRepository:
 
         from api.models.user import UserModel as UserModelLocal
 
-        course = (
-            self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
-        )
+        course = self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
         if not course:
             return None
 
@@ -1341,7 +1337,7 @@ class StatsRepository:
         teacher_rows = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModelLocal.name,
                 UserModelLocal.avatar_url,
@@ -1364,7 +1360,7 @@ class StatsRepository:
             )
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModelLocal.name,
                 UserModelLocal.avatar_url,
