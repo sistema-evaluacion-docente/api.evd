@@ -132,6 +132,7 @@ class UserService:
                 roles_to_assign,
                 institutional_code=data.institutional_code,
                 contract_type=data.contract_type,
+                department_id=data.department_id,
             )
         else:
             if normalized_roles:
