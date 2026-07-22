@@ -24,4 +24,7 @@ exclude_lines = [
 ]
 
 [tool.pylint.messages_control]
-disable = ["not-callable"]
+disable = [
+    "not-callable",
+    "singleton-comparison",
+]
