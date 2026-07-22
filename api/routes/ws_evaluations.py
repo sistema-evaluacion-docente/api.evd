@@ -1,10 +1,10 @@
 """WebSocket routes for evaluations."""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from api.core.websockets.connection_manager import connection_manager
 from api.middlewares.auth import verify_token
 from api.services.user_service import UserService
 from api.database import SessionLocal
@@ -19,6 +19,57 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _EVAL_ROLES = {RoleName.ADMIN.value, RoleName.DIRECTOR_DE_DEPARTAMENTO.value}
+
+
+class ConnectionManager:
+    """Manages WebSocket connections and broadcasting messages to connected clients."""
+
+    def __init__(self):
+        self._channels: dict[str, list[WebSocket]] = {}
+
+    async def connect(self, websocket: WebSocket, channel: str):
+        """Accepts a new WebSocket connection and adds it to the specified channel."""
+
+        await websocket.accept()
+
+        if channel not in self._channels:
+            self._channels[channel] = []
+        self._channels[channel].append(websocket)
+
+        logger.info(
+            "WS connected to channel '%s' (%d total)",
+            channel,
+            len(self._channels[channel]),
+        )
+
+    def disconnect(self, websocket: WebSocket, channel: str):
+        """Removes a WebSocket connection from the specified channel."""
+
+        if channel in self._channels and websocket in self._channels[channel]:
+            self._channels[channel].remove(websocket)
+            if not self._channels[channel]:
+                del self._channels[channel]
+
+        logger.info("WS disconnected from channel '%s'", channel)
+
+    async def broadcast(self, channel: str, event):
+        """Sends a message to all active WebSocket connections in the specified channel."""
+
+        if channel not in self._channels:
+            return
+
+        payload = (
+            event.model_dump_json() if hasattr(event, "model_dump_json") else str(event)
+        )
+
+        for connection in self._channels[channel]:
+            try:
+                await connection.send_text(payload)
+            except Exception:
+                pass
+
+
+manager = ConnectionManager()
 
 
 async def _authenticate_ws(token: str | None) -> dict | None:
@@ -86,10 +137,16 @@ async def ws_evaluation(
 
     channel = f"eval:{evaluation_id}"
 
-    await connection_manager.connect(websocket, channel)
+    await manager.connect(websocket, channel)
 
     try:
         while True:
-            await websocket.receive_text()
+            try:
+                data = await websocket.receive_text()
+                logger.debug("Received: %s", data)
+            except asyncio.TimeoutError:
+                continue
     except WebSocketDisconnect:
-        await connection_manager.disconnect(websocket, channel)
+        logger.info("Client disconnected from channel '%s'", channel)
+    finally:
+        manager.disconnect(websocket, channel)

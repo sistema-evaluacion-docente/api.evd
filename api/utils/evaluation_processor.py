@@ -8,8 +8,8 @@ validate period/department before queuing the task — no double-parsing.
 import asyncio
 import logging
 
-from api.core.websockets.connection_manager import connection_manager
-from api.core.websockets.events import EvaluationProgressEvent
+from api.routes.ws_evaluations import manager as connection_manager
+from api.core.websockets.events import EvaluationProgressEvent, EvaluationLogEvent
 from api.database import SessionLocal
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
@@ -48,6 +48,40 @@ def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
         logger.debug("Failed to broadcast WS progress for evaluation %d", evaluation_id)
 
 
+def _broadcast_log(
+    evaluation_id: int,
+    level: str,
+    message: str,
+    teacher_name: str | None = None,
+    teacher_code: str | None = None,
+    course_name: str | None = None,
+    course_code: str | None = None,
+) -> None:
+    """Broadcast a log message to all WebSocket clients connected to the evaluation channel."""
+
+    try:
+        event = EvaluationLogEvent(
+            evaluation_id=evaluation_id,
+            level=level,
+            message=message,
+            teacher_name=teacher_name,
+            teacher_code=teacher_code,
+            course_name=course_name,
+            course_code=course_code,
+        )
+
+        try:
+            asyncio.get_running_loop()
+
+            asyncio.ensure_future(
+                connection_manager.broadcast(f"eval:{evaluation_id}", event)
+            )
+        except RuntimeError:
+            asyncio.run(connection_manager.broadcast(f"eval:{evaluation_id}", event))
+    except Exception:
+        logger.debug("Failed to broadcast WS log for evaluation %d", evaluation_id)
+
+
 def process_evaluation(evaluation_id: int, parsed: dict) -> None:
     """Persist all data extracted from a teacher evaluation PDF.
 
@@ -77,22 +111,39 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 f"'{parsed['department_code']}' not found"
             )
 
+        _broadcast_log(
+            evaluation_id,
+            level="info",
+            message=f"Iniciando procesamiento del período {period.code} - {department.name}",
+        )
+
         for teacher_data in parsed["teachers"]:
+            teacher_name = teacher_data["name"]
+            teacher_code = teacher_data["code"]
+
             user = (
                 db.query(UserModel)
-                .filter(UserModel.institutional_code == teacher_data["code"])
+                .filter(UserModel.institutional_code == teacher_code)
                 .first()
             )
 
             if not user:
                 user = UserModel(
-                    email=f"{teacher_data['code']}@temp.local",
-                    name=teacher_data["name"],
-                    institutional_code=teacher_data["code"],
+                    email=f"{teacher_code}@temp.local",
+                    name=teacher_name,
+                    institutional_code=teacher_code,
                     active=True,
                 )
                 db.add(user)
                 db.flush()
+
+                _broadcast_log(
+                    evaluation_id,
+                    level="success",
+                    message=f"Usuario creado: {teacher_name}",
+                    teacher_name=teacher_name,
+                    teacher_code=teacher_code,
+                )
 
             teacher = (
                 db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
@@ -107,22 +158,44 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 )
                 db.add(teacher)
                 db.flush()
+                _broadcast_log(
+                    evaluation_id,
+                    level="success",
+                    message=f"Docente registrado: {teacher_name}",
+                    teacher_name=teacher_name,
+                    teacher_code=teacher_code,
+                )
+
+            groups_count = 0
+            comments_count = 0
 
             for group_data in teacher_data.get("groups", []):
+                course_code = group_data["course_code"]
+                course_name = group_data["course_name"]
+
                 course = (
                     db.query(CourseModel)
-                    .filter(CourseModel.code == group_data["course_code"])
+                    .filter(CourseModel.code == course_code)
                     .first()
                 )
 
                 if not course:
                     course = CourseModel(
-                        code=group_data["course_code"],
-                        name=group_data["course_name"],
+                        code=course_code,
+                        name=course_name,
                         department_id=department.id,
                     )
                     db.add(course)
                     db.flush()
+                    _broadcast_log(
+                        evaluation_id,
+                        level="info",
+                        message=f"Materia creada: {course_name}",
+                        teacher_name=teacher_name,
+                        teacher_code=teacher_code,
+                        course_name=course_name,
+                        course_code=course_code,
+                    )
 
                 group_name = f"{group_data['group']}{group_data['section']}"
                 academic_group = (
@@ -154,6 +227,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
 
                 db.add(eval_score)
                 db.flush()
+                groups_count += 1
 
                 for q_code, score in group_data["question_scores"].items():
                     if score is not None:
@@ -165,7 +239,9 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                             )
                         )
 
-                for text in group_data.get("comments", []):
+                group_comments = group_data.get("comments", [])
+
+                for text in group_comments:
                     db.add(
                         CommentModel(
                             teacher_id=teacher.id,
@@ -176,6 +252,15 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                             pedagogical_category_id=None,
                         )
                     )
+                comments_count += len(group_comments)
+
+            _broadcast_log(
+                evaluation_id,
+                level="success",
+                message=f"Notas creadas para {teacher_name}: {groups_count} grupos, {comments_count} comentarios",
+                teacher_name=teacher_name,
+                teacher_code=teacher_code,
+            )
 
         evaluation = (
             db.query(EvaluationModel)
@@ -189,6 +274,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             evaluation.ai_status = "PENDING"
 
         db.commit()
+
+        _broadcast_log(
+            evaluation_id,
+            level="success",
+            message=f"Procesamiento completado: {len(parsed['teachers'])} docentes procesados",
+        )
 
         _broadcast_progress(
             evaluation_id,
@@ -204,6 +295,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         db.rollback()
         logger.error(
             "Failed to process evaluation %d: %s", evaluation_id, exc, exc_info=True
+        )
+
+        _broadcast_log(
+            evaluation_id,
+            level="error",
+            message=f"Error al procesar la evaluación: {str(exc)}",
         )
 
         try:
@@ -259,15 +356,28 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             ai_status="ANALYZING",
         )
 
+        _broadcast_log(
+            evaluation_id,
+            level="info",
+            message="Iniciando análisis de comentarios con IA",
+        )
+
         comments = (
             db.query(CommentModel)
             .filter(CommentModel.evaluation_id == evaluation_id)
             .all()
         )
 
+        _broadcast_log(
+            evaluation_id,
+            level="info",
+            message=f"Analizando {len(comments)} comentarios...",
+        )
+
         risk_cache: dict[str, int | None] = {}
         category_cache: dict[str, int | None] = {}
 
+        analyzed_count = 0
         for comment in comments:
             if not comment.original_text:
                 continue
@@ -298,8 +408,23 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                 comment.pedagogical_category_id = category_cache[category_label]
                 comment.category_score = result.get("category_score")
 
+            analyzed_count += 1
+
+            if analyzed_count % 10 == 0:
+                _broadcast_log(
+                    evaluation_id,
+                    level="info",
+                    message=f"Progreso: {analyzed_count}/{len(comments)} comentarios analizados",
+                )
+
         evaluation.ai_status = "ANALYZED"
         db.commit()
+
+        _broadcast_log(
+            evaluation_id,
+            level="success",
+            message=f"Análisis completado: {analyzed_count} comentarios procesados",
+        )
 
         _broadcast_progress(
             evaluation_id,
@@ -317,6 +442,13 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             exc,
             exc_info=True,
         )
+
+        _broadcast_log(
+            evaluation_id,
+            level="error",
+            message=f"Error en el análisis de IA: {str(exc)}",
+        )
+
         try:
             evaluation = (
                 db.query(EvaluationModel)

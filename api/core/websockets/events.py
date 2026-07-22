@@ -26,6 +26,19 @@ class EvaluationProgressEvent(BaseWebSocketEvent):
     count: Optional[int] = None
 
 
+class EvaluationLogEvent(BaseWebSocketEvent):
+    """Event model for detailed evaluation processing logs."""
+
+    type: Literal["evaluation_log"] = "evaluation_log"
+    evaluation_id: int
+    level: Literal["info", "success", "warning", "error"] = "info"
+    message: str
+    teacher_name: Optional[str] = None
+    teacher_code: Optional[str] = None
+    course_name: Optional[str] = None
+    course_code: Optional[str] = None
+
+
 class DevLogEvent(BaseWebSocketEvent):
     """Event model for developer logs."""
 
