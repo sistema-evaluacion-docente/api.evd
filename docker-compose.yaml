@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: docker/Dockerfile
     ports:
-      - "8000:8000"
+      - "8009:8000"
     environment:
       - PORT=${PORT}
       - DATABASE_URL=${DATABASE_URL}
@@ -24,36 +24,42 @@ services:
       - SEED_ADMIN_UID=${SEED_ADMIN_UID}
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
       - DEBUG=${DEBUG}
-    depends_on:
-      db.evd:
-        condition: service_healthy
-    networks:
-      - network_evd
+    # depends_on:
+    #   db.evd:
+    #     condition: service_healthy
+    # networks:
+    #   - network_evd
 
-  db.evd:
-    image: postgres:16
-    container_name: postgres_evd
-    restart: always
-    volumes:
-      - pgdata_evd:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-      start_period: 5s
-    networks:
-      - network_evd
-    ports:
-      - "5432:5432"
+deploy:
+  resources:
+    limits:
+      cpus: '2'
+      memory: 2g
 
-volumes:
-  pgdata_evd:
+#   db.evd:
+#     image: postgres:16
+#     container_name: postgres_evd
+#     restart: always
+#     volumes:
+#       - pgdata_evd:/var/lib/postgresql/data
+#     environment:
+#       - POSTGRES_DB=${POSTGRES_DB}
+#       - POSTGRES_USER=${POSTGRES_USER}
+#       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+#     healthcheck:
+#       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+#       interval: 5s
+#       timeout: 5s
+#       retries: 10
+#       start_period: 5s
+#     networks:
+#       - network_evd
+#     ports:
+#       - "5432:5432"
 
-networks:
-  network_evd:
-    driver: bridge
+# volumes:
+#   pgdata_evd:
+
+# networks:
+#   network_evd:
+#     driver: bridge

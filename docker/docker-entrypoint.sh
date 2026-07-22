@@ -11,4 +11,4 @@ alembic upgrade head || {
 HOST="0.0.0.0"
 PORT_ENV=${PORT:-8000}
 
-exec fastapi run api/app.py --host ${HOST} --port ${PORT_ENV}
+exec fastapi run api/app.py --host ${HOST} --port ${PORT_ENV} --proxy-headers --forwarded-allow-ips='*'
