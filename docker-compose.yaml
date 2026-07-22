@@ -24,17 +24,18 @@ services:
       - SEED_ADMIN_UID=${SEED_ADMIN_UID}
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
       - DEBUG=${DEBUG}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2g
     # depends_on:
     #   db.evd:
     #     condition: service_healthy
     # networks:
     #   - network_evd
 
-deploy:
-  resources:
-    limits:
-      cpus: '2'
-      memory: 2g
+
 
 #   db.evd:
 #     image: postgres:16
