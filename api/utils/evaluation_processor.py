@@ -83,10 +83,11 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 .filter(UserModel.institutional_code == teacher_data["code"])
                 .first()
             )
+
             if not user:
                 user = UserModel(
                     email=f"{teacher_data['code']}@temp.local",
-                    name=teacher_data["code"],
+                    name=teacher_data["name"],
                     institutional_code=teacher_data["code"],
                     active=True,
                 )
@@ -94,10 +95,9 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 db.flush()
 
             teacher = (
-                db.query(TeacherModel)
-                .filter(TeacherModel.user_id == user.id)
-                .first()
+                db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
             )
+
             if not teacher:
                 teacher = TeacherModel(
                     user_id=user.id,
@@ -114,6 +114,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     .filter(CourseModel.code == group_data["course_code"])
                     .first()
                 )
+
                 if not course:
                     course = CourseModel(
                         code=group_data["course_code"],
@@ -133,6 +134,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     )
                     .first()
                 )
+
                 if not academic_group:
                     academic_group = AcademicGroupModel(
                         course_id=course.id,
@@ -149,6 +151,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     respondent_count=group_data["respondent_count"],
                     overall_average=group_data["overall_average"],
                 )
+
                 db.add(eval_score)
                 db.flush()
 
@@ -179,6 +182,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             .filter(EvaluationModel.id == evaluation_id)
             .first()
         )
+
         if evaluation:
             evaluation.status = "COMPLETED"
             evaluation.count = len(parsed["teachers"])
@@ -208,6 +212,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 .filter(EvaluationModel.id == evaluation_id)
                 .first()
             )
+
             if evaluation:
                 evaluation.status = "FAILED"
                 db.commit()
@@ -238,6 +243,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             .filter(EvaluationModel.id == evaluation_id)
             .first()
         )
+
         if not evaluation:
             logger.error(
                 "analyze_evaluation_comments: evaluation %d not found", evaluation_id
