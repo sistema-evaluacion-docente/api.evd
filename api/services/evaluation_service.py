@@ -227,6 +227,16 @@ class EvaluationService:
 
         self.evaluations_repository.db.commit()
 
+        await self.audit_service.log(
+            action="CREATE",
+            entity_name="evaluations",
+            entity_id=evaluation_model.id,
+            actor_id=resolved_user_id,
+            description=f"""Se creó la evaluación {evaluation_model.id}
+            del período {period.name} para el departamento {department.name} ({department.code})
+            con un total de {len(parsed['teachers'])} docentes""",
+        )
+
         return evaluation_to_dict(evaluation_model), parsed
 
     async def trigger_analysis(self, evaluation_id: int) -> dict:
