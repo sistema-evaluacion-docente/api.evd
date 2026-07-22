@@ -21,7 +21,6 @@ class TeacherModel(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
     )
-    institutional_code: Mapped[str] = mapped_column(String(255), nullable=False)
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id"), nullable=True
     )

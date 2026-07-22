@@ -4,8 +4,8 @@ Director model
 
 import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -20,9 +20,6 @@ class DirectorsModel(Base):
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
     )
-    institutional_code: Mapped[str] = mapped_column(
-        String(255), nullable=False, unique=True, index=True
-    )
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=False, unique=True, index=True
     )
@@ -30,6 +27,8 @@ class DirectorsModel(Base):
         Integer, ForeignKey("departments.id"), nullable=False, unique=True, index=True
     )
     active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    user: Mapped["UserModel"] = relationship("UserModel", uselist=False)
 
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),
