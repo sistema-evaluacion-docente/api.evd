@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceNotFoundError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceNotFoundError, ValidationError
 from api.models.evaluation import EvaluationModel
 from api.schemas.evaluation import EvaluationFilters
 from api.services.evaluation_service import EvaluationService
@@ -39,6 +39,12 @@ class TestEvaluationService:
         return MagicMock()
 
     @pytest.fixture
+    def mock_directors_repo(self):
+        """Mock DirectorsRepository."""
+
+        return MagicMock()
+
+    @pytest.fixture
     def mock_audit_service(self):
         """Mock AuditService."""
 
@@ -52,6 +58,7 @@ class TestEvaluationService:
         mock_evaluations_repo,
         mock_users_repo,
         mock_academic_periods_repo,
+        mock_directors_repo,
         mock_audit_service,
     ):
         """Create service instance with mocked dependencies."""
@@ -60,6 +67,7 @@ class TestEvaluationService:
             mock_evaluations_repo,
             mock_users_repo,
             mock_academic_periods_repo,
+            mock_directors_repo,
             mock_audit_service,
         )
 
@@ -583,3 +591,109 @@ class TestEvaluationService:
         result = await service.get_teachers_by_period(999, pagination, None)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete_returns_none_when_not_found(
+        self, service, mock_evaluations_repo
+    ):
+        """Test delete returns None when evaluation not found."""
+
+        mock_evaluations_repo.get_by_id.return_value = None
+
+        result = await service.delete(999, {"uid": "director-uid"})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete_raises_permission_denied_when_user_not_found(
+        self, service, mock_evaluations_repo, mock_users_repo, mock_evaluation
+    ):
+        """Test delete raises PermissionDeniedError when current_user uid not in DB."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_users_repo.get_by_uid.return_value = None
+
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(1, {"uid": "unknown-uid"})
+
+    @pytest.mark.asyncio
+    async def test_delete_raises_permission_denied_when_not_director(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test delete raises PermissionDeniedError when user is not a director."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_directors_repo.get_by_user_id.return_value = None
+
+        with pytest.raises(PermissionDeniedError, match="departamento asociado"):
+            await service.delete(1, {"uid": "director-uid"})
+
+    @pytest.mark.asyncio
+    async def test_delete_raises_permission_denied_wrong_department(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test delete raises PermissionDeniedError when director belongs to different department."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 999
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
+        with pytest.raises(PermissionDeniedError, match="departamento asociado"):
+            await service.delete(1, {"uid": "director-uid"})
+
+    @pytest.mark.asyncio
+    async def test_delete_deletes_evaluation_and_logs_audit(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_audit_service,
+        mock_evaluation,
+    ):
+        """Test delete succeeds when user is the director of the evaluation's department."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
+        with patch(
+            "api.services.evaluation_service.evaluation_to_dict",
+            return_value={
+                "id": 1,
+                "department_id": 1,
+                "academic_period_code": "2024-1",
+            },
+        ):
+            result = await service.delete(1, {"uid": "director-uid"})
+
+        assert result["id"] == 1
+        mock_evaluations_repo.delete_evaluation.assert_called_once_with(1)
+        mock_audit_service.log.assert_called_once_with(
+            action="DELETE",
+            entity_name="evaluations",
+            entity_id=1,
+            actor_id=99,
+            description="Se eliminó la evaluación 1 del período 2024-1",
+        )
