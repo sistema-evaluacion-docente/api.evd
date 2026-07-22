@@ -9,9 +9,10 @@ from fastapi import HTTPException
 
 from api.config import config
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceNotFoundError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceNotFoundError, ValidationError
 from api.models.department import DepartmentModel
 from api.repositories.academic_periods import AcademicPeriodsRepository
+from api.repositories.directors import DirectorsRepository
 from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.users import UsersRepository
 from api.schemas.academic_period import AcademicPeriodCreate
@@ -31,11 +32,13 @@ class EvaluationService:
         evaluations_repository: EvaluationsRepository,
         users_repository: UsersRepository,
         academic_periods_repository: AcademicPeriodsRepository,
+        directors_repository: DirectorsRepository,
         audit_service: AuditService,
     ):
         self.evaluations_repository = evaluations_repository
         self.users_repository = users_repository
         self.academic_periods_repository = academic_periods_repository
+        self.directors_repository = directors_repository
         self.audit_service = audit_service
 
     async def get_all(
@@ -175,7 +178,9 @@ class EvaluationService:
         if not department:
             raise HTTPException(
                 status_code=422,
-                detail=f"Departamento '{parsed['department_code']}' no está registrado en el sistema",
+                detail=f"Departamento '{
+                    parsed['department_code']
+                }' no está registrado en el sistema",
             )
 
         existing = self.evaluations_repository.get_by_period_and_department(
@@ -270,7 +275,44 @@ class EvaluationService:
             entity_name="evaluations",
             entity_id=evaluation_id,
             actor_id=user.id if user else None,
-            description=f"Se {'activó' if active else 'desactivó'} la evaluación {evaluation_id}",
+            description=f"Se {'activó' if active else 'desactivó'} la evaluación {
+                evaluation_id
+            }",
         )
 
         return updated
+
+    async def delete(self, evaluation_id: int, current_user: dict) -> dict | None:
+        """Delete an evaluation. Only the director of the evaluation's department can delete."""
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        user = self.users_repository.get_by_uid(current_user["uid"])
+
+        if not user:
+            raise PermissionDeniedError()
+
+        director = self.directors_repository.get_by_user_id(user.id)
+
+        if not director or director.department_id != evaluation.department_id:
+            raise PermissionDeniedError(
+                "Solo el director del departamento asociado puede eliminar esta evaluación"
+            )
+
+        old_data = evaluation_to_dict(evaluation)
+        self.evaluations_repository.delete_evaluation(evaluation_id)
+
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name="evaluations",
+            entity_id=evaluation_id,
+            actor_id=user.id,
+            description=f"Se eliminó la evaluación {evaluation_id} del período {
+                old_data.get('academic_period_code') or 'N/A'
+            }",
+        )
+
+        return old_data
