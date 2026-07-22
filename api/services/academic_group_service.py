@@ -238,7 +238,7 @@ class AcademicGroupService:
             teacher_user = group.teacher.user
             data["teacher"] = {
                 "id": group.teacher.id,
-                "institutional_code": group.teacher.institutional_code,
+                "institutional_code": teacher_user.institutional_code if teacher_user else None,
                 "name": teacher_user.name if teacher_user else None,
             }
 
