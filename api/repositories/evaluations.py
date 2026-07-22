@@ -448,7 +448,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return {
             "teacher_id": teacher_id,
-            "institutional_code": teacher.institutional_code,
+            "institutional_code": teacher_user.institutional_code if teacher_user else None,
             "name": teacher_user.name if teacher_user else None,
             "contract_type": teacher.contract_type,
             "evaluation_id": evaluation_id,
@@ -479,7 +479,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         base_query = (
             self.db.query(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
                 UserModel.avatar_url,
@@ -510,7 +510,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         base_query = base_query.group_by(
             TeacherModel.id,
-            TeacherModel.institutional_code,
+            UserModel.institutional_code,
             TeacherModel.contract_type,
             UserModel.name,
             UserModel.avatar_url,
@@ -559,7 +559,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         rows = (
             self.db.query(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
                 func.count(EvaluationScoreModel.id).label("group_count"),
@@ -574,7 +574,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModel.name,
             )

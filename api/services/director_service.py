@@ -152,7 +152,6 @@ class DirectorService:
             {
                 "user_id": user["id"],
                 "department_id": data.department_id,
-                "institutional_code": data.institutional_code,
             }
         )
 
@@ -188,9 +187,11 @@ class DirectorService:
                     "Director", "department_id", str(data.department_id)
                 )
 
+        current_institutional_code = director.user.institutional_code if director.user else None
+
         if (
             data.institutional_code is not None
-            and data.institutional_code != director.institutional_code
+            and data.institutional_code != current_institutional_code
         ):
             existing_code = self.directors_repository.get_by_institutional_code(
                 data.institutional_code
@@ -211,7 +212,17 @@ class DirectorService:
             ):
                 raise ValueError("Este usuario ya es director de otro departamento")
 
-        director = self.directors_repository.update_director(director, data)
+        if data.institutional_code is not None and director.user:
+            director.user.institutional_code = data.institutional_code
+            self.directors_repository.db.commit()
+            self.directors_repository.db.refresh(director.user)
+
+        director_update_data = DirectorUpdate(
+            user_id=data.user_id,
+            department_id=data.department_id,
+            active=data.active,
+        )
+        director = self.directors_repository.update_director(director, director_update_data)
 
         await self.audit_service.log(
             action="UPDATE",
@@ -276,3 +287,28 @@ class DirectorService:
         )
 
         return await self.get_by_id(director.id)
+
+    async def unassign_director(
+        self, department_id: int, current_user: dict
+    ) -> dict | None:
+        """Remove the director assignment from a department."""
+
+        department = self.departments_repository.get(department_id)
+
+        if not department:
+            raise ResourceNotFoundError("Department", department_id)
+
+        director = self.directors_repository.unassign_director(department_id)
+
+        if not director:
+            return None
+
+        await self.audit_service.log(
+            action="UNASSIGN",
+            entity_name="directors",
+            entity_id=director.id,
+            actor_id=current_user["id"],
+            description=f"Se desasignó el director del departamento {department.name}",
+        )
+
+        return director_to_dict(director)

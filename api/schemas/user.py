@@ -61,6 +61,7 @@ class UserOut(BaseModel):
     name: Optional[str]
     active: Optional[bool]
     avatar_url: Optional[str]
+    institutional_code: Optional[str] = None
     roles: list[RoleName]
     teacher_id: Optional[int] = None
     created_at: datetime

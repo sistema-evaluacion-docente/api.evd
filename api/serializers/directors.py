@@ -8,7 +8,7 @@ def director_to_dict(director: DirectorsModel) -> dict:
 
     return {
         "id": director.id,
-        "institutional_code": director.institutional_code,
+        "institutional_code": director.user.institutional_code if director.user else None,
         "user_id": director.user_id,
         "department_id": director.department_id,
         "active": director.active,

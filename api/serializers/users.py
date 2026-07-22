@@ -16,6 +16,7 @@ def user_to_dict(
         "name": user.name,
         "active": user.active,
         "avatar_url": user.avatar_url,
+        "institutional_code": user.institutional_code,
         "roles": roles or [],
         "teacher_id": user.teacher.id if user.teacher else None,
         "created_at": user.created_at,

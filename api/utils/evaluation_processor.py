@@ -22,6 +22,7 @@ from api.models.evaluation_score import EvaluationScoreModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
+from api.models.user import UserModel
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 
 logger = logging.getLogger(__name__)
@@ -77,14 +78,29 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             )
 
         for teacher_data in parsed["teachers"]:
+            user = (
+                db.query(UserModel)
+                .filter(UserModel.institutional_code == teacher_data["code"])
+                .first()
+            )
+            if not user:
+                user = UserModel(
+                    email=f"{teacher_data['code']}@temp.local",
+                    name=teacher_data["code"],
+                    institutional_code=teacher_data["code"],
+                    active=True,
+                )
+                db.add(user)
+                db.flush()
+
             teacher = (
                 db.query(TeacherModel)
-                .filter(TeacherModel.institutional_code == teacher_data["code"])
+                .filter(TeacherModel.user_id == user.id)
                 .first()
             )
             if not teacher:
                 teacher = TeacherModel(
-                    institutional_code=teacher_data["code"],
+                    user_id=user.id,
                     department_id=department.id,
                     contract_type=teacher_data.get("contract_type"),
                     active=True,

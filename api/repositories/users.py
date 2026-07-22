@@ -191,7 +191,6 @@ class UsersRepository(BaseRepository[UserModel]):
     def create_teacher(
         self,
         user_id: int,
-        institutional_code: str | None = None,
         contract_type: str | None = None,
         department_id: int | None = None,
         active: bool | None = True,
@@ -199,7 +198,6 @@ class UsersRepository(BaseRepository[UserModel]):
         """Create a new teacher model associated with a specific user ID."""
 
         teacher = TeacherModel(
-            institutional_code=institutional_code or str(user_id),
             department_id=department_id,
             contract_type=contract_type,
             user_id=user_id,
@@ -237,6 +235,7 @@ class UsersRepository(BaseRepository[UserModel]):
                 "name": data.get("name"),
                 "active": data.get("active", True),
                 "avatar_url": data.get("avatar_url"),
+                "institutional_code": data.get("institutional_code"),
             }
             user = UserModel(**create_fields)
             self.db.add(user)

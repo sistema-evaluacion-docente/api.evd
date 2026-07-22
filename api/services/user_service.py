@@ -109,6 +109,7 @@ class UserService:
             "name": data.name,
             "active": data.active,
             "avatar_url": data.avatar_url,
+            "institutional_code": data.institutional_code,
         }
 
         user, is_new = self.users_repository.find_or_create_user(user_data)
@@ -130,7 +131,6 @@ class UserService:
             self._ensure_teacher(
                 user,
                 roles_to_assign,
-                institutional_code=data.institutional_code,
                 contract_type=data.contract_type,
                 department_id=data.department_id,
             )
@@ -177,6 +177,7 @@ class UserService:
             "name": data.name,
             "active": data.active,
             "avatar_url": data.avatar_url,
+            "institutional_code": data.institutional_code,
         }
 
         user, is_new = self.users_repository.find_or_create_user(user_data)
@@ -194,7 +195,6 @@ class UserService:
             self._ensure_teacher(
                 user,
                 normalized_roles,
-                institutional_code=data.institutional_code,
                 contract_type=data.contract_type,
                 department_id=department_id,
             )
@@ -320,7 +320,6 @@ class UserService:
         self,
         user,
         roles: list[str],
-        institutional_code: str | None = None,
         contract_type: str | None = None,
         department_id: int | None = None,
     ) -> None:
@@ -341,7 +340,6 @@ class UserService:
 
         self.users_repository.create_teacher(
             user_id=user.id,
-            institutional_code=institutional_code,
             contract_type=contract_type,
             department_id=resolved_department_id,
             active=user.active,

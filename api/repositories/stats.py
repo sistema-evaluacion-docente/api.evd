@@ -251,7 +251,7 @@ class StatsRepository:
         base_query = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -274,7 +274,7 @@ class StatsRepository:
             .join(UserModel, UserModel.id == TeacherModel.user_id)
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -343,7 +343,7 @@ class StatsRepository:
         base_query = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -381,7 +381,7 @@ class StatsRepository:
             base_query = base_query.filter(
                 (UserModel.name.ilike(search_pattern))
                 | (UserModel.email.ilike(search_pattern))
-                | (TeacherModel.institutional_code.ilike(search_pattern))
+                | (UserModel.institutional_code.ilike(search_pattern))
             )
 
         count_query = (
@@ -416,7 +416,7 @@ class StatsRepository:
             count_query = count_query.filter(
                 (UserModel.name.ilike(search_pattern))
                 | (UserModel.email.ilike(search_pattern))
-                | (TeacherModel.institutional_code.ilike(search_pattern))
+                | (UserModel.institutional_code.ilike(search_pattern))
             )
 
         total = count_query.scalar() or 0
@@ -426,7 +426,7 @@ class StatsRepository:
         results = (
             base_query.group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 UserModel.name,
                 UserModel.email,
                 UserModel.avatar_url,
@@ -1337,7 +1337,7 @@ class StatsRepository:
         teacher_rows = (
             self.db.query(
                 TeacherModel.id.label("teacher_id"),
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModelLocal.name,
                 UserModelLocal.avatar_url,
@@ -1360,7 +1360,7 @@ class StatsRepository:
             )
             .group_by(
                 TeacherModel.id,
-                TeacherModel.institutional_code,
+                UserModel.institutional_code,
                 TeacherModel.contract_type,
                 UserModelLocal.name,
                 UserModelLocal.avatar_url,

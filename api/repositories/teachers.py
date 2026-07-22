@@ -40,7 +40,8 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
         return (
             self.db.query(TeacherModel)
-            .filter(TeacherModel.institutional_code == institutional_code)
+            .join(UserModel, TeacherModel.user_id == UserModel.id)
+            .filter(UserModel.institutional_code == institutional_code)
             .first()
         )
 
@@ -52,7 +53,8 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
         return (
             self.db.query(TeacherModel)
-            .filter(TeacherModel.institutional_code.in_(codes))
+            .join(UserModel, TeacherModel.user_id == UserModel.id)
+            .filter(UserModel.institutional_code.in_(codes))
             .all()
         )
 
@@ -73,7 +75,7 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
                 query = query.filter(
                     or_(
-                        TeacherModel.institutional_code.ilike(like_term),
+                        UserModel.institutional_code.ilike(like_term),
                         TeacherModel.contract_type.ilike(like_term),
                         UserModel.name.ilike(like_term),
                         UserModel.email.ilike(like_term),
@@ -242,7 +244,7 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
         return {
             "teacher_id": teacher_id,
-            "institutional_code": teacher.institutional_code,
+            "institutional_code": teacher_user.institutional_code if teacher_user else None,
             "name": teacher_user.name if teacher_user else None,
             "history": [
                 {

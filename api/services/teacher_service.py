@@ -98,9 +98,21 @@ class TeacherService:
                 "teacher", "institutional_code", data.institutional_code
             )
 
-        teacher = self.teachers_repository.create(data.model_dump())
-        self.teachers_repository.db.commit()
-        self.teachers_repository.db.refresh(teacher)
+        user_data = UserCreate(
+            email=f"{data.institutional_code}@temp.local",
+            name=data.institutional_code,
+            active=True,
+            institutional_code=data.institutional_code,
+            contract_type=data.contract_type,
+        )
+
+        user = await self.user_service.create_user_with_roles(
+            user_data, department_id=data.department_id
+        )
+
+        teacher = self.teachers_repository.get_by_institutional_code(
+            data.institutional_code
+        )
 
         result = self._enrich_teacher_to_dict(teacher)
 
@@ -182,13 +194,19 @@ class TeacherService:
 
         old_data = teacher_to_dict(teacher)
         payload = data.model_dump(exclude_unset=True)
+        institutional_code = payload.pop("institutional_code", None)
 
         updated = self.teachers_repository.update_teacher(teacher, payload)
+
+        if institutional_code is not None and teacher.user:
+            teacher.user.institutional_code = institutional_code
+            self.teachers_repository.db.commit()
+            self.teachers_repository.db.refresh(teacher.user)
+
         result = self._enrich_teacher_to_dict(updated)
 
         changes = []
         for field in (
-            "institutional_code",
             "department_id",
             "contract_type",
             "user_id",
@@ -198,6 +216,9 @@ class TeacherService:
             if new_val is not None and new_val != old_data.get(field):
                 old_val = old_data.get(field)
                 changes.append(f"{field} cambió de {old_val} a {new_val}")
+
+        if institutional_code is not None and institutional_code != old_data.get("institutional_code"):
+            changes.append(f"institutional_code cambió de {old_data.get('institutional_code')} a {institutional_code}")
 
         desc = f"Se actualizó el profesor #{teacher_id}"
         if changes:
@@ -341,7 +362,7 @@ class TeacherService:
         ]
 
         existing_teachers = self.teachers_repository.get_by_institutional_codes(codes)
-        existing_codes = {t.institutional_code for t in existing_teachers}
+        existing_codes = {t.user.institutional_code for t in existing_teachers if t.user}
 
         created = []
         skipped = []
