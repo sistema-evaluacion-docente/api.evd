@@ -170,7 +170,6 @@ class TestUsersRepository:
 
         result = repo.create_teacher(
             user_id=1,
-            institutional_code="CODE123",
             contract_type="FULL_TIME",
             department_id=1,
             active=True,

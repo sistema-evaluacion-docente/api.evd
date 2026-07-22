@@ -31,6 +31,8 @@ class TestDirectorsRepository:
         director.user_id = 10
         director.department_id = 1
         director.active = True
+        director.user = MagicMock()
+        director.user.institutional_code = "12345"
         return director
 
     def test_inherits_base_repository(self, repo):

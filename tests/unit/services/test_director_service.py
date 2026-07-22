@@ -72,10 +72,11 @@ class TestDirectorService:
         """Mock DirectorsModel instance."""
         director = MagicMock(spec=DirectorsModel)
         director.id = 1
-        director.institutional_code = "12345"
         director.user_id = 10
         director.department_id = 1
         director.active = True
+        director.user = MagicMock()
+        director.user.institutional_code = "12345"
         director.created_at = "2024-01-01T00:00:00Z"
         director.updated_at = "2024-01-01T00:00:00Z"
         return director

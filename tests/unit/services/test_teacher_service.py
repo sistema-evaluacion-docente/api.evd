@@ -86,12 +86,12 @@ class TestTeacherService:
 
         teacher = MagicMock(spec=TeacherModel)
         teacher.id = 1
-        teacher.institutional_code = "12345"
         teacher.department_id = 1
         teacher.contract_type = "FULL_TIME"
         teacher.user_id = 1
         teacher.active = True
-        teacher.user = None
+        teacher.user = MagicMock()
+        teacher.user.institutional_code = "12345"
         teacher.created_at = "2024-01-01T00:00:00Z"
         teacher.updated_at = "2024-01-01T00:00:00Z"
         return teacher
@@ -163,14 +163,15 @@ class TestTeacherService:
         self,
         service,
         mock_teachers_repo,
+        mock_user_service,
         mock_audit_service,
         mock_teacher,
         current_user,
     ):
         """Test create succeeds with valid data."""
 
-        mock_teachers_repo.get_by_institutional_code.return_value = None
-        mock_teachers_repo.create.return_value = mock_teacher
+        mock_teachers_repo.get_by_institutional_code.side_effect = [None, mock_teacher]
+        mock_user_service.create_user_with_roles.return_value = {"id": 1}
 
         data = TeacherCreate(
             institutional_code="12345",
@@ -181,7 +182,7 @@ class TestTeacherService:
         result = await service.create(data, current_user)
 
         assert result is not None
-        mock_teachers_repo.create.assert_called_once()
+        mock_user_service.create_user_with_roles.assert_called_once()
         mock_audit_service.log.assert_called_once()
 
     @pytest.mark.asyncio
@@ -329,7 +330,7 @@ class TestTeacherService:
         assert result["previous_count"] == 8
 
     @pytest.mark.asyncio
-    async def test_get_history(self, service, mock_teachers_repo):
+    async def test_get_history(self, service, mock_teachers_repo, mock_users_repo):
         """Test get_history delegates to repository."""
 
         expected = {
@@ -338,8 +339,17 @@ class TestTeacherService:
             "history": [],
         }
         mock_teachers_repo.get_history.return_value = expected
+        mock_teachers_repo.get_by_id.return_value = MagicMock()
 
-        result = await service.get_history(1)
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_users_repo.get_user_role_names.return_value = ["ADMIN"]
+
+        current_user = MagicMock()
+        current_user.uid = "test-uid"
+
+        result = await service.get_history(current_user, 1)
 
         assert result == expected
         mock_teachers_repo.get_history.assert_called_once_with(1)

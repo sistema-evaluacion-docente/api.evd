@@ -28,12 +28,12 @@ class TestTeachersRepository:
 
         teacher = MagicMock(spec=TeacherModel)
         teacher.id = 1
-        teacher.institutional_code = "12345"
         teacher.department_id = 1
         teacher.contract_type = "FULL_TIME"
         teacher.user_id = 1
         teacher.active = True
-        teacher.user = None
+        teacher.user = MagicMock()
+        teacher.user.institutional_code = "12345"
         return teacher
 
     def test_inherits_base_repository(self, repo):
@@ -69,9 +69,10 @@ class TestTeachersRepository:
     def test_get_by_institutional_code_found(self, repo, mock_db, mock_teacher_model):
         """Test get_by_institutional_code returns teacher when found."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
-            mock_teacher_model
-        )
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value.first.return_value = mock_teacher_model
 
         result = repo.get_by_institutional_code("12345")
 
@@ -80,7 +81,10 @@ class TestTeachersRepository:
     def test_get_by_institutional_code_not_found(self, repo, mock_db):
         """Test get_by_institutional_code returns None when not found."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value.first.return_value = None
 
         result = repo.get_by_institutional_code("99999")
 
@@ -96,9 +100,10 @@ class TestTeachersRepository:
     def test_get_by_institutional_codes(self, repo, mock_db, mock_teacher_model):
         """Test get_by_institutional_codes returns matching teachers."""
 
-        mock_db.query.return_value.filter.return_value.all.return_value = [
-            mock_teacher_model
-        ]
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value.all.return_value = [mock_teacher_model]
 
         result = repo.get_by_institutional_codes(["12345"])
 

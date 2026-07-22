@@ -76,8 +76,9 @@ class TestAcademicGroupService:
 
         teacher = MagicMock(spec=TeacherModel)
         teacher.id = 20
-        teacher.institutional_code = "12345"
-        teacher.user = None
+        teacher.user = MagicMock()
+        teacher.user.institutional_code = "12345"
+        teacher.user.name = None
 
         group = MagicMock(spec=AcademicGroupModel)
         group.id = 1

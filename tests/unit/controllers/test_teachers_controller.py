@@ -178,9 +178,11 @@ class TestTeachersController:
             "history": [],
         }
 
-        result = await controller.get_history(1)
+        current_user = MagicMock()
+        current_user.uid = "test-uid"
+        result = await controller.get_history(current_user, 1)
 
-        mock_service.get_history.assert_called_once_with(1)
+        mock_service.get_history.assert_called_once_with(current_user, 1)
         assert result["teacher_id"] == 1
 
     @pytest.mark.asyncio
