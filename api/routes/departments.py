@@ -117,3 +117,21 @@ async def assign_director(
         raise HTTPException(status_code=400, detail=str(e))
 
     return director
+
+
+@router.delete("/{department_id}/director", status_code=204)
+async def unassign_director(
+    department_id: int,
+    current_user=Depends(require_roles(_ROLES)),
+    controller: DirectorsController = Depends(get_directors_controller),
+):
+    """Unassign the director from a department."""
+
+    result = await controller.unassign_director(department_id, current_user)
+
+    if not result:
+        raise HTTPException(
+            status_code=404, detail="Director no encontrado para este departamento"
+        )
+
+    return None

@@ -50,6 +50,13 @@ class DirectorsController:
 
         return await self.service.assign_director(department_id, user_id, current_user)
 
+    async def unassign_director(
+        self, department_id: int, current_user: dict
+    ) -> dict | None:
+        """Unassign the director from a department."""
+
+        return await self.service.unassign_director(department_id, current_user)
+
 
 def get_directors_controller(
     service: DirectorService = Depends(get_director_service),

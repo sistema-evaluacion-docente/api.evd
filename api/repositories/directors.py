@@ -40,7 +40,8 @@ class DirectorsRepository(BaseRepository[DirectorsModel]):
 
         return (
             self.db.query(DirectorsModel)
-            .filter(DirectorsModel.institutional_code == institutional_code)
+            .join(UserModel, DirectorsModel.user_id == UserModel.id)
+            .filter(UserModel.institutional_code == institutional_code)
             .first()
         )
 
@@ -137,6 +138,26 @@ class DirectorsRepository(BaseRepository[DirectorsModel]):
             department_id=department_id,
         )
         self.db.add(director)
+        self.db.commit()
+        self.db.refresh(director)
+        return director
+
+    def unassign_director(self, department_id: int) -> DirectorsModel | None:
+        """Unassign director from a department by marking it as inactive."""
+
+        director = (
+            self.db.query(DirectorsModel)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active == True,
+            )
+            .first()
+        )
+
+        if not director:
+            return None
+
+        director.active = False
         self.db.commit()
         self.db.refresh(director)
         return director
