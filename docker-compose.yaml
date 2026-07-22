@@ -30,6 +30,12 @@ services:
     # networks:
     #   - network_evd
 
+deploy:
+  resources:
+    limits:
+      cpus: '2'
+      memory: 2g
+
 #   db.evd:
 #     image: postgres:16
 #     container_name: postgres_evd
