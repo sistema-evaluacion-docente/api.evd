@@ -205,6 +205,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             .filter(
                 EvaluationModel.academic_period_id == academic_period_id,
                 EvaluationModel.department_id == department_id,
+                EvaluationModel.active == True,
             )
             .first()
         )

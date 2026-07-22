@@ -182,7 +182,7 @@ class EvaluationService:
             period.id, department.id
         )
 
-        if existing and existing["active"] and existing["status"] == "COMPLETED":
+        if existing and existing["active"]:
             raise HTTPException(
                 status_code=409,
                 detail=(
