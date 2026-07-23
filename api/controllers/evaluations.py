@@ -16,12 +16,13 @@ class EvaluationsController:
 
     async def get_all(
         self,
+        user_email: str,
         filters: EvaluationFilters,
         pagination: PaginationParams,
     ):
         """Retrieve all evaluations based on filters and pagination."""
 
-        return await self.service.get_all(filters, pagination)
+        return await self.service.get_all(user_email, filters, pagination)
 
     async def get_by_id(self, evaluation_id: int):
         """Retrieve an evaluation by ID."""

@@ -43,10 +43,29 @@ class EvaluationService:
 
     async def get_all(
         self,
+        user_email: str,
         filters: EvaluationFilters,
         pagination: PaginationParams,
     ) -> dict:
         """Retrieve all evaluations based on filters and pagination."""
+
+        user_id = (
+            self.users_repository.get_by_email(user_email).id if user_email else None
+        )
+
+        if not user_id:
+            raise PermissionDeniedError(
+                "Usuario no encontrado o no tiene permisos para acceder a las evaluaciones."
+            )
+
+        director = self.directors_repository.get_by_user_id(user_id)
+
+        if not director:
+            raise PermissionDeniedError(
+                "El usuario no tiene permisos para acceder a las evaluaciones."
+            )
+
+        filters.department_id = director.department_id
 
         items, total = self.evaluations_repository.search(filters, pagination)
 
