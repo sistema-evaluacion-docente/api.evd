@@ -26,8 +26,11 @@ services:
       - DEBUG=${DEBUG}
       - HUGGINGFACE_RISK_MODEL=${HUGGINGFACE_RISK_MODEL}
       - HUGGINGFACE_CATEGORY_MODEL=${HUGGINGFACE_CATEGORY_MODEL}
+      - HF_HOME=/app/hf_cache
     volumes:
       - .:/app
+      - hf_cache:/app/hf_cache
 
 volumes:
+  hf_cache:
   pgdata_evd:

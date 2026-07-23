@@ -26,6 +26,9 @@ services:
       - DEBUG=${DEBUG}
       - HUGGINGFACE_RISK_MODEL=${HUGGINGFACE_RISK_MODEL}
       - HUGGINGFACE_CATEGORY_MODEL=${HUGGINGFACE_CATEGORY_MODEL}
+      - HF_HOME=/app/hf_cache
+    volumes:
+      - hf_cache:/app/hf_cache
     deploy:
       resources:
         limits:
@@ -60,8 +63,9 @@ services:
 #     ports:
 #       - "5432:5432"
 
-# volumes:
-#   pgdata_evd:
+volumes:
+  hf_cache:
+  # pgdata_evd:
 
 # networks:
 #   network_evd:
