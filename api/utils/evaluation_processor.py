@@ -338,6 +338,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         db.close()
 
 
+# TODO: optimize
 def analyze_evaluation_comments(evaluation_id: int) -> None:
     """Run AI classification on every comment of an evaluation.
 
@@ -389,34 +390,42 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         risk_cache: dict[str, int | None] = {}
         category_cache: dict[str, int | None] = {}
 
+        all_risk_levels = db.query(RiskLevelModel).all()
+        risk_name_to_id: dict[str, int] = {
+            r.name.lower(): r.id for r in all_risk_levels
+        }
+
+        all_categories = db.query(PedagogicalCategoryModel).all()
+        category_name_to_id: dict[str, int] = {
+            c.name.lower(): c.id for c in all_categories
+        }
+
         analyzed_count = 0
+
         for comment in comments:
             if not comment.original_text:
                 continue
 
             result = analyze_comment(comment.original_text)
 
+            print(result)
+
             risk_label = result.get("risk_label")
+
             if risk_label is not None:
                 if risk_label not in risk_cache:
-                    row = (
-                        db.query(RiskLevelModel)
-                        .filter(RiskLevelModel.name == risk_label)
-                        .first()
-                    )
-                    risk_cache[risk_label] = row.id if row else None
+                    risk_cache[risk_label] = risk_name_to_id.get(risk_label.lower())
+
                 comment.risk_level = risk_cache[risk_label]
                 comment.risk_score = result.get("risk_score")
 
             category_label = result.get("category_label")
+
             if category_label is not None:
                 if category_label not in category_cache:
-                    row = (
-                        db.query(PedagogicalCategoryModel)
-                        .filter(PedagogicalCategoryModel.name == category_label)
-                        .first()
+                    category_cache[category_label] = category_name_to_id.get(
+                        category_label.lower()
                     )
-                    category_cache[category_label] = row.id if row else None
                 comment.pedagogical_category_id = category_cache[category_label]
                 comment.category_score = result.get("category_score")
 
@@ -441,6 +450,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_progress(
             evaluation_id,
             stage="ANALYZING",
+            status="COMPLETED",
             ai_status="ANALYZED",
         )
 
@@ -458,6 +468,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_log(
             evaluation_id,
             level="error",
+            status="FAILED",
             message=f"Error en el análisis de IA: {str(exc)}",
         )
 

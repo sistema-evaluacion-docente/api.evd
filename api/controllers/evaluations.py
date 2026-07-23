@@ -85,6 +85,11 @@ class EvaluationsController:
 
         return await self.service.update_status(evaluation_id, active, current_user)
 
+    async def delete(self, evaluation_id: int, current_user: dict):
+        """Delete an evaluation and all related data."""
+
+        return await self.service.delete(evaluation_id, current_user)
+
 
 def get_evaluations_controller(
     service: EvaluationService = Depends(get_evaluation_service),

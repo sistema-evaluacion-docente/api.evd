@@ -16,7 +16,10 @@ _category_pipeline = None
 
 
 def _get_risk_pipeline():
+    """Get the HuggingFace pipeline for risk level classification."""
+
     global _risk_pipeline
+
     if _risk_pipeline is None:
         try:
             _risk_pipeline = pipeline(
@@ -30,7 +33,10 @@ def _get_risk_pipeline():
 
 
 def _get_category_pipeline():
+    """Get the HuggingFace pipeline for pedagogical category classification."""
+
     global _category_pipeline
+
     if _category_pipeline is None:
         try:
             _category_pipeline = pipeline(
@@ -49,6 +55,7 @@ def analyze_comment(text: str) -> dict:
     Returns the top label and confidence score for risk level and pedagogical
     category. Any field is None if the model fails or is not configured.
     """
+
     result = {
         "risk_label": None,
         "risk_score": None,
@@ -57,18 +64,22 @@ def analyze_comment(text: str) -> dict:
     }
 
     risk_pipe = _get_risk_pipeline()
+
     if risk_pipe:
         try:
             output = risk_pipe(text)
+
             result["risk_label"] = output[0]["label"]
             result["risk_score"] = round(output[0]["score"], 4)
         except Exception as exc:
             logger.error("Risk model inference failed: %s", exc)
 
     category_pipe = _get_category_pipeline()
+
     if category_pipe:
         try:
             output = category_pipe(text)
+
             result["category_label"] = output[0]["label"]
             result["category_score"] = round(output[0]["score"], 4)
         except Exception as exc:

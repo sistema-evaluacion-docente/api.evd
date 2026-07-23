@@ -24,6 +24,8 @@ services:
       - SEED_ADMIN_UID=${SEED_ADMIN_UID}
       - SEED_ADMIN_EMAIL=${SEED_ADMIN_EMAIL}
       - DEBUG=${DEBUG}
+      - HUGGINGFACE_RISK_MODEL=${HUGGINGFACE_RISK_MODEL}
+      - HUGGINGFACE_CATEGORY_MODEL=${HUGGINGFACE_CATEGORY_MODEL}
     deploy:
       resources:
         limits:

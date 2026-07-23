@@ -231,7 +231,11 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 AcademicPeriodModel,
                 EvaluationModel.academic_period_id == AcademicPeriodModel.id,
             )
-            .filter(AcademicGroupModel.teacher_id == teacher_id)
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                AcademicPeriodModel.active == True,
+                EvaluationModel.active == True,
+            )
             .group_by(
                 EvaluationModel.id,
                 AcademicPeriodModel.code,
@@ -244,7 +248,9 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
         return {
             "teacher_id": teacher_id,
-            "institutional_code": teacher_user.institutional_code if teacher_user else None,
+            "institutional_code": (
+                teacher_user.institutional_code if teacher_user else None
+            ),
             "name": teacher_user.name if teacher_user else None,
             "history": [
                 {

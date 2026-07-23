@@ -123,7 +123,7 @@ async def get_evaluation_by_period(
 
     if not evaluation:
         raise HTTPException(
-            status_code=404, detail="Evaluation not found for the given period"
+            status_code=404, detail="Evaluación no encontrada para este periodo"
         )
 
     return evaluation
@@ -143,7 +143,7 @@ async def get_evaluation_by_id(
     evaluation = await controller.get_by_id(evaluation_id)
 
     if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return evaluation
 
@@ -166,7 +166,7 @@ async def get_teachers_by_period(
     if not result:
         raise HTTPException(
             status_code=404,
-            detail="Academic period not found or no evaluations exist for this period",
+            detail="Periodo academico no encontrado o no existen evaluaciones para este periodo",
         )
 
     return {
@@ -192,7 +192,7 @@ async def get_evaluation_summary(
     summary = await controller.get_summary(evaluation_id)
 
     if not summary:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return summary
 
@@ -211,7 +211,7 @@ async def get_evaluation_dimension_averages(
     dimensions = await controller.get_dimension_averages(evaluation_id)
 
     if dimensions is None:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return dimensions
 
@@ -231,7 +231,9 @@ async def get_teacher_comments(
     result = await controller.get_teacher_comments(evaluation_id, teacher_id)
 
     if not result:
-        raise HTTPException(status_code=404, detail="Evaluation or teacher not found")
+        raise HTTPException(
+            status_code=404, detail="Evaluación o docente no encontrado"
+        )
 
     return result
 
@@ -261,7 +263,9 @@ async def export_teacher_evaluation(
 
     detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
     if not detail:
-        raise HTTPException(status_code=404, detail="Evaluation or teacher not found")
+        raise HTTPException(
+            status_code=404, detail="Evaluación o docente no encontrado"
+        )
 
     comparison = None
     eval_record = (
@@ -299,7 +303,9 @@ async def get_teacher_evaluation_detail(
     detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
 
     if not detail:
-        raise HTTPException(status_code=404, detail="Evaluation or teacher not found")
+        raise HTTPException(
+            status_code=404, detail="Evaluación o docenten no encontrado"
+        )
 
     return detail
 
@@ -324,7 +330,7 @@ async def export_evaluation(
     summary = await controller.get_summary(evaluation_id)
 
     if not summary:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     buffer, filename = build_evaluation_report(summary)
     return evaluation_streaming_response(buffer, filename)
@@ -350,6 +356,26 @@ async def analyze_evaluation(
     return evaluation
 
 
+@router.delete(
+    "/{evaluation_id}",
+    response_model=EvaluationOut,
+)
+async def delete_evaluation(
+    evaluation_id: int,
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Delete an evaluation and all related scores, comments, and data.
+    Only the director of the associated department can perform this action."""
+
+    evaluation = await controller.delete(evaluation_id, current_user)
+
+    if not evaluation:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+
+    return evaluation
+
+
 @router.patch(
     "/{evaluation_id}/status",
     response_model=EvaluationOut,
@@ -367,6 +393,6 @@ async def update_evaluation_status(
     )
 
     if not evaluation:
-        raise HTTPException(status_code=404, detail="Evaluation not found")
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return evaluation

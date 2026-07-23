@@ -260,14 +260,38 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return evaluation_to_dict(evaluation)
 
-    def delete_evaluation(self, evaluation_id: int) -> None:
-        """Delete an evaluation record by ID."""
+    def delete_evaluation(self, evaluation_id: int) -> EvaluationModel | None:
+        """Delete an evaluation and all its related records by ID."""
 
         evaluation = self.get_by_id(evaluation_id)
 
-        if evaluation:
-            self.db.delete(evaluation)
-            self.db.commit()
+        if not evaluation:
+            return None
+
+        score_ids = [
+            row[0]
+            for row in self.db.query(EvaluationScoreModel.id)
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+            .all()
+        ]
+
+        if score_ids:
+            self.db.query(EvaluationQuestionScoreModel).filter(
+                EvaluationQuestionScoreModel.evaluation_score_id.in_(score_ids)
+            ).delete(synchronize_session="fetch")
+
+        self.db.query(EvaluationScoreModel).filter(
+            EvaluationScoreModel.evaluation_id == evaluation_id
+        ).delete(synchronize_session="fetch")
+
+        self.db.query(CommentModel).filter(
+            CommentModel.evaluation_id == evaluation_id
+        ).delete(synchronize_session="fetch")
+
+        self.db.delete(evaluation)
+        self.db.commit()
+
+        return evaluation
 
     def get_teacher_comments(self, evaluation_id: int, teacher_id: int) -> dict | None:
         """Return comments grouped by course for a teacher within an evaluation."""
@@ -449,7 +473,9 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return {
             "teacher_id": teacher_id,
-            "institutional_code": teacher_user.institutional_code if teacher_user else None,
+            "institutional_code": (
+                teacher_user.institutional_code if teacher_user else None
+            ),
             "name": teacher_user.name if teacher_user else None,
             "contract_type": teacher.contract_type,
             "evaluation_id": evaluation_id,

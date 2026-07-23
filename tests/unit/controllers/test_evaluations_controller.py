@@ -30,6 +30,7 @@ class TestEvaluationsController:
         service.prepare_upload = AsyncMock()
         service.trigger_analysis = AsyncMock()
         service.update_status = AsyncMock()
+        service.delete = AsyncMock()
         return service
 
     @pytest.fixture
@@ -202,3 +203,15 @@ class TestEvaluationsController:
 
         mock_service.update_status.assert_called_once_with(1, False, current_user)
         assert result["active"] is False
+
+    @pytest.mark.asyncio
+    async def test_delete_delegates_to_service(self, controller, mock_service):
+        """Test delete delegates to service."""
+
+        current_user = {"uid": "director-uid"}
+        mock_service.delete.return_value = {"id": 1, "department_id": 1}
+
+        result = await controller.delete(1, current_user)
+
+        mock_service.delete.assert_called_once_with(1, current_user)
+        assert result["id"] == 1
