@@ -18,7 +18,7 @@ from api.controllers.evaluations import (
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.database import get_db
-from api.middlewares.auth import require_roles
+from api.middlewares.auth import require_roles, get_current_user
 from api.models.evaluation import EvaluationModel as EvaluationORM
 from api.repositories.stats import StatsRepository, get_stats_repository
 from api.schemas.evaluation import (
@@ -100,12 +100,13 @@ async def get_question_catalog(
 async def get_all_evaluations(
     filters: EvaluationFiltersDep,
     pagination: PaginationDep,
+    current_user=Depends(get_current_user),
     _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Endpoint to list all evaluations with optional filters."""
 
-    return await controller.get_all(filters, pagination)
+    return await controller.get_all(current_user.email, filters, pagination)
 
 
 @router.get(
