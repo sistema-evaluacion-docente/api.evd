@@ -450,6 +450,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_progress(
             evaluation_id,
             stage="ANALYZING",
+            status="COMPLETED",
             ai_status="ANALYZED",
         )
 
@@ -467,6 +468,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_log(
             evaluation_id,
             level="error",
+            status="FAILED",
             message=f"Error en el análisis de IA: {str(exc)}",
         )
 
