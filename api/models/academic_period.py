@@ -24,7 +24,7 @@ class AcademicPeriodModel(Base):
     end_date = Column(Date, nullable=True)
     evaluation_end_date = Column(Date, nullable=True)
     final_evaluation_date = Column(Date, nullable=True)
-    active = Column(Boolean, nullable=True, default=False)
+    active = Column(Boolean, nullable=True, default=True)
 
     academic_groups = relationship("AcademicGroupModel", back_populates="academic_period")
 
