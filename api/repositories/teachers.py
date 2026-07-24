@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi.params import Depends
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
@@ -65,7 +65,11 @@ class TeachersRepository(BaseRepository[TeacherModel]):
     ) -> tuple[list[TeacherModel], int]:
         """Search for teachers based on filters and pagination parameters."""
 
-        query = self.db.query(TeacherModel).options(joinedload(TeacherModel.user))
+        query = (
+            self.db.query(TeacherModel)
+            .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
+            .options(contains_eager(TeacherModel.user))
+        )
 
         if filters.search:
             term = filters.search.strip()
