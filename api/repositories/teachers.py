@@ -197,7 +197,10 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         }
 
     def get_history(
-        self, teacher_id: int, pagination: PaginationParams
+        self,
+        teacher_id: int,
+        pagination: PaginationParams,
+        sort_by: str | None = None,
     ) -> tuple[list[dict], int, dict | None]:
         """Return the teacher's average score for each academic period, paginated."""
 
@@ -244,8 +247,22 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 AcademicPeriodModel.name,
                 AcademicPeriodModel.id,
             )
-            .order_by(AcademicPeriodModel.code.asc())
         )
+
+        order_clause = AcademicPeriodModel.code.asc()
+
+        if sort_by == "period_code_desc":
+            order_clause = AcademicPeriodModel.code.desc()
+        elif sort_by == "overall_average_asc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).asc()
+        elif sort_by == "overall_average_desc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).desc()
+        elif sort_by == "group_count_asc":
+            order_clause = func.count(EvaluationScoreModel.id).asc()
+        elif sort_by == "group_count_desc":
+            order_clause = func.count(EvaluationScoreModel.id).desc()
+
+        base_query = base_query.order_by(order_clause)
 
         total = base_query.count()
         rows = base_query.offset(pagination.offset).limit(pagination.limit).all()

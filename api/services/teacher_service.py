@@ -286,7 +286,11 @@ class TeacherService:
         )
 
     async def get_history(
-        self, current_user: TokenUser, teacher_id: int, pagination: PaginationParams
+        self,
+        current_user: TokenUser,
+        teacher_id: int,
+        pagination: PaginationParams,
+        sort_by: str | None = None,
     ) -> dict | None:
         """Get teacher's historical averages across all periods, paginated."""
 
@@ -303,7 +307,7 @@ class TeacherService:
             )
 
         items, total, teacher_info = self.teachers_repository.get_history(
-            teacher_id, pagination
+            teacher_id, pagination, sort_by
         )
 
         if teacher_info is None:
