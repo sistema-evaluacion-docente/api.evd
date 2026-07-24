@@ -185,9 +185,11 @@ class TestTeachersController:
         current_user = MagicMock()
         current_user.uid = "test-uid"
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_history(current_user, 1, pagination)
+        result = await controller.get_history(current_user, 1, pagination, "period_code_asc")
 
-        mock_service.get_history.assert_called_once_with(current_user, 1, pagination)
+        mock_service.get_history.assert_called_once_with(
+            current_user, 1, pagination, "period_code_asc"
+        )
         assert result["teacher_id"] == 1
 
     @pytest.mark.asyncio
