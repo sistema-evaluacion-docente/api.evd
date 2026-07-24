@@ -91,7 +91,7 @@ _ = (
 Base.metadata.create_all(bind=engine)
 
 
-app = FastAPI(title="EVD API", redirect_slashes=False)
+app = FastAPI(title="EVD API")
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
 app.mount(
