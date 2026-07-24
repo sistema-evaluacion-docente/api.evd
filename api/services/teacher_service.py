@@ -61,18 +61,39 @@ class TeacherService:
     ) -> dict:
         """Retrieve teachers with overall_average for a given academic period."""
 
-        teachers, total = self.teachers_repository.search(filters, pagination)
-        teacher_ids = [t.id for t in teachers]
-
-        avgs = self.teachers_repository.get_teacher_averages_by_period(
-            teacher_ids, academic_period_id
+        sort_by_average = filters.sort_by in (
+            "overall_average_asc",
+            "overall_average_desc",
         )
 
-        items = []
-        for t in teachers:
-            d = self._enrich_teacher_to_dict(t)
-            d["overall_average"] = avgs.get(t.id)
-            items.append(d)
+        if sort_by_average:
+            rows, total = self.teachers_repository.search_with_averages(
+                filters, pagination, academic_period_id
+            )
+
+            items = []
+
+            for teacher, avg_score in rows:
+                d = self._enrich_teacher_to_dict(teacher)
+                d["overall_average"] = (
+                    float(avg_score) if avg_score is not None else None
+                )
+
+                items.append(d)
+        else:
+            teachers, total = self.teachers_repository.search(filters, pagination)
+            teacher_ids = [t.id for t in teachers]
+
+            avgs = self.teachers_repository.get_teacher_averages_by_period(
+                teacher_ids, academic_period_id
+            )
+
+            items = []
+
+            for t in teachers:
+                d = self._enrich_teacher_to_dict(t)
+                d["overall_average"] = avgs.get(t.id)
+                items.append(d)
 
         return build_paginated_response(items, total, pagination)
 
