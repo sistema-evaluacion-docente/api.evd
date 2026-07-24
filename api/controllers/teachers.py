@@ -71,10 +71,12 @@ class TeachersController:
 
         return await self.service.count_by_department(department_id, academic_period_id)
 
-    async def get_history(self, current_user: TokenUser, teacher_id: int):
+    async def get_history(
+        self, current_user: TokenUser, teacher_id: int, pagination: PaginationParams
+    ):
         """Get teacher's historical averages."""
 
-        return await self.service.get_history(current_user, teacher_id)
+        return await self.service.get_history(current_user, teacher_id, pagination)
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict

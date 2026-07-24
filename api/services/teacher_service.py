@@ -217,8 +217,12 @@ class TeacherService:
                 old_val = old_data.get(field)
                 changes.append(f"{field} cambió de {old_val} a {new_val}")
 
-        if institutional_code is not None and institutional_code != old_data.get("institutional_code"):
-            changes.append(f"institutional_code cambió de {old_data.get('institutional_code')} a {institutional_code}")
+        if institutional_code is not None and institutional_code != old_data.get(
+            "institutional_code"
+        ):
+            changes.append(
+                f"institutional_code cambió de {old_data.get('institutional_code')} a {institutional_code}"
+            )
 
         desc = f"Se actualizó el profesor #{teacher_id}"
         if changes:
@@ -282,9 +286,9 @@ class TeacherService:
         )
 
     async def get_history(
-        self, current_user: TokenUser, teacher_id: int
+        self, current_user: TokenUser, teacher_id: int, pagination: PaginationParams
     ) -> dict | None:
-        """Get teacher's historical averages across all periods."""
+        """Get teacher's historical averages across all periods, paginated."""
 
         user = self.users_repository.get_by_uid(current_user.uid)
         teacher = self.teachers_repository.get_by_id(teacher_id)
@@ -298,7 +302,16 @@ class TeacherService:
                 "El docente no tiene permiso para acceder a este historial"
             )
 
-        return self.teachers_repository.get_history(teacher_id)
+        items, total, teacher_info = self.teachers_repository.get_history(
+            teacher_id, pagination
+        )
+
+        if teacher_info is None:
+            return None
+
+        paginated = build_paginated_response(items, total, pagination)
+
+        return {**teacher_info, **paginated}
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
@@ -362,7 +375,9 @@ class TeacherService:
         ]
 
         existing_teachers = self.teachers_repository.get_by_institutional_codes(codes)
-        existing_codes = {t.user.institutional_code for t in existing_teachers if t.user}
+        existing_codes = {
+            t.user.institutional_code for t in existing_teachers if t.user
+        }
 
         created = []
         skipped = []

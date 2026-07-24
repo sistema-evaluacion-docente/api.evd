@@ -131,6 +131,7 @@ async def count_teachers(
 @router.get("/{teacher_id}/history", response_model=TeacherHistoryOut)
 async def get_teacher_history(
     teacher_id: int,
+    pagination: PaginationDep,
     current_user=Depends(get_current_user),
     _=Depends(
         require_roles(
@@ -141,7 +142,7 @@ async def get_teacher_history(
 ):
     """Return the historical average score of a teacher across all evaluated periods."""
 
-    history = await controller.get_history(current_user, teacher_id)
+    history = await controller.get_history(current_user, teacher_id, pagination)
 
     if not history:
         raise HTTPException(status_code=404, detail="Teacher not found")
