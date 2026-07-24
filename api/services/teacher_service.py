@@ -6,7 +6,7 @@ import io
 import openpyxl
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError
+from api.exceptions import ResourceAlreadyExistsError, ValidationError
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
@@ -320,7 +320,7 @@ class TeacherService:
         roles = self.users_repository.get_user_role_names(user.id) if user else []
 
         if not user or not teacher:
-            raise ValueError("Usuario no encontrado")
+            raise ValidationError("Usuario no encontrado")
 
         if RoleName.DOCENTE in roles and teacher.user_id != user.id:
             raise PermissionError(
@@ -352,7 +352,7 @@ class TeacherService:
 
         if len(rows) < 2:
             file_type = "CSV" if is_csv else "Excel"
-            raise ValueError(
+            raise ValidationError(
                 f"El archivo {file_type} debe contener al menos un encabezado y una fila de datos"
             )
 
@@ -362,7 +362,7 @@ class TeacherService:
 
         if not expected.issubset(actual):
             missing = expected - actual
-            raise ValueError(
+            raise ValidationError(
                 f"Faltan columnas requeridas en el archivo: {', '.join(sorted(missing))}"
             )
 
@@ -503,7 +503,7 @@ class TeacherService:
         ws = wb.active
 
         if not ws:
-            raise ValueError("El archivo Excel está vacío o no tiene hojas")
+            raise ValidationError("El archivo Excel está vacío o no tiene hojas")
 
         return list(ws.iter_rows(values_only=True))
 
