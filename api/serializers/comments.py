@@ -36,6 +36,7 @@ def comment_to_dict(
         "pedagogical_category": {
             "id": category.id,
             "name": category.name,
+            "description": category.description,
             "color_hex": category.color_hex,
         } if category else None,
         "category_score": comment.category_score,
