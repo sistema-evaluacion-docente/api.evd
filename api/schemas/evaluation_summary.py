@@ -159,12 +159,16 @@ class TeacherPeriodHistory(BaseModel):
 
 
 class TeacherHistoryOut(BaseModel):
-    """Full historical record of a teacher across all periods."""
+    """Paginated historical record of a teacher across all periods."""
 
     teacher_id: int
     institutional_code: str
     name: Optional[str]
-    history: list[TeacherPeriodHistory]
+    items: list[TeacherPeriodHistory]
+    total: int
+    page: int
+    limit: int
+    pages: int
 
 
 class TeacherPeriodEvaluation(BaseModel):

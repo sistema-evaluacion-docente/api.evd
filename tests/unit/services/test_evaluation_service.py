@@ -100,17 +100,25 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_all_returns_paginated_evaluations(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, mock_users_repo, mock_directors_repo
     ):
         """Test get_all returns paginated evaluations."""
 
         items = [{"id": 1}, {"id": 2}]
         mock_evaluations_repo.search.return_value = (items, 2)
 
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_users_repo.get_by_email.return_value = mock_user
+
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
         filters = EvaluationFilters()
         pagination = PaginationParams(page=1, limit=10)
 
-        result = await service.get_all(filters, pagination)
+        result = await service.get_all("admin@test.com", filters, pagination)
 
         assert result["items"] == items
         assert result["total"] == 2

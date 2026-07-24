@@ -53,9 +53,9 @@ class TestEvaluationsController:
 
         filters = EvaluationFilters()
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_all(filters, pagination)
+        result = await controller.get_all("admin@test.com", filters, pagination)
 
-        mock_service.get_all.assert_called_once_with(filters, pagination)
+        mock_service.get_all.assert_called_once_with("admin@test.com", filters, pagination)
         assert result["total"] == 0
 
     @pytest.mark.asyncio

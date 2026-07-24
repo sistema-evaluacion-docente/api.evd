@@ -196,13 +196,18 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             "previous_count": previous_count,
         }
 
-    def get_history(self, teacher_id: int) -> dict | None:
-        """Return the teacher's average score for each academic period."""
+    def get_history(
+        self,
+        teacher_id: int,
+        pagination: PaginationParams,
+        sort_by: str | None = None,
+    ) -> tuple[list[dict], int, dict | None]:
+        """Return the teacher's average score for each academic period, paginated."""
 
         teacher = self.get_by_id(teacher_id)
 
         if not teacher:
-            return None
+            return [], 0, None
 
         teacher_user = (
             self.db.query(UserModel).filter(UserModel.id == teacher.user_id).first()
@@ -210,7 +215,7 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             else None
         )
 
-        rows = (
+        base_query = (
             self.db.query(
                 EvaluationModel.id.label("evaluation_id"),
                 AcademicPeriodModel.code.label("period_code"),
@@ -242,30 +247,47 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 AcademicPeriodModel.name,
                 AcademicPeriodModel.id,
             )
-            .order_by(AcademicPeriodModel.code.asc())
-            .all()
         )
 
-        return {
+        order_clause = AcademicPeriodModel.code.asc()
+
+        if sort_by == "period_code_desc":
+            order_clause = AcademicPeriodModel.code.desc()
+        elif sort_by == "overall_average_asc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).asc()
+        elif sort_by == "overall_average_desc":
+            order_clause = func.avg(EvaluationScoreModel.overall_average).desc()
+        elif sort_by == "group_count_asc":
+            order_clause = func.count(EvaluationScoreModel.id).asc()
+        elif sort_by == "group_count_desc":
+            order_clause = func.count(EvaluationScoreModel.id).desc()
+
+        base_query = base_query.order_by(order_clause)
+
+        total = base_query.count()
+        rows = base_query.offset(pagination.offset).limit(pagination.limit).all()
+
+        teacher_info = {
             "teacher_id": teacher_id,
             "institutional_code": (
                 teacher_user.institutional_code if teacher_user else None
             ),
             "name": teacher_user.name if teacher_user else None,
-            "history": [
-                {
-                    "evaluation_id": row.evaluation_id,
-                    "period_id": row.period_id,
-                    "period_code": row.period_code,
-                    "period_name": row.period_name,
-                    "overall_average": (
-                        float(row.avg_score) if row.avg_score else None
-                    ),
-                    "group_count": row.group_count,
-                }
-                for row in rows
-            ],
         }
+
+        items = [
+            {
+                "evaluation_id": row.evaluation_id,
+                "period_id": row.period_id,
+                "period_code": row.period_code,
+                "period_name": row.period_name,
+                "overall_average": (float(row.avg_score) if row.avg_score else None),
+                "group_count": row.group_count,
+            }
+            for row in rows
+        ]
+
+        return items, total, teacher_info
 
 
 def get_teachers_repository(db: Annotated[Session, Depends(get_db)]):

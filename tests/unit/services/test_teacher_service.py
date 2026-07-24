@@ -331,14 +331,27 @@ class TestTeacherService:
 
     @pytest.mark.asyncio
     async def test_get_history(self, service, mock_teachers_repo, mock_users_repo):
-        """Test get_history delegates to repository."""
+        """Test get_history delegates to repository with pagination and sort_by."""
 
-        expected = {
-            "teacher_id": 1,
-            "institutional_code": "12345",
-            "history": [],
-        }
-        mock_teachers_repo.get_history.return_value = expected
+        pagination = PaginationParams(page=1, limit=10)
+        mock_teachers_repo.get_history.return_value = (
+            [
+                {
+                    "evaluation_id": 1,
+                    "period_id": 1,
+                    "period_code": "2024-1",
+                    "period_name": "Period 1",
+                    "overall_average": 4.5,
+                    "group_count": 3,
+                }
+            ],
+            1,
+            {
+                "teacher_id": 1,
+                "institutional_code": "12345",
+                "name": "Test Teacher",
+            },
+        )
         mock_teachers_repo.get_by_id.return_value = MagicMock()
 
         mock_user = MagicMock()
@@ -349,7 +362,13 @@ class TestTeacherService:
         current_user = MagicMock()
         current_user.uid = "test-uid"
 
-        result = await service.get_history(current_user, 1)
+        result = await service.get_history(current_user, 1, pagination, "overall_average_desc")
 
-        assert result == expected
-        mock_teachers_repo.get_history.assert_called_once_with(1)
+        assert result["teacher_id"] == 1
+        assert result["institutional_code"] == "12345"
+        assert result["total"] == 1
+        assert result["page"] == 1
+        assert result["limit"] == 10
+        assert result["pages"] == 1
+        assert len(result["items"]) == 1
+        mock_teachers_repo.get_history.assert_called_once_with(1, pagination, "overall_average_desc")

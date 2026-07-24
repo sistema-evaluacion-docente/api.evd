@@ -115,6 +115,7 @@ class TeacherFilters:
     active: bool | None = None
     department_id: int | None = None
     contract_type: str | None = None
+    sort_by: str | None = None
 
 
 def teacher_filters(
@@ -122,6 +123,7 @@ def teacher_filters(
     active: bool | None = Query(default=None),
     department_id: int | None = Query(default=None),
     contract_type: str | None = Query(default=None),
+    sort_by: str | None = Query(default=None),
 ) -> TeacherFilters:
     """Dependency function to extract teacher filters from query parameters."""
 
@@ -130,6 +132,7 @@ def teacher_filters(
         active=active,
         department_id=department_id,
         contract_type=contract_type,
+        sort_by=sort_by,
     )
 
 
