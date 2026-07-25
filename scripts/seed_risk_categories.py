@@ -35,31 +35,30 @@ DEFAULT_RISK_LEVELS: list[dict[str, str]] = [
     },
 ]
 
-# TODO: Update the default categories with meaningful descriptions and colors
 DEFAULT_CATEGORIES: list[dict[str, str]] = [
     {
         "name": "LABEL_0",
-        "description": "Categoría pedagógica 0",
+        "description": "DESARROLLO DEL CONOCIMIENTO",
         "color_hex": "#3b82f6",
     },
     {
         "name": "LABEL_1",
-        "description": "Categoría pedagógica 1",
+        "description": "DESEMPEÑO DOCENTE",
         "color_hex": "#8b5cf6",
     },
     {
         "name": "LABEL_2",
-        "description": "Categoría pedagógica 2",
+        "description": "PROCESOS DE EVALUACIÓN",
         "color_hex": "#06b6d4",
     },
     {
         "name": "LABEL_3",
-        "description": "Categoría pedagógica 3",
+        "description": "INTEGRACIÓN INTERPERSONAL",
         "color_hex": "#f97316",
     },
     {
         "name": "LABEL_4",
-        "description": "Categoría pedagógica 4",
+        "description": "SIN CATEGORIA",
         "color_hex": "#6b7280",
     },
 ]

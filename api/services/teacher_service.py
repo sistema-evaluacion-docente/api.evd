@@ -6,7 +6,7 @@ import io
 import openpyxl
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError
+from api.exceptions import ResourceAlreadyExistsError, ValidationError
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
@@ -61,18 +61,39 @@ class TeacherService:
     ) -> dict:
         """Retrieve teachers with overall_average for a given academic period."""
 
-        teachers, total = self.teachers_repository.search(filters, pagination)
-        teacher_ids = [t.id for t in teachers]
-
-        avgs = self.teachers_repository.get_teacher_averages_by_period(
-            teacher_ids, academic_period_id
+        sort_by_average = filters.sort_by in (
+            "overall_average_asc",
+            "overall_average_desc",
         )
 
-        items = []
-        for t in teachers:
-            d = self._enrich_teacher_to_dict(t)
-            d["overall_average"] = avgs.get(t.id)
-            items.append(d)
+        if sort_by_average:
+            rows, total = self.teachers_repository.search_with_averages(
+                filters, pagination, academic_period_id
+            )
+
+            items = []
+
+            for teacher, avg_score in rows:
+                d = self._enrich_teacher_to_dict(teacher)
+                d["overall_average"] = (
+                    float(avg_score) if avg_score is not None else None
+                )
+
+                items.append(d)
+        else:
+            teachers, total = self.teachers_repository.search(filters, pagination)
+            teacher_ids = [t.id for t in teachers]
+
+            avgs = self.teachers_repository.get_teacher_averages_by_period(
+                teacher_ids, academic_period_id
+            )
+
+            items = []
+
+            for t in teachers:
+                d = self._enrich_teacher_to_dict(t)
+                d["overall_average"] = avgs.get(t.id)
+                items.append(d)
 
         return build_paginated_response(items, total, pagination)
 
@@ -299,7 +320,7 @@ class TeacherService:
         roles = self.users_repository.get_user_role_names(user.id) if user else []
 
         if not user or not teacher:
-            raise ValueError("Usuario no encontrado")
+            raise ValidationError("Usuario no encontrado")
 
         if RoleName.DOCENTE in roles and teacher.user_id != user.id:
             raise PermissionError(
@@ -331,7 +352,7 @@ class TeacherService:
 
         if len(rows) < 2:
             file_type = "CSV" if is_csv else "Excel"
-            raise ValueError(
+            raise ValidationError(
                 f"El archivo {file_type} debe contener al menos un encabezado y una fila de datos"
             )
 
@@ -341,7 +362,7 @@ class TeacherService:
 
         if not expected.issubset(actual):
             missing = expected - actual
-            raise ValueError(
+            raise ValidationError(
                 f"Faltan columnas requeridas en el archivo: {', '.join(sorted(missing))}"
             )
 
@@ -482,7 +503,7 @@ class TeacherService:
         ws = wb.active
 
         if not ws:
-            raise ValueError("El archivo Excel está vacío o no tiene hojas")
+            raise ValidationError("El archivo Excel está vacío o no tiene hojas")
 
         return list(ws.iter_rows(values_only=True))
 

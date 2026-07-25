@@ -115,6 +115,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
@@ -138,6 +139,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
@@ -159,6 +161,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
@@ -179,6 +182,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
@@ -199,6 +203,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
@@ -219,6 +224,7 @@ class TestTeachersRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
         mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query

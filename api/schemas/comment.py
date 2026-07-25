@@ -23,6 +23,7 @@ class PedagogicalCategoryOut(BaseModel):
 
     id: int
     name: str
+    description: Optional[str] = None
     color_hex: Optional[str] = None
 
 

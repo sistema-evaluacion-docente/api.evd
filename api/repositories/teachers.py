@@ -5,7 +5,7 @@ from typing import Annotated
 from fastapi.params import Depends
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
@@ -65,7 +65,11 @@ class TeachersRepository(BaseRepository[TeacherModel]):
     ) -> tuple[list[TeacherModel], int]:
         """Search for teachers based on filters and pagination parameters."""
 
-        query = self.db.query(TeacherModel).options(joinedload(TeacherModel.user))
+        query = (
+            self.db.query(TeacherModel)
+            .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
+            .options(contains_eager(TeacherModel.user))
+        )
 
         if filters.search:
             term = filters.search.strip()
@@ -91,9 +95,94 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         if filters.contract_type is not None:
             query = query.filter(TeacherModel.contract_type == filters.contract_type)
 
-        query = query.order_by(TeacherModel.created_at.desc())
+        if filters.sort_by == "institutional_code_asc":
+            query = query.order_by(UserModel.institutional_code.asc())
+        elif filters.sort_by == "institutional_code_desc":
+            query = query.order_by(UserModel.institutional_code.desc())
+        elif filters.sort_by == "name_asc":
+            query = query.order_by(UserModel.name.asc())
+        elif filters.sort_by == "name_desc":
+            query = query.order_by(UserModel.name.desc())
+        else:
+            query = query.order_by(TeacherModel.created_at.desc())
 
         return self.paginate(query, pagination)
+
+    def search_with_averages(
+        self,
+        filters: TeacherFilters,
+        pagination: PaginationParams,
+        academic_period_id: int,
+    ) -> tuple[list[tuple[TeacherModel, float | None]], int]:
+        """Search teachers sorted by overall_average for a given academic period.
+
+        Returns a list of (teacher, avg_score) tuples sorted by average.
+        """
+
+        avg_subq = (
+            self.db.query(
+                AcademicGroupModel.teacher_id.label("teacher_id"),
+                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .group_by(AcademicGroupModel.teacher_id)
+            .subquery()
+        )
+
+        query = (
+            self.db.query(TeacherModel, avg_subq.c.avg_score)
+            .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
+            .outerjoin(avg_subq, TeacherModel.id == avg_subq.c.teacher_id)
+            .options(contains_eager(TeacherModel.user))
+        )
+
+        if filters.search:
+            term = filters.search.strip()
+
+            if term:
+                like_term = f"%{term}%"
+
+                query = query.filter(
+                    or_(
+                        UserModel.institutional_code.ilike(like_term),
+                        TeacherModel.contract_type.ilike(like_term),
+                        UserModel.name.ilike(like_term),
+                        UserModel.email.ilike(like_term),
+                    )
+                )
+
+        if filters.active is not None:
+            query = query.filter(TeacherModel.active == filters.active)
+
+        if filters.department_id is not None:
+            query = query.filter(TeacherModel.department_id == filters.department_id)
+
+        if filters.contract_type is not None:
+            query = query.filter(TeacherModel.contract_type == filters.contract_type)
+
+        if filters.sort_by == "overall_average_asc":
+            query = query.order_by(
+                func.coalesce(avg_subq.c.avg_score, 0).asc(),
+                TeacherModel.id.asc(),
+            )
+        else:
+            query = query.order_by(
+                func.coalesce(avg_subq.c.avg_score, 0).desc(),
+                TeacherModel.id.asc(),
+            )
+
+        total = query.count()
+        rows = query.offset(pagination.offset).limit(pagination.limit).all()
+
+        return rows, total
 
     def delete_teacher(self, teacher_id: int) -> TeacherModel | None:
         """Delete a teacher by ID. Raises ValueError if teacher has academic groups."""
