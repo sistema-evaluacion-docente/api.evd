@@ -432,12 +432,14 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             analyzed_count += 1
 
             if analyzed_count % 10 == 0:
+                db.commit()
                 _broadcast_log(
                     evaluation_id,
                     level="info",
                     message=f"Progreso: {analyzed_count}/{len(comments)} comentarios analizados",
                 )
 
+        db.commit()
         evaluation.ai_status = "ANALYZED"
         db.commit()
 
@@ -457,7 +459,11 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         logger.info("AI analysis completed for evaluation %d", evaluation_id)
 
     except Exception as exc:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass
+
         logger.error(
             "AI analysis failed for evaluation %d: %s",
             evaluation_id,
@@ -473,6 +479,8 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         )
 
         try:
+            db.close()
+            db = SessionLocal()
             evaluation = (
                 db.query(EvaluationModel)
                 .filter(EvaluationModel.id == evaluation_id)

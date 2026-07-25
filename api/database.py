@@ -13,7 +13,7 @@ database_url = config.SQLALCHEMY_DATABASE_URI
 if not database_url:
     raise RuntimeError("DATABASE_URL is not configured")
 
-engine = create_engine(database_url, pool_pre_ping=True)
+engine = create_engine(database_url, pool_pre_ping=True, pool_recycle=300)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
 
