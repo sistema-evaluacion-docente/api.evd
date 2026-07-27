@@ -90,6 +90,78 @@ def _broadcast_log(
         logger.debug("Failed to broadcast WS log for evaluation %d", evaluation_id)
 
 
+def _create_process_notification(
+    db,
+    evaluation_id: int,
+    department_id: int | None,
+    uploader_user_id: int | None,
+    success: bool,
+    teachers_count: int = 0,
+) -> None:
+    """
+    Create notifications for the evaluation uploader
+    and department director when evaluation processing finishes.
+    """
+
+    if success:
+        title = "Evaluación procesada"
+        message = f"""El procesamiento de la evaluación #{evaluation_id} finalizó exitosamente.
+        Se procesaron {teachers_count} docentes."""
+        notification_type = "success"
+    else:
+        title = "Error en procesamiento"
+        message = f"""Ocurrió un error al procesar la evaluación #{evaluation_id}."""
+        notification_type = "error"
+
+    user_ids_to_notify: set[int] = set()
+
+    if uploader_user_id:
+        user_ids_to_notify.add(uploader_user_id)
+
+    if department_id:
+        director = (
+            db.query(DirectorsModel)
+            .filter(DirectorsModel.department_id == department_id)
+            .first()
+        )
+        if director:
+            user_ids_to_notify.add(director.user_id)
+
+    for user_id in user_ids_to_notify:
+        try:
+            notification = NotificationModel(
+                user_id=user_id,
+                title=title,
+                message=message,
+                type=notification_type,
+            )
+            db.add(notification)
+            db.flush()
+
+            event = NotificationEvent(
+                notification_id=notification.id,
+                user_id=user_id,
+                title=title,
+                message=message,
+                notification_type=notification_type,
+            )
+
+            channel = f"notifications:{user_id}"
+
+            try:
+                asyncio.get_running_loop()
+                asyncio.ensure_future(notification_manager.broadcast(channel, event))
+            except RuntimeError:
+                asyncio.run(notification_manager.broadcast(channel, event))
+
+        except Exception as exc:
+            logger.warning(
+                "Failed to create/broadcast notification for user %d: %s",
+                user_id,
+                exc,
+            )
+
+
 def _create_analysis_notification(
     db,
     evaluation_id: int,
@@ -172,6 +244,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
     On success:  evaluation.status = "COMPLETED", evaluation.count = # teachers
     On failure:  evaluation.status = "FAILED" (all other changes rolled back)
     """
+
     db = SessionLocal()
 
     try:
@@ -380,6 +453,17 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             count=len(parsed["teachers"]),
         )
 
+        _create_process_notification(
+            db,
+            evaluation_id=evaluation_id,
+            department_id=department.id,
+            uploader_user_id=evaluation.user_id if evaluation else None,
+            success=True,
+            teachers_count=len(parsed["teachers"]),
+        )
+
+        db.commit()
+
         logger.info("Evaluation %d processed successfully", evaluation_id)
 
     except Exception as exc:
@@ -410,6 +494,16 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     stage="UPLOADING",
                     status="FAILED",
                 )
+
+                _create_process_notification(
+                    db,
+                    evaluation_id=evaluation_id,
+                    department_id=evaluation.department_id,
+                    uploader_user_id=evaluation.user_id,
+                    success=False,
+                )
+
+                db.commit()
         except Exception:
             pass
 
