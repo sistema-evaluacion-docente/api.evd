@@ -17,6 +17,7 @@ from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
 from api.models.improvement_plan import ImprovementPlanModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.notification import NotificationModel
 # from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
@@ -55,6 +56,7 @@ _ = (
     FacultyModel,
     ImprovementPlanModel,
     ImprovementPlanCheckpointModel,
+    NotificationModel,
     ImprovementPlanItemModel,
     PedagogicalCategoryModel,
     RiskLevelModel,

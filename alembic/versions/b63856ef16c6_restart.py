@@ -1,8 +1,8 @@
-"""restart_db
+"""restart
 
-Revision ID: dd75d3889d9f
+Revision ID: b63856ef16c6
 Revises: 
-Create Date: 2026-07-21 22:01:29.515915
+Create Date: 2026-07-26 18:52:08.841534
 
 """
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision: str = 'dd75d3889d9f'
+revision: str = 'b63856ef16c6'
 down_revision: Union[str, Sequence[str], None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
@@ -144,6 +144,20 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('code')
     )
+    op.create_table('notifications',
+    sa.Column('id', sa.Integer(), autoincrement=True, nullable=False),
+    sa.Column('user_id', sa.Integer(), nullable=False),
+    sa.Column('title', sa.String(length=255), nullable=False),
+    sa.Column('message', sa.Text(), nullable=False),
+    sa.Column('type', sa.String(length=50), nullable=False),
+    sa.Column('read', sa.Boolean(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_notifications_id'), 'notifications', ['id'], unique=False)
+    op.create_index(op.f('ix_notifications_user_id'), 'notifications', ['user_id'], unique=False)
     op.create_table('user_roles',
     sa.Column('user_id', sa.Integer(), nullable=False),
     sa.Column('role_id', sa.Integer(), nullable=False),
@@ -380,6 +394,9 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_courses_id'), table_name='courses')
     op.drop_table('courses')
     op.drop_table('user_roles')
+    op.drop_index(op.f('ix_notifications_user_id'), table_name='notifications')
+    op.drop_index(op.f('ix_notifications_id'), table_name='notifications')
+    op.drop_table('notifications')
     op.drop_table('departments')
     op.drop_index(op.f('ix_audit_user_id'), table_name='audit')
     op.drop_index(op.f('ix_audit_id'), table_name='audit')
