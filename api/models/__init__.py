@@ -26,6 +26,7 @@ from api.models.role import RoleModel
 from api.models.setting import SettingModel
 from api.models.setting_history import SettingHistoryModel
 from api.models.teacher import TeacherModel
+from api.models.notification import NotificationModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 
@@ -51,6 +52,7 @@ __all__ = [
     "SettingModel",
     "SettingHistoryModel",
     "TeacherModel",
+    "NotificationModel",
     "UserModel",
     "UserRoleModel",
 ]

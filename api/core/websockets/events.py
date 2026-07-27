@@ -39,6 +39,17 @@ class EvaluationLogEvent(BaseWebSocketEvent):
     course_code: Optional[str] = None
 
 
+class NotificationEvent(BaseWebSocketEvent):
+    """Event model for real-time user notifications."""
+
+    type: Literal["notification"] = "notification"
+    notification_id: int
+    user_id: int
+    title: str
+    message: str
+    notification_type: str
+
+
 class DevLogEvent(BaseWebSocketEvent):
     """Event model for developer logs."""
 

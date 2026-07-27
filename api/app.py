@@ -37,6 +37,7 @@ from api.models import (
     improvement_plan_checkpoint,
     improvement_plan_evidence,
     improvement_plan_item,
+    notification,
     role,
     setting,
     setting_history,
@@ -57,12 +58,13 @@ from api.routes import (
     evaluations,
     faculties,
     health,
+    notifications,
     settings,
     stats,
     teachers,
     users,
 )
-from api.routes import ws_dev_logs, ws_evaluations
+from api.routes import ws_dev_logs, ws_evaluations, ws_notifications
 
 _ = (
     academic_group,
@@ -133,5 +135,7 @@ app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
+app.include_router(notifications.router)
 app.include_router(ws_evaluations.router)
 app.include_router(ws_dev_logs.router)
+app.include_router(ws_notifications.router)

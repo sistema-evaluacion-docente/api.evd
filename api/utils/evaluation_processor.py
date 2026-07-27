@@ -25,7 +25,13 @@ from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 from api.models.role import RoleModel
+from api.models.notification import NotificationModel
+from api.models.director import DirectorsModel
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
+from api.core.websockets.events import NotificationEvent
+from api.core.websockets.connection_manager import (
+    connection_manager as notification_manager,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +88,79 @@ def _broadcast_log(
             asyncio.run(connection_manager.broadcast(f"eval:{evaluation_id}", event))
     except Exception:
         logger.debug("Failed to broadcast WS log for evaluation %d", evaluation_id)
+
+
+def _create_analysis_notification(
+    db,
+    evaluation_id: int,
+    department_id: int | None,
+    uploader_user_id: int | None,
+    success: bool,
+    comments_count: int = 0,
+) -> None:
+    """
+    Create notifications for the evaluation uploader
+    and department director when AI analysis finishes.
+    """
+
+    if success:
+        title = "Análisis IA completado"
+        message = f"""El análisis de IA de la evaluación #{evaluation_id} finalizó exitosamente.
+        Se procesaron {comments_count} comentarios."""
+        notification_type = "success"
+    else:
+        title = "Error en análisis IA"
+        message = f"""Ocurrió un error al procesar el análisis de IA
+        de la evaluación #{evaluation_id}."""
+        notification_type = "error"
+
+    user_ids_to_notify: set[int] = set()
+
+    if uploader_user_id:
+        user_ids_to_notify.add(uploader_user_id)
+
+    if department_id:
+        director = (
+            db.query(DirectorsModel)
+            .filter(DirectorsModel.department_id == department_id)
+            .first()
+        )
+        if director:
+            user_ids_to_notify.add(director.user_id)
+
+    for user_id in user_ids_to_notify:
+        try:
+            notification = NotificationModel(
+                user_id=user_id,
+                title=title,
+                message=message,
+                type=notification_type,
+            )
+            db.add(notification)
+            db.flush()
+
+            event = NotificationEvent(
+                notification_id=notification.id,
+                user_id=user_id,
+                title=title,
+                message=message,
+                notification_type=notification_type,
+            )
+
+            channel = f"notifications:{user_id}"
+
+            try:
+                asyncio.get_running_loop()
+                asyncio.ensure_future(notification_manager.broadcast(channel, event))
+            except RuntimeError:
+                asyncio.run(notification_manager.broadcast(channel, event))
+
+        except Exception as exc:
+            logger.warning(
+                "Failed to create/broadcast notification for user %d: %s",
+                user_id,
+                exc,
+            )
 
 
 def process_evaluation(evaluation_id: int, parsed: dict) -> None:
@@ -407,9 +486,6 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                 continue
 
             result = analyze_comment(comment.original_text)
-
-            print(result)
-
             risk_label = result.get("risk_label")
 
             if risk_label is not None:
@@ -456,6 +532,17 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             ai_status="ANALYZED",
         )
 
+        _create_analysis_notification(
+            db,
+            evaluation_id=evaluation_id,
+            department_id=evaluation.department_id,
+            uploader_user_id=evaluation.user_id,
+            success=True,
+            comments_count=analyzed_count,
+        )
+
+        db.commit()
+
         logger.info("AI analysis completed for evaluation %d", evaluation_id)
 
     except Exception as exc:
@@ -474,7 +561,6 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_log(
             evaluation_id,
             level="error",
-            status="FAILED",
             message=f"Error en el análisis de IA: {str(exc)}",
         )
 
@@ -496,6 +582,16 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                     stage="ANALYZING",
                     ai_status="FAILED",
                 )
+
+                _create_analysis_notification(
+                    db,
+                    evaluation_id=evaluation_id,
+                    department_id=evaluation.department_id,
+                    uploader_user_id=evaluation.user_id,
+                    success=False,
+                )
+
+                db.commit()
         except Exception:
             pass
 
