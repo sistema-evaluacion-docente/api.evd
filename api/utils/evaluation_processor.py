@@ -247,6 +247,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
 
     db = SessionLocal()
 
+    _broadcast_log(
+        evaluation_id,
+        level="info",
+        message="Iniciando procesamiento de la evaluación..."
+    )
+
     try:
         period = (
             db.query(AcademicPeriodModel)
@@ -268,7 +274,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         _broadcast_log(
             evaluation_id,
             level="info",
-            message=f"Iniciando procesamiento del período {period.code} - {department.name}",
+            message=f"Procesando evaluación para periodo {period.name} y departamento {department.name}...",
         )
 
         for teacher_data in parsed["teachers"]:
@@ -520,6 +526,12 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
     """
     db = SessionLocal()
 
+    _broadcast_log(
+        evaluation_id,
+        level="info",
+        message=f"Iniciando análisis de comentarios con IA",
+    )
+
     try:
         evaluation = (
             db.query(EvaluationModel)
@@ -545,7 +557,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         _broadcast_log(
             evaluation_id,
             level="info",
-            message="Iniciando análisis de comentarios con IA",
+            message="Analizando comentarios con IA...",
         )
 
         comments = (
@@ -601,7 +613,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
 
             analyzed_count += 1
 
-            if analyzed_count % 10 == 0:
+            if analyzed_count % 5 == 0:
                 db.commit()
                 _broadcast_log(
                     evaluation_id,
