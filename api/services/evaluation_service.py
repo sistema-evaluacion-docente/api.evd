@@ -145,7 +145,7 @@ class EvaluationService:
         """
 
         if not filename or not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="File must be a PDF")
+            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
 
         validate_file_size(file_bytes)
 
@@ -158,7 +158,8 @@ class EvaluationService:
         try:
             parsed = parse_pdf(file_bytes)
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=f"Could not parse PDF: {exc}")
+            print(f"Error parsing PDF: {exc}")
+            raise HTTPException(status_code=400, detail="Error al procesar el PDF")
 
         if not parsed.get("period_code"):
             raise HTTPException(
@@ -175,7 +176,8 @@ class EvaluationService:
         if not parsed.get("teachers"):
             raise HTTPException(
                 status_code=422,
-                detail="No se encontraron datos del docente en el PDF. Asegúrese de que se trate de un documento de evaluación docente de la UFPS.",
+                detail="""No se encontraron datos del docente en el PDF. Asegúrese
+                de que se trate de un documento de evaluación docente de la UFPS.""",
             )
 
         period = self.academic_periods_repository.get_by_code(parsed["period_code"])
