@@ -12,6 +12,9 @@ jobs:
   build_and_publish:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -29,7 +32,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: docker/Dockerfile
+          file: ./docker/Dockerfile
           platforms: linux/amd64
           push: true
           tags: ghcr.io/sistema-evaluacion-docente/api.evd:latest
