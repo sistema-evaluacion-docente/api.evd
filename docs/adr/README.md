@@ -13,3 +13,4 @@ Cada ADR documenta una decision arquitectonica significativa, su contexto y sus 
 | [003](003-pagination-params.md) | Paginación genérica con PaginationParams y PaginationDep | Aceptado | 2026-07-19 |
 | [004](004-websocket-dev-logs.md) | WebSocket para Dev Logs en Tiempo Real | Aceptado | 2026-07-21 |
 | [005](005-websocket-evaluations.md) | WebSocket para Evaluaciones con Logs Detallados | Aceptado | 2026-07-21 |
+| [006](006-websocket-notifications.md) | WebSocket para Notificaciones en Tiempo Real | Aceptado | 2026-07-26 |
