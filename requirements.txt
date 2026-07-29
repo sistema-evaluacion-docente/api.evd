@@ -12,3 +12,5 @@ spacy
 openpyxl
 transformers
 torch
+pytest
+pytest-asyncio
