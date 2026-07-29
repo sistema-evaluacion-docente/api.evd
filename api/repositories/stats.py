@@ -1134,6 +1134,129 @@ class StatsRepository:
             "dimensions": dimensions,
         }
 
+    async def get_teacher_vs_previous_period(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """
+        Compare a teacher's per-question and per-dimension averages between
+        the current academic period and the previous one.
+        """
+
+        teacher = (
+            self.db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
+        )
+        if not teacher:
+            return None
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+        if not period:
+            return None
+
+        def get_question_averages(period_id: int) -> dict[str, float]:
+            rows = (
+                self.db.query(
+                    EvaluationQuestionScoreModel.question_code,
+                    func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+                )
+                .join(
+                    EvaluationScoreModel,
+                    EvaluationScoreModel.id
+                    == EvaluationQuestionScoreModel.evaluation_score_id,
+                )
+                .join(
+                    AcademicGroupModel,
+                    AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+                )
+                .join(
+                    EvaluationModel,
+                    EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+                )
+                .filter(
+                    AcademicGroupModel.teacher_id == teacher_id,
+                    EvaluationModel.academic_period_id == period_id,
+                )
+                .group_by(EvaluationQuestionScoreModel.question_code)
+                .all()
+            )
+            return {row.question_code: round(float(row.avg_score), 2) for row in rows}
+
+        current_by_code = get_question_averages(academic_period_id)
+
+        prev_period_code = await self._get_previous_period_code(period.code)
+        prev_period = None
+        previous_by_code: dict[str, float] = {}
+
+        if prev_period_code:
+            prev_period = (
+                self.db.query(AcademicPeriodModel)
+                .filter(AcademicPeriodModel.code == prev_period_code)
+                .first()
+            )
+            if prev_period:
+                previous_by_code = get_question_averages(prev_period.id)
+
+        question_text = {q["code"]: q["text"] for q in QUESTIONS}
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            questions = []
+            for code in codes:
+                questions.append(
+                    {
+                        "code": code,
+                        "text": question_text.get(code, code),
+                        "current_average": current_by_code.get(code),
+                        "previous_average": previous_by_code.get(code),
+                    }
+                )
+
+            current_dim = [current_by_code[c] for c in codes if c in current_by_code]
+            prev_dim = [previous_by_code[c] for c in codes if c in previous_by_code]
+
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "current_average": (
+                        round(sum(current_dim) / len(current_dim), 2)
+                        if current_dim
+                        else None
+                    ),
+                    "previous_average": (
+                        round(sum(prev_dim) / len(prev_dim), 2) if prev_dim else None
+                    ),
+                    "questions": questions,
+                }
+            )
+
+        all_current_scores = list(current_by_code.values())
+        current_overall = (
+            round(sum(all_current_scores) / len(all_current_scores), 2)
+            if all_current_scores
+            else None
+        )
+
+        all_prev_scores = list(previous_by_code.values())
+        previous_overall = (
+            round(sum(all_prev_scores) / len(all_prev_scores), 2)
+            if all_prev_scores
+            else None
+        )
+
+        return {
+            "teacher_id": teacher_id,
+            "academic_period_id": academic_period_id,
+            "academic_period_code": period.code,
+            "previous_academic_period_id": prev_period.id if prev_period else None,
+            "previous_academic_period_code": prev_period_code,
+            "current_overall_average": current_overall,
+            "previous_overall_average": previous_overall,
+            "dimensions": dimensions,
+        }
+
     async def get_subjects(
         self, academic_period_id: int, department_id: int | None = None
     ) -> list[dict]:

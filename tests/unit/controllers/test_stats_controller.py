@@ -28,6 +28,7 @@ class TestStatsController:
         service.get_teacher_comments_by_subject = AsyncMock()
         service.get_teacher_dimension_averages = AsyncMock()
         service.get_teacher_vs_department = AsyncMock()
+        service.get_teacher_vs_previous_period = AsyncMock()
         service.get_teacher_matrix = AsyncMock()
         service.get_subjects = AsyncMock()
         service.get_subject_teachers = AsyncMock()
@@ -185,6 +186,21 @@ class TestStatsController:
 
         mock_service.get_teacher_vs_department.assert_awaited_once_with(1, 1)
         assert result["teacher_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_vs_previous_period(self, controller, mock_service):
+        """Test get_teacher_vs_previous_period delegates to service."""
+
+        mock_service.get_teacher_vs_previous_period.return_value = {
+            "teacher_id": 1,
+            "current_overall_average": 4.5,
+        }
+
+        result = await controller.get_teacher_vs_previous_period(1, 2)
+
+        mock_service.get_teacher_vs_previous_period.assert_awaited_once_with(1, 2)
+        assert result["teacher_id"] == 1
+        assert result["current_overall_average"] == 4.5
 
     @pytest.mark.asyncio
     async def test_get_teacher_matrix(self, controller, mock_service):

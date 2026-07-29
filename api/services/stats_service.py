@@ -118,6 +118,15 @@ class StatsService:
             teacher_id, academic_period_id
         )
 
+    async def get_teacher_vs_previous_period(
+        self, teacher_id: int, academic_period_id: int
+    ) -> dict | None:
+        """Compare teacher averages per dimension and question against the previous period."""
+
+        return await self.stats_repository.get_teacher_vs_previous_period(
+            teacher_id, academic_period_id
+        )
+
     async def get_teacher_matrix(
         self, teacher_id: int, evaluation_id: int
     ) -> dict | None:

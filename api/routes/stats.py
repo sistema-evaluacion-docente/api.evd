@@ -263,6 +263,34 @@ async def get_teacher_vs_department(
 
 
 @router.get(
+    "/teachers/{teacher_id}/period-comparison",
+    response_model=dict,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_teacher_vs_previous_period(
+    teacher_id: int,
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    _=Depends(get_current_user),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """
+    Compare a teacher's per-dimension and per-question averages
+    between the current period and the previous one.
+    """
+
+    result = await controller.get_teacher_vs_previous_period(
+        teacher_id, academic_period_id
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404, detail="Docente o periodo académico no encontrado"
+        )
+
+    return result
+
+
+@router.get(
     "/distribution/grades",
     response_model=dict,
     responses={403: {"description": "Forbidden"}},
