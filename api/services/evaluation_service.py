@@ -159,7 +159,9 @@ class EvaluationService:
             parsed = parse_pdf(file_bytes)
         except Exception as exc:
             print(f"Error parsing PDF: {exc}")
-            raise HTTPException(status_code=400, detail="Error al procesar el PDF")
+            raise HTTPException(
+                status_code=400, detail=f"Error al procesar el PDF: {exc}"
+            )
 
         if not parsed.get("period_code"):
             raise HTTPException(
