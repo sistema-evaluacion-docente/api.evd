@@ -37,10 +37,18 @@ class TestTeachersController:
         return service
 
     @pytest.fixture
-    def controller(self, mock_service):
+    def mock_dashboard_service(self):
+        """Mock DashboardService."""
+
+        service = MagicMock()
+        service.get_dashboard = AsyncMock()
+        return service
+
+    @pytest.fixture
+    def controller(self, mock_service, mock_dashboard_service):
         """Create controller instance with mocked service."""
 
-        return TeachersController(mock_service)
+        return TeachersController(mock_service, mock_dashboard_service)
 
     @pytest.mark.asyncio
     async def test_get_all_delegates_to_service(self, controller, mock_service):
@@ -185,7 +193,9 @@ class TestTeachersController:
         current_user = MagicMock()
         current_user.uid = "test-uid"
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_history(current_user, 1, pagination, "period_code_asc")
+        result = await controller.get_history(
+            current_user, 1, pagination, "period_code_asc"
+        )
 
         mock_service.get_history.assert_called_once_with(
             current_user, 1, pagination, "period_code_asc"
