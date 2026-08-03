@@ -3,6 +3,7 @@
 from fastapi.param_functions import Depends
 
 from api.core.pagination import PaginationParams
+from api.dependencies.dashboard import get_dashboard_service
 from api.dependencies.teachers import get_teacher_service
 from api.schemas.teacher import (
     TeacherCreate,
@@ -11,14 +12,20 @@ from api.schemas.teacher import (
     TeacherUpdate,
 )
 from api.schemas.user import TokenUser
+from api.services.dashboard_service import DashboardService
 from api.services.teacher_service import TeacherService
 
 
 class TeachersController:
     """Controller for teacher-related operations."""
 
-    def __init__(self, service: TeacherService):
+    def __init__(
+        self,
+        service: TeacherService,
+        dashboard_service: DashboardService,
+    ):
         self.service = service
+        self.dashboard_service = dashboard_service
 
     async def get_all(
         self,
@@ -93,10 +100,16 @@ class TeachersController:
             file_bytes, filename, department_id, current_user
         )
 
+    async def get_dashboard(self, teacher_id: int, evaluation_id: int):
+        """Get combined dashboard data for a teacher."""
+
+        return await self.dashboard_service.get_dashboard(teacher_id, evaluation_id)
+
 
 def get_teachers_controller(
     service: TeacherService = Depends(get_teacher_service),
+    dashboard_service: DashboardService = Depends(get_dashboard_service),
 ):
     """Dependency injection for TeachersController."""
 
-    return TeachersController(service)
+    return TeachersController(service, dashboard_service)

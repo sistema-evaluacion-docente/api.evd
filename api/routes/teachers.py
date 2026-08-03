@@ -6,7 +6,7 @@ from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
-from api.schemas.evaluation_summary import TeacherHistoryOut
+from api.schemas.evaluation_summary import TeacherDashboardOut, TeacherHistoryOut
 from api.schemas.teacher import (
     BulkUploadResult,
     TeacherCreate,
@@ -151,6 +151,25 @@ async def get_teacher_history(
         raise HTTPException(status_code=404, detail="Teacher not found")
 
     return history
+
+
+@router.get("/{teacher_id}/dashboard", response_model=TeacherDashboardOut)
+async def get_teacher_dashboard(
+    teacher_id: int,
+    evaluation_id: int = Query(..., description="Evaluation ID for the period"),
+    _=Depends(require_roles(_ROLES)),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Get combined dashboard data for a teacher (evaluation detail, period comparison, comments, matrix)."""
+
+    result = await controller.get_dashboard(teacher_id, evaluation_id)
+
+    if not result:
+        raise HTTPException(
+            status_code=404, detail="Docente o evaluación no encontrada"
+        )
+
+    return result
 
 
 @router.get("/{teacher_id}", response_model=TeacherOut)
