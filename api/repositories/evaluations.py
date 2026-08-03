@@ -186,7 +186,10 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         evaluation = (
             self.db.query(EvaluationModel)
-            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.active == True,
+            )
             .first()
         )
 

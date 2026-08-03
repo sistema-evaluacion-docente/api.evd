@@ -156,13 +156,14 @@ async def get_teacher_history(
 @router.get("/{teacher_id}/dashboard", response_model=TeacherDashboardOut)
 async def get_teacher_dashboard(
     teacher_id: int,
-    evaluation_id: int = Query(..., description="Evaluation ID for the period"),
+    period_name: str = Query(..., description="Academic period name"),
+    department_id: int = Query(..., description="Department ID"),
     _=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """Get combined dashboard data for a teacher (evaluation detail, period comparison, comments, matrix)."""
 
-    result = await controller.get_dashboard(teacher_id, evaluation_id)
+    result = await controller.get_dashboard(teacher_id, period_name, department_id)
 
     if not result:
         raise HTTPException(

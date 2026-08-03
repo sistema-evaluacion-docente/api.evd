@@ -20,6 +20,15 @@ class AcademicPeriodsRepository(BaseRepository[AcademicPeriodModel]):
     def __init__(self, db: Session):
         super().__init__(AcademicPeriodModel, db)
 
+    def get_by_name(self, name: str) -> AcademicPeriodModel | None:
+        """Get an academic period by name."""
+
+        return (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.name == name)
+            .first()
+        )
+
     def get_by_code(self, code: str) -> AcademicPeriodModel | None:
         """Get an academic period by code."""
 

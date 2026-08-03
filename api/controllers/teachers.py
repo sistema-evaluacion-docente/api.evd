@@ -100,10 +100,14 @@ class TeachersController:
             file_bytes, filename, department_id, current_user
         )
 
-    async def get_dashboard(self, teacher_id: int, evaluation_id: int):
+    async def get_dashboard(
+        self, teacher_id: int, period_name: str, department_id: int
+    ):
         """Get combined dashboard data for a teacher."""
 
-        return await self.dashboard_service.get_dashboard(teacher_id, evaluation_id)
+        return await self.dashboard_service.get_dashboard(
+            teacher_id, period_name, department_id
+        )
 
 
 def get_teachers_controller(
