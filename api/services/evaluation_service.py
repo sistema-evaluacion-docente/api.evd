@@ -92,11 +92,23 @@ class EvaluationService:
         return self.evaluations_repository.get_dimension_averages(evaluation_id)
 
     async def get_teacher_detail(
-        self, evaluation_id: int, teacher_id: int
+        self, period_name: str, department_id: int, teacher_id: int
     ) -> dict | None:
         """Get per-course and per-dimension detail for a teacher in an evaluation."""
 
-        return self.evaluations_repository.get_teacher_detail(evaluation_id, teacher_id)
+        period = self.academic_periods_repository.get_by_name(period_name)
+        if not period:
+            return None
+
+        evaluation_data = self.evaluations_repository.get_by_period_and_department(
+            period.id, department_id
+        )
+        if not evaluation_data:
+            return None
+
+        return self.evaluations_repository.get_teacher_detail(
+            evaluation_data["id"], teacher_id
+        )
 
     async def get_teacher_comments(
         self, evaluation_id: int, teacher_id: int

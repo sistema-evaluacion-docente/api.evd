@@ -240,7 +240,7 @@ async def get_teacher_comments(
 
 
 @router.get(
-    "/{evaluation_id}/teachers/{teacher_id}/export",
+    "/teachers/{teacher_id}/export",
     responses={
         200: {
             "content": {
@@ -250,8 +250,9 @@ async def get_teacher_comments(
     },
 )
 async def export_teacher_evaluation(
-    evaluation_id: int,
     teacher_id: int,
+    period_name: str,
+    department_id: int,
     include_comments: bool = Depends(
         lambda x: x.query_params.get("include_comments", "false").lower() == "true"
     ),
@@ -262,11 +263,13 @@ async def export_teacher_evaluation(
 ):
     """Download an Excel report for a teacher's evaluation detail."""
 
-    detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
+    detail = await controller.get_teacher_detail(period_name, department_id, teacher_id)
     if not detail:
         raise HTTPException(
             status_code=404, detail="Evaluación o docente no encontrado"
         )
+
+    evaluation_id = detail["evaluation_id"]
 
     comparison = None
     eval_record = (
@@ -290,22 +293,23 @@ async def export_teacher_evaluation(
 
 
 @router.get(
-    "/{evaluation_id}/teachers/{teacher_id}",
+    "/teachers/{teacher_id}/detail",
     response_model=TeacherEvaluationDetail,
 )
 async def get_teacher_evaluation_detail(
-    evaluation_id: int,
     teacher_id: int,
+    period_name: str,
+    department_id: int,
     _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation."""
 
-    detail = await controller.get_teacher_detail(evaluation_id, teacher_id)
+    detail = await controller.get_teacher_detail(period_name, department_id, teacher_id)
 
     if not detail:
         raise HTTPException(
-            status_code=404, detail="Evaluación o docenten no encontrado"
+            status_code=404, detail="Evaluación o docente no encontrado"
         )
 
     return detail
