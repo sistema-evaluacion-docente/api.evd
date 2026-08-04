@@ -98,6 +98,7 @@ class TeacherEvaluationDetail(BaseModel):
     teacher_id: int
     institutional_code: str
     name: Optional[str]
+    avatar_url: Optional[str] = None
     contract_type: Optional[str]
     evaluation_id: int
     period_code: Optional[str]

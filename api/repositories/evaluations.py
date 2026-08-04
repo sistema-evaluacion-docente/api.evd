@@ -480,6 +480,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
                 teacher_user.institutional_code if teacher_user else None
             ),
             "name": teacher_user.name if teacher_user else None,
+            "avatar_url": teacher_user.avatar_url if teacher_user else None,
             "contract_type": teacher.contract_type,
             "evaluation_id": evaluation_id,
             "period_code": period.code if period else None,

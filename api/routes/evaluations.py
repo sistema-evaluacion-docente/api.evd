@@ -263,7 +263,9 @@ async def export_teacher_evaluation(
 ):
     """Download an Excel report for a teacher's evaluation detail."""
 
-    detail = await controller.get_teacher_detail(period_name, department_id, teacher_id)
+    detail = await controller.get_teacher_detail(
+        period_name, teacher_id, department_id
+    )
     if not detail:
         raise HTTPException(
             status_code=404, detail="Evaluación o docente no encontrado"
@@ -299,13 +301,12 @@ async def export_teacher_evaluation(
 async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
-    department_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+_=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation."""
 
-    detail = await controller.get_teacher_detail(period_name, department_id, teacher_id)
+    detail = await controller.get_teacher_detail(period_name, teacher_id)
 
     if not detail:
         raise HTTPException(
