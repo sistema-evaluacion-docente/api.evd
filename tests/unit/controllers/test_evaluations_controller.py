@@ -120,9 +120,9 @@ class TestEvaluationsController:
             "overall_average": 4.5,
         }
 
-        result = await controller.get_teacher_detail("2024-1", 1, 10)
+        result = await controller.get_teacher_detail("2024-1", 10)
 
-        mock_service.get_teacher_detail.assert_called_once_with("2024-1", 1, 10)
+        mock_service.get_teacher_detail.assert_called_once_with("2024-1", 10, None)
         assert result["teacher_id"] == 10
 
     @pytest.mark.asyncio
