@@ -294,12 +294,26 @@ class UserService:
         return self._build_user_response(user)
 
     def _build_user_response(self, user) -> dict:
-        """Build a dictionary representation of the user, including roles and department ID."""
+        """Build a dictionary representation of the user, including roles and department info."""
 
         roles = self.users_repository.get_user_role_names(user.id)
         department_id = self._resolve_department_id(user, roles)
+        department_name = self._resolve_department_name(department_id)
 
-        return user_to_dict(user, roles=roles, department_id=department_id)
+        return user_to_dict(
+            user,
+            roles=roles,
+            department_id=department_id,
+            department_name=department_name,
+        )
+
+    def _resolve_department_name(self, department_id: int | None) -> str | None:
+        """Resolve the department name for the given department ID."""
+
+        if department_id is None:
+            return None
+
+        return self.users_repository.get_department_name(department_id)
 
     def _resolve_department_id(self, user, roles: list[str]) -> int | None:
         """Resolve the department ID for the user based on their roles."""

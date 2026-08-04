@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
+from api.models.department import DepartmentModel
 from api.models.director import DirectorsModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
@@ -187,6 +188,17 @@ class UsersRepository(BaseRepository[UserModel]):
             .filter(DirectorsModel.user_id == user_id)
             .first()
         )
+
+    def get_department_name(self, department_id: int) -> str | None:
+        """Retrieve the name of a department by its ID."""
+
+        result = (
+            self.db.query(DepartmentModel.name)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+
+        return result[0] if result else None
 
     def create_teacher(
         self,

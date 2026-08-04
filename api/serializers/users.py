@@ -4,7 +4,10 @@ from api.models.user import UserModel
 
 
 def user_to_dict(
-    user: UserModel, roles: list[str] | None = None, department_id: int | None = None
+    user: UserModel,
+    roles: list[str] | None = None,
+    department_id: int | None = None,
+    department_name: str | None = None,
 ) -> dict:
     """Convert UserModel instance to dictionary."""
 
@@ -13,6 +16,7 @@ def user_to_dict(
         "uid": user.uid,
         "email": user.email,
         "department_id": department_id,
+        "department_name": department_name,
         "name": user.name,
         "active": user.active,
         "avatar_url": user.avatar_url,
