@@ -217,10 +217,31 @@ class TeacherService:
             return None
 
         old_data = teacher_to_dict(teacher)
+        old_user_data = (
+            {
+                "name": teacher.user.name,
+                "email": teacher.user.email,
+                "avatar_url": teacher.user.avatar_url,
+                "institutional_code": teacher.user.institutional_code,
+            }
+            if teacher.user
+            else {}
+        )
         payload = data.model_dump(exclude_unset=True)
         institutional_code = payload.pop("institutional_code", None)
 
+        user_changes = {}
+        for field in ("name", "email", "avatar_url"):
+            if field in payload and teacher.user:
+                user_changes[field] = payload.pop(field)
+
         updated = self.teachers_repository.update_teacher(teacher, payload)
+
+        if user_changes and teacher.user:
+            for field, value in user_changes.items():
+                setattr(teacher.user, field, value)
+            self.teachers_repository.db.commit()
+            self.teachers_repository.db.refresh(teacher.user)
 
         if institutional_code is not None and teacher.user:
             teacher.user.institutional_code = institutional_code
@@ -239,6 +260,12 @@ class TeacherService:
             new_val = payload.get(field)
             if new_val is not None and new_val != old_data.get(field):
                 old_val = old_data.get(field)
+                changes.append(f"{field} cambió de {old_val} a {new_val}")
+
+        for field in ("name", "email", "avatar_url"):
+            new_val = user_changes.get(field)
+            if new_val is not None and new_val != old_user_data.get(field):
+                old_val = old_user_data.get(field)
                 changes.append(f"{field} cambió de {old_val} a {new_val}")
 
         if institutional_code is not None and institutional_code != old_data.get(

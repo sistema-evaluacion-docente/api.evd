@@ -63,6 +63,9 @@ class TeacherCreateWithUser(BaseModel):
 class TeacherUpdate(BaseModel):
     """Schema for updating a teacher."""
 
+    name: Optional[str] = None
+    email: Optional[str] = None
+    avatar_url: Optional[str] = None
     institutional_code: Optional[str] = None
     department_id: Optional[int] = None
     contract_type: Optional[str] = None
