@@ -13,7 +13,6 @@ from api.database import get_db
 from api.models.audit import AuditModel
 from api.repositories.base import BaseRepository
 from api.schemas.audit import AuditFilters
-from api.utils.get_audit import get_audit
 
 
 class AuditsRepository(BaseRepository[AuditModel]):
