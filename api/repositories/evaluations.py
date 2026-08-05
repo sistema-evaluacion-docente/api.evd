@@ -127,6 +127,10 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             order_clause = func.avg(EvaluationScoreModel.overall_average).asc()
         elif filters.sort_by == "average_desc":
             order_clause = func.avg(EvaluationScoreModel.overall_average).desc()
+        elif filters.sort_by == "period_name_asc":
+            order_clause = AcademicPeriodModel.name.asc()
+        elif filters.sort_by == "period_name_desc":
+            order_clause = AcademicPeriodModel.name.desc()
 
         evaluations = (
             base_query.order_by(order_clause)
