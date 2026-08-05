@@ -62,6 +62,8 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         self,
         filters: TeacherFilters,
         pagination: PaginationParams,
+        academic_period_id: int | None = None,
+        has_average: bool | None = None,
     ) -> tuple[list[TeacherModel], int]:
         """Search for teachers based on filters and pagination parameters."""
 
@@ -70,6 +72,11 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
             .options(contains_eager(TeacherModel.user))
         )
+
+        if academic_period_id is not None and has_average is not None:
+            avg_subq = self._build_average_subquery(academic_period_id)
+            query = query.outerjoin(avg_subq, TeacherModel.id == avg_subq.c.teacher_id)
+            query = self._filter_by_has_average(query, avg_subq, has_average)
 
         if filters.search:
             term = filters.search.strip()
@@ -113,29 +120,14 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         filters: TeacherFilters,
         pagination: PaginationParams,
         academic_period_id: int,
+        has_average: bool = True,
     ) -> tuple[list[tuple[TeacherModel, float | None]], int]:
         """Search teachers sorted by overall_average for a given academic period.
 
         Returns a list of (teacher, avg_score) tuples sorted by average.
         """
 
-        avg_subq = (
-            self.db.query(
-                AcademicGroupModel.teacher_id.label("teacher_id"),
-                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
-            )
-            .join(
-                EvaluationScoreModel,
-                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
-            )
-            .join(
-                EvaluationModel,
-                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
-            )
-            .filter(EvaluationModel.academic_period_id == academic_period_id)
-            .group_by(AcademicGroupModel.teacher_id)
-            .subquery()
-        )
+        avg_subq = self._build_average_subquery(academic_period_id)
 
         query = (
             self.db.query(TeacherModel, avg_subq.c.avg_score)
@@ -143,6 +135,8 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             .outerjoin(avg_subq, TeacherModel.id == avg_subq.c.teacher_id)
             .options(contains_eager(TeacherModel.user))
         )
+
+        query = self._filter_by_has_average(query, avg_subq, has_average)
 
         if filters.search:
             term = filters.search.strip()
@@ -183,6 +177,36 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         rows = query.offset(pagination.offset).limit(pagination.limit).all()
 
         return rows, total
+
+    def _build_average_subquery(self, academic_period_id: int):
+        """Build a subquery of teacher average scores for an academic period."""
+
+        return (
+            self.db.query(
+                AcademicGroupModel.teacher_id.label("teacher_id"),
+                func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(EvaluationModel.academic_period_id == academic_period_id)
+            .group_by(AcademicGroupModel.teacher_id)
+            .subquery()
+        )
+
+    @staticmethod
+    def _filter_by_has_average(query, avg_subq, has_average: bool):
+        """Filter a query by whether teachers have an average score."""
+
+        if has_average:
+            return query.filter(avg_subq.c.avg_score.isnot(None))
+
+        return query.filter(avg_subq.c.avg_score.is_(None))
 
     def delete_teacher(self, teacher_id: int) -> TeacherModel | None:
         """Delete a teacher by ID. Raises ValueError if teacher has academic groups."""

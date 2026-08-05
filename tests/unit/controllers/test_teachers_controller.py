@@ -88,7 +88,7 @@ class TestTeachersController:
         result = await controller.get_all_with_averages(filters, pagination, 1)
 
         mock_service.get_all_with_averages.assert_called_once_with(
-            filters, pagination, 1
+            filters, pagination, 1, True
         )
 
     @pytest.mark.asyncio

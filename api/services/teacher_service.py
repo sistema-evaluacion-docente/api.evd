@@ -58,6 +58,7 @@ class TeacherService:
         filters: TeacherFilters,
         pagination: PaginationParams,
         academic_period_id: int,
+        has_average: bool = True,
     ) -> dict:
         """Retrieve teachers with overall_average for a given academic period."""
 
@@ -68,7 +69,7 @@ class TeacherService:
 
         if sort_by_average:
             rows, total = self.teachers_repository.search_with_averages(
-                filters, pagination, academic_period_id
+                filters, pagination, academic_period_id, has_average
             )
 
             items = []
@@ -81,7 +82,9 @@ class TeacherService:
 
                 items.append(d)
         else:
-            teachers, total = self.teachers_repository.search(filters, pagination)
+            teachers, total = self.teachers_repository.search(
+                filters, pagination, academic_period_id, has_average
+            )
             teacher_ids = [t.id for t in teachers]
 
             avgs = self.teachers_repository.get_teacher_averages_by_period(

@@ -99,13 +99,16 @@ async def get_teachers_with_averages(
     academic_period_id: int = Query(
         ..., description="Academic period ID to compute overall_average"
     ),
+    has_average: bool = Query(
+        True, description="Filter teachers that have an overall average or not"
+    ),
     _=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
     """List teachers with overall_average for a given academic period."""
 
     return await controller.get_all_with_averages(
-        filters, pagination, academic_period_id
+        filters, pagination, academic_period_id, has_average
     )
 
 
