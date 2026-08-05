@@ -11,8 +11,8 @@ from pydantic import BaseModel, model_validator
 class AcademicPeriodCreate(BaseModel):
     """Schema for creating an academic period."""
 
-    code: str
-    name: Optional[str] = None
+    name: str
+    code: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     evaluation_end_date: Optional[date] = None

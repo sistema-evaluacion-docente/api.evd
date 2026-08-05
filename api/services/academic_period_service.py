@@ -55,10 +55,10 @@ class AcademicPeriodService:
     async def create(self, data: AcademicPeriodCreate, current_user: dict) -> dict:
         """Create a new academic period, rejecting duplicate codes and date overlaps."""
 
-        existing = self.academic_periods_repository.get_by_code(data.code)
+        existing = self.academic_periods_repository.get_by_code(data.name)
 
         if existing:
-            raise ResourceAlreadyExistsError("academic_period", "code", data.code)
+            raise ResourceAlreadyExistsError("academic_period", "code", data.name)
 
         if data.start_date and data.end_date:
             if self.academic_periods_repository.overlaps_with(
@@ -67,6 +67,8 @@ class AcademicPeriodService:
                 raise ValidationError(
                     "El rango de fechas se solapa con otro periodo académico existente"
                 )
+
+        data.code = data.name
 
         period = self.academic_periods_repository.create_period(data.model_dump())
         self.academic_periods_repository.db.commit()
@@ -80,7 +82,7 @@ class AcademicPeriodService:
             entity_id=period.id,
             actor_id=current_user.get("id"),
             description=(
-                f"Se creó el período académico {data.code} "
+                f"Se creó el período académico"
                 f"(nombre: {data.name}, inicio: {data.start_date}, fin: {data.end_date})"
             ),
         )
