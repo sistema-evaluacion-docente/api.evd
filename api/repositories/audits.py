@@ -1,6 +1,8 @@
 """Repository for audit-related database operations."""
 
+from datetime import timedelta
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends
 from sqlalchemy import or_
@@ -38,11 +40,55 @@ class AuditsRepository(BaseRepository[AuditModel]):
         if filters.operation is not None:
             query = query.filter(AuditModel.operation == filters.operation)
 
-        if filters.date_from is not None:
-            query = query.filter(AuditModel.created_at >= filters.date_from)
+        if filters.date_from is not None and filters.date_to is not None:
+            bogota_tz = ZoneInfo("America/Bogota")
 
-        if filters.date_to is not None:
-            query = query.filter(AuditModel.created_at <= filters.date_to)
+            date_from_start = filters.date_from.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            date_to_start = filters.date_to.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+
+            if date_from_start == date_to_start:
+                date_from_bogota = date_from_start.replace(tzinfo=bogota_tz)
+                next_day_bogota = date_from_bogota + timedelta(days=1)
+                date_from_utc = date_from_bogota.astimezone(ZoneInfo("UTC"))
+                next_day_utc = next_day_bogota.astimezone(ZoneInfo("UTC"))
+
+                query = query.filter(
+                    AuditModel.created_at >= date_from_utc,
+                    AuditModel.created_at < next_day_utc,
+                )
+            else:
+                date_from_bogota = date_from_start.replace(tzinfo=bogota_tz)
+                date_to_bogota = date_to_start.replace(tzinfo=bogota_tz)
+                date_from_utc = date_from_bogota.astimezone(ZoneInfo("UTC"))
+                date_to_end_bogota = date_to_bogota + timedelta(days=1)
+                date_to_utc = date_to_end_bogota.astimezone(ZoneInfo("UTC"))
+
+                query = query.filter(
+                    AuditModel.created_at >= date_from_utc,
+                    AuditModel.created_at < date_to_utc,
+                )
+        elif filters.date_from is not None:
+            bogota_tz = ZoneInfo("America/Bogota")
+            date_from_start = filters.date_from.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            date_from_bogota = date_from_start.replace(tzinfo=bogota_tz)
+            date_from_utc = date_from_bogota.astimezone(ZoneInfo("UTC"))
+            query = query.filter(AuditModel.created_at >= date_from_utc)
+        elif filters.date_to is not None:
+            bogota_tz = ZoneInfo("America/Bogota")
+            date_to_start = filters.date_to.replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            date_to_end_bogota = date_to_start.replace(tzinfo=bogota_tz) + timedelta(
+                days=1
+            )
+            date_to_utc = date_to_end_bogota.astimezone(ZoneInfo("UTC"))
+            query = query.filter(AuditModel.created_at < date_to_utc)
 
         if filters.search is not None:
             term = filters.search.strip()
