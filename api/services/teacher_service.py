@@ -352,10 +352,18 @@ class TeacherService:
         if not user or not teacher:
             raise ValidationError("Usuario no encontrado")
 
-        if RoleName.DOCENTE in roles and teacher.user_id != user.id:
-            raise PermissionError(
-                "El docente no tiene permiso para acceder a este historial"
+        is_admin = RoleName.ADMIN in roles
+        is_own_teacher = RoleName.DOCENTE in roles and teacher.user_id == user.id
+        is_department_director = False
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in roles:
+            director = self.users_repository.get_director_by_user_id(user.id)
+            is_department_director = bool(
+                director and director.department_id == teacher.department_id
             )
+
+        if not (is_admin or is_own_teacher or is_department_director):
+            raise PermissionError("No tiene permiso para acceder a este historial")
 
         items, total, teacher_info = self.teachers_repository.get_history(
             teacher_id, pagination, sort_by
