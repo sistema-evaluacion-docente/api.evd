@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from api.core.pagination import PaginationParams
@@ -64,6 +64,21 @@ class UsersRepository(BaseRepository[UserModel]):
 
         if filters.active is not None:
             query = query.filter(UserModel.active == filters.active)
+
+        if filters.roles:
+            role_names = [
+                role.value if hasattr(role, "value") else str(role)
+                for role in filters.roles
+            ]
+
+            if role_names:
+                role_subquery = (
+                    select(UserRoleModel.user_id)
+                    .join(RoleModel, RoleModel.id == UserRoleModel.role_id)
+                    .where(RoleModel.name.in_(role_names))
+                )
+
+                query = query.filter(UserModel.id.in_(role_subquery))
 
         query = query.options(selectinload(UserModel.teacher)).order_by(
             UserModel.created_at.desc()

@@ -100,17 +100,19 @@ class UserFilters:
 
     search: str | None = None
     active: bool | None = None
+    roles: Optional[list[RoleName]] = None
 
 
 def user_filters(
     search: str | None = Query(default=None, min_length=1),
     active: bool | None = Query(default=None),
+    roles: Optional[list[RoleName]] = Query(default=None),
 ) -> UserFilters:
     """
     Dependency function to extract user filters from query parameters.
     """
 
-    return UserFilters(search=search, active=active)
+    return UserFilters(search=search, active=active, roles=roles)
 
 
 UserFiltersDep = Annotated[UserFilters, Depends(user_filters)]
