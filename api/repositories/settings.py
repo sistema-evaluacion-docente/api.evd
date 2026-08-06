@@ -4,12 +4,13 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, contains_eager, joinedload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.setting import SettingModel
 from api.models.setting_history import SettingHistoryModel
+from api.models.user import UserModel
 from api.repositories.base import BaseRepository
 from api.schemas.setting import SettingFilters
 
@@ -20,10 +21,25 @@ class SettingsRepository(BaseRepository[SettingModel]):
     def __init__(self, db: Session):
         super().__init__(SettingModel, db)
 
-    def get_by_key(self, key: str) -> SettingModel | None:
-        """Get a setting by key."""
+    def get(self, setting_id: int) -> SettingModel | None:
+        """Get a setting by ID with changed-by user loaded."""
 
-        return self.db.query(SettingModel).filter(SettingModel.key == key).first()
+        return (
+            self.db.query(SettingModel)
+            .options(joinedload(SettingModel.changed_by_user))
+            .filter(SettingModel.id == setting_id)
+            .first()
+        )
+
+    def get_by_key(self, key: str) -> SettingModel | None:
+        """Get a setting by key with changed-by user loaded."""
+
+        return (
+            self.db.query(SettingModel)
+            .options(joinedload(SettingModel.changed_by_user))
+            .filter(SettingModel.key == key)
+            .first()
+        )
 
     def search(
         self,
@@ -32,7 +48,11 @@ class SettingsRepository(BaseRepository[SettingModel]):
     ) -> tuple[list[SettingModel], int]:
         """Search for settings based on filters and pagination parameters."""
 
-        query = self.db.query(SettingModel)
+        query = (
+            self.db.query(SettingModel)
+            .outerjoin(UserModel, UserModel.uid == SettingModel.changed_by)
+            .options(contains_eager(SettingModel.changed_by_user))
+        )
 
         if filters.search:
             term = filters.search.strip()
@@ -99,7 +119,11 @@ class SettingsRepository(BaseRepository[SettingModel]):
     ) -> tuple[list[SettingHistoryModel], int]:
         """Get setting history with optional filters and pagination."""
 
-        query = self.db.query(SettingHistoryModel)
+        query = (
+            self.db.query(SettingHistoryModel)
+            .outerjoin(UserModel, UserModel.uid == SettingHistoryModel.changed_by)
+            .options(contains_eager(SettingHistoryModel.changed_by_user))
+        )
 
         if key:
             query = query.filter(SettingHistoryModel.key == key)

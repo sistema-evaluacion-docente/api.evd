@@ -6,7 +6,7 @@ import datetime
 from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
 
@@ -24,6 +24,13 @@ class SettingModel(Base):
     )
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     changed_by: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+
+    changed_by_user: Mapped[Optional["UserModel"]] = relationship(
+        "UserModel",
+        primaryjoin="UserModel.uid == foreign(SettingModel.changed_by)",
+        viewonly=True,
+        uselist=False,
+    )
 
     effective_from: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True),

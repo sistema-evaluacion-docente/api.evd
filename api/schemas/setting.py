@@ -33,6 +33,8 @@ class SettingOut(BaseModel):
     value_type: str
     description: Optional[str]
     changed_by: Optional[str]
+    changed_by_name: Optional[str]
+    changed_by_avatar_url: Optional[str]
     effective_from: datetime
     created_at: datetime
     updated_at: datetime
@@ -46,6 +48,8 @@ class SettingHistoryOut(BaseModel):
     old_value: Optional[str]
     new_value: str
     changed_by: Optional[str]
+    changed_by_name: Optional[str]
+    changed_by_avatar_url: Optional[str]
     change_reason: Optional[str]
     changed_at: datetime
 
