@@ -3,15 +3,16 @@ Tests for UsersRepository layer.
 """
 
 from unittest.mock import MagicMock
+
 import pytest
 
 from api.core.pagination import PaginationParams
+from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
-from api.models.teacher import TeacherModel
-from api.repositories.users import UsersRepository
 from api.repositories.base import BaseRepository
-from api.schemas.user import UserFilters
+from api.repositories.users import UsersRepository
+from api.schemas.user import RoleName, UserFilters
 
 
 class TestUsersRepository:
@@ -332,6 +333,28 @@ class TestUsersRepository:
         items, total = repo.search(filters, pagination)
 
         assert total == 1
+        mock_query.filter.assert_called_once()
+
+    def test_search_with_roles_filter(self, repo, mock_db, mock_user_model):
+        """Test search filters users by roles."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_user_model
+        ]
+
+        filters = UserFilters(search=None, active=None, roles=[RoleName.DOCENTE])
+        pagination = PaginationParams(page=1, limit=10)
+
+        items, total = repo.search(filters, pagination)
+
+        assert total == 1
+        assert items == [mock_user_model]
         mock_query.filter.assert_called_once()
 
     def test_search_pagination_offset(self, repo, mock_db, mock_user_model):
