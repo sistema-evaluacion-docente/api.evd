@@ -55,7 +55,7 @@ class TestSettingsRepository:
     def test_get_by_key_found(self, repo, mock_db, mock_setting_model):
         """Test get_by_key returns setting when found."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
             mock_setting_model
         )
 
@@ -66,7 +66,9 @@ class TestSettingsRepository:
     def test_get_by_key_not_found(self, repo, mock_db):
         """Test get_by_key returns None when not found."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
+            None
+        )
 
         result = repo.get_by_key("nonexistent")
 
@@ -77,6 +79,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 1
@@ -91,6 +94,7 @@ class TestSettingsRepository:
 
         assert total == 1
         assert items == [mock_setting_model]
+        mock_query.outerjoin.assert_called_once()
         mock_query.count.assert_called_once()
         mock_query.offset.assert_called_once_with(0)
 
@@ -99,6 +103,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 1
@@ -119,6 +124,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 1
@@ -138,6 +144,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 25
@@ -179,7 +186,7 @@ class TestSettingsRepository:
     def test_delete_setting_success(self, repo, mock_db, mock_setting_model):
         """Test delete_setting deletes and returns setting."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = (
+        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
             mock_setting_model
         )
 
@@ -192,7 +199,9 @@ class TestSettingsRepository:
     def test_delete_setting_not_found(self, repo, mock_db):
         """Test delete_setting returns None when not found."""
 
-        mock_db.query.return_value.filter.return_value.first.return_value = None
+        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
+            None
+        )
 
         result = repo.delete_setting(999)
 
@@ -222,6 +231,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 1
@@ -240,6 +250,7 @@ class TestSettingsRepository:
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.order_by.return_value = mock_query
         mock_query.all.return_value = [mock_history_model]

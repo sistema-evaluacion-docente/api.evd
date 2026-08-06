@@ -7,11 +7,7 @@ import pytest
 from api.core.pagination import PaginationParams
 from api.exceptions import ResourceAlreadyExistsError
 from api.models.setting import SettingModel
-from api.schemas.setting import (
-    SettingCreate,
-    SettingFilters,
-    SettingUpdate,
-)
+from api.schemas.setting import SettingCreate, SettingFilters, SettingUpdate
 from api.services.settings_service import SettingService
 
 
@@ -84,9 +80,29 @@ class TestSettingService:
         assert len(result["items"]) == 1
 
     @pytest.mark.asyncio
-    async def test_get_by_id_found(
+    async def test_get_all_includes_changed_by_user_info(
         self, service, mock_settings_repo, mock_setting
     ):
+        """Test get_all includes changed-by user name and avatar URL."""
+
+        mock_user = MagicMock()
+        mock_user.name = "Admin User"
+        mock_user.avatar_url = "http://avatar.example.com/admin.png"
+        mock_setting.changed_by_user = mock_user
+
+        mock_settings_repo.search.return_value = ([mock_setting], 1)
+
+        filters = SettingFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        result = await service.get_all(filters, pagination)
+
+        item = result["items"][0]
+        assert item["changed_by_name"] == "Admin User"
+        assert item["changed_by_avatar_url"] == "http://avatar.example.com/admin.png"
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_found(self, service, mock_settings_repo, mock_setting):
         """Test get_by_id returns setting dict when found."""
 
         mock_settings_repo.get.return_value = mock_setting
@@ -108,9 +124,7 @@ class TestSettingService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_by_key_found(
-        self, service, mock_settings_repo, mock_setting
-    ):
+    async def test_get_by_key_found(self, service, mock_settings_repo, mock_setting):
         """Test get_by_key returns setting dict when found."""
 
         mock_settings_repo.get_by_key.return_value = mock_setting
@@ -238,9 +252,7 @@ class TestSettingService:
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_history_with_pagination(
-        self, service, mock_settings_repo
-    ):
+    async def test_get_history_with_pagination(self, service, mock_settings_repo):
         """Test get_history returns paginated history."""
 
         mock_history = MagicMock()
@@ -259,3 +271,32 @@ class TestSettingService:
 
         assert result["total"] == 1
         assert len(result["items"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_history_includes_changed_by_user_info(
+        self, service, mock_settings_repo
+    ):
+        """Test get_history includes changed-by user name and avatar URL."""
+
+        mock_history = MagicMock()
+        mock_history.id = 1
+        mock_history.key = "app_name"
+        mock_history.old_value = "Old"
+        mock_history.new_value = "New"
+        mock_history.changed_by = "user-uid"
+        mock_history.change_reason = "Test"
+        mock_history.changed_at = "2024-01-01T00:00:00Z"
+
+        mock_user = MagicMock()
+        mock_user.name = "Admin User"
+        mock_user.avatar_url = "http://avatar.example.com/admin.png"
+        mock_history.changed_by_user = mock_user
+
+        mock_settings_repo.get_history.return_value = ([mock_history], 1)
+
+        pagination = PaginationParams(page=1, limit=10)
+        result = await service.get_history(key="app_name", pagination=pagination)
+
+        item = result["items"][0]
+        assert item["changed_by_name"] == "Admin User"
+        assert item["changed_by_avatar_url"] == "http://avatar.example.com/admin.png"
