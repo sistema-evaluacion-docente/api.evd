@@ -31,6 +31,7 @@ class TestEvaluationsController:
         service.trigger_analysis = AsyncMock()
         service.update_status = AsyncMock()
         service.delete = AsyncMock()
+        service.get_pdf_path = AsyncMock()
         return service
 
     @pytest.fixture
@@ -55,7 +56,9 @@ class TestEvaluationsController:
         pagination = PaginationParams(page=1, limit=10)
         result = await controller.get_all("admin@test.com", filters, pagination)
 
-        mock_service.get_all.assert_called_once_with("admin@test.com", filters, pagination)
+        mock_service.get_all.assert_called_once_with(
+            "admin@test.com", filters, pagination
+        )
         assert result["total"] == 0
 
     @pytest.mark.asyncio
@@ -215,3 +218,17 @@ class TestEvaluationsController:
 
         mock_service.delete.assert_called_once_with(1, current_user)
         assert result["id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_delegates_to_service(self, controller, mock_service):
+        """Test get_pdf_path delegates to service."""
+
+        current_user = {"roles": ["ADMIN"]}
+        mock_service.get_pdf_path.return_value = (
+            "uploads/evaluations/2024-1/CS/file.pdf"
+        )
+
+        result = await controller.get_pdf_path(1, current_user)
+
+        mock_service.get_pdf_path.assert_called_once_with(1, current_user)
+        assert result == "uploads/evaluations/2024-1/CS/file.pdf"

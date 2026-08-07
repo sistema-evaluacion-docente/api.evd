@@ -566,6 +566,96 @@ class TestEvaluationService:
         mock_academic_periods_repo.create.assert_called_once()
 
     @pytest.mark.asyncio
+    async def test_get_pdf_path_raises_not_found_when_evaluation_missing(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_pdf_path raises ResourceNotFoundError when evaluation doesn't exist."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_pdf_path(999, {"roles": ["ADMIN"]})
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_allows_admin(self, service, mock_evaluations_repo):
+        """Test get_pdf_path allows ADMIN regardless of department."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/file.pdf",
+        }
+
+        result = await service.get_pdf_path(
+            1, {"roles": ["ADMIN"], "department_id": 999}
+        )
+
+        assert result == "uploads/evaluations/2024-1/CS/file.pdf"
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_allows_director_of_same_department(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_pdf_path allows a director whose department matches."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/file.pdf",
+        }
+
+        result = await service.get_pdf_path(
+            1, {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 1}
+        )
+
+        assert result == "uploads/evaluations/2024-1/CS/file.pdf"
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_denies_director_of_other_department(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_pdf_path denies a director from a different department."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/file.pdf",
+        }
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_pdf_path(
+                1, {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 2}
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_denies_docente(self, service, mock_evaluations_repo):
+        """Test get_pdf_path denies a plain DOCENTE."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/file.pdf",
+        }
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_pdf_path(1, {"roles": ["DOCENTE"], "department_id": 1})
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_raises_not_found_when_no_pdf(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_pdf_path raises ResourceNotFoundError when evaluation has no PDF."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": None,
+        }
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_pdf_path(1, {"roles": ["ADMIN"], "department_id": 1})
+
+    @pytest.mark.asyncio
     async def test_get_teachers_by_period_returns_paginated_result(
         self, service, mock_evaluations_repo
     ):
