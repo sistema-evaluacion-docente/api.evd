@@ -6,6 +6,7 @@ import os
 import uuid
 
 from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import FileResponse
 
 from api.config import config
 from api.controllers.improvement_plans import (
@@ -117,9 +118,7 @@ async def get_all_plans(
     page: int = Query(default=1, ge=1),
     limit: int = Query(default=10, ge=1, le=100),
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """List improvement plans with pagination and filters."""
 
@@ -158,9 +157,7 @@ async def get_at_risk_teachers(
     period_id: int = Query(..., description="Academic period to inspect"),
     department_id: int | None = Query(default=None),
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Teachers below the institutional threshold that have no plan yet for the
     period, with weak dimensions and suggested improvement actions."""
@@ -197,9 +194,7 @@ async def get_plan_candidates(
     ),
     search: str | None = Query(default=None, min_length=1),
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Teachers that can receive a plan, with the average of every dimension and
     of every question of the evaluation form.
@@ -238,9 +233,7 @@ async def get_plan_candidates(
 async def get_evaluated_periods(
     department_id: int | None = Query(default=None),
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Periods the department already has grades for — the ones a plan can take
     as origin period. The current academic period usually has none yet."""
@@ -268,9 +261,7 @@ async def get_evaluated_periods(
 )
 async def get_plan_indicators(
     _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Indicators a plan item can commit to: the overall average, each dimension
     as a whole, and each question of the evaluation form within it."""
@@ -290,9 +281,7 @@ async def get_plan_indicators(
 )
 async def get_my_plans(
     current_user=Depends(require_roles([RoleName.DOCENTE])),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Plans of the authenticated teacher (vista del docente)."""
 
@@ -317,9 +306,7 @@ async def get_my_plans(
 async def get_teacher_history(
     teacher_id: int,
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Cross-period history of a teacher: overall and per-dimension averages
     for every evaluated period, every improvement plan with its resolution,
@@ -361,18 +348,14 @@ async def create_plan(
     payload: ImprovementPlanCreate,
     current_user=Depends(get_current_user),
     _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Create a new improvement plan with its items."""
 
     try:
         plan = await controller.create(payload, current_user)
     except ValueError as e:
-        return ResponseSchema(
-            status=400, message=str(e), path="/improvement-plans"
-        )
+        return ResponseSchema(status=400, message=str(e), path="/improvement-plans")
 
     return ResponseSchema(
         status=201,
@@ -390,9 +373,7 @@ async def create_plan(
 async def get_plan_by_id(
     plan_id: int,
     current_user=Depends(require_roles(ANY_ROLE)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Get an improvement plan by id. A DOCENTE can only see their own plan."""
 
@@ -415,6 +396,75 @@ async def get_plan_by_id(
     )
 
 
+@router.get(
+    "/{plan_id}/acta",
+    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def download_acta(
+    plan_id: int,
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Download the acta de compromiso PDF of a plan.
+
+    Not served as a public static asset — only ADMIN, the director of the
+    plan's department, or the plan's own DOCENTE may access it."""
+
+    plan = await controller.get_by_id(plan_id)
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="Improvement plan not found")
+
+    _ensure_can_access(controller, current_user, plan)
+
+    file_path = plan.get("acta_pdf_url")
+
+    if not file_path or not os.path.isfile(file_path):
+        raise HTTPException(status_code=404, detail="El plan no tiene un acta adjunta")
+
+    return FileResponse(
+        file_path,
+        media_type="application/pdf",
+        filename=f"acta_plan_{plan_id}.pdf",
+        content_disposition_type="inline",
+    )
+
+
+@router.get(
+    "/{plan_id}/evidences/{evidence_id}",
+    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+)
+async def download_evidence(
+    plan_id: int,
+    evidence_id: int,
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Download an evidence PDF attached to a plan.
+
+    Not served as a public static asset — only ADMIN, the director of the
+    plan's department, or the plan's own DOCENTE may access it."""
+
+    plan = await controller.get_by_id(plan_id)
+
+    if not plan:
+        raise HTTPException(status_code=404, detail="Improvement plan not found")
+
+    _ensure_can_access(controller, current_user, plan)
+
+    evidence = controller.get_evidence(plan_id, evidence_id)
+
+    if not evidence or not os.path.isfile(evidence.file_url):
+        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+
+    return FileResponse(
+        evidence.file_url,
+        media_type="application/pdf",
+        filename=f"evidencia_{evidence_id}.pdf",
+        content_disposition_type="inline",
+    )
+
+
 @router.put(
     "/{plan_id}",
     response_model=ImprovementPlanDetailResponse,
@@ -425,9 +475,7 @@ async def update_plan(
     payload: ImprovementPlanUpdate,
     current_user=Depends(get_current_user),
     _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Update a plan and its items (add/remove/update)."""
 
@@ -462,9 +510,7 @@ async def upload_acta(
     file: UploadFile | None = File(default=None),
     description: str | None = Form(default=None),
     current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Attach or replace the acta de compromiso (PDF and/or description).
 
@@ -528,9 +574,7 @@ async def add_evidence(
     description: str | None = Form(default=None),
     item_id: int | None = Form(default=None),
     current_user=Depends(require_roles(ANY_ROLE)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Attach an evidence PDF to a plan, optionally tied to one of its items.
 
@@ -586,9 +630,7 @@ async def delete_evidence(
     plan_id: int,
     evidence_id: int,
     current_user=Depends(require_roles(ANY_ROLE)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Delete an evidence. Allowed to whoever uploaded it, or to the plan's
     director/admin."""
@@ -647,9 +689,7 @@ async def close_plan(
     payload: ImprovementPlanClose,
     current_user=Depends(get_current_user),
     _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Close a plan (manual anytime, or confirming the verification result)."""
 
@@ -679,9 +719,7 @@ async def evaluate_plan(
     plan_id: int,
     current_user=Depends(get_current_user),
     _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(
-        get_improvement_plans_controller
-    ),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """Recompute item compliance against the verification period and suggest a
     result (does not close the plan)."""

@@ -34,6 +34,12 @@ class EvaluationsController:
 
         return await self.service.get_by_period(period_id)
 
+    async def get_pdf_path(self, evaluation_id: int, current_user: dict) -> str:
+        """Retrieve the absolute path to an evaluation's PDF, enforcing that
+        only ADMIN or the director of its department may access it."""
+
+        return await self.service.get_pdf_path(evaluation_id, current_user)
+
     async def get_summary(self, evaluation_id: int):
         """Get aggregated statistics for an evaluation."""
 

@@ -7,7 +7,6 @@ import os
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from api.config import config
@@ -63,8 +62,10 @@ from api.routes import (
     stats,
     teachers,
     users,
+    ws_dev_logs,
+    ws_evaluations,
+    ws_notifications,
 )
-from api.routes import ws_dev_logs, ws_evaluations, ws_notifications
 
 _ = (
     academic_group,
@@ -96,9 +97,10 @@ Base.metadata.create_all(bind=engine)
 app = FastAPI(title="EVD API")
 
 os.makedirs(config.UPLOAD_DIR, exist_ok=True)
-app.mount(
-    f"/{config.UPLOAD_DIR}", StaticFiles(directory=config.UPLOAD_DIR), name="uploads"
-)
+# NOTE: UPLOAD_DIR is intentionally NOT mounted as a public static directory.
+# Files under it (evaluation PDFs, improvement plan actas/evidencias) contain
+# department/teacher-sensitive data and must be served through authenticated,
+# permission-checked endpoints (see GET /evaluations/{id}/pdf).
 
 _allow_all_origins = "*" in config.ALLOWED_ORIGINS
 

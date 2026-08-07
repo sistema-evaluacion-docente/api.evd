@@ -2,13 +2,10 @@
 Routes for evaluation operations.
 """
 
-from fastapi import (
-    BackgroundTasks,
-    Depends,
-    File,
-    HTTPException,
-    UploadFile,
-)
+import os
+
+from fastapi import BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from api.controllers.evaluations import (
@@ -18,7 +15,7 @@ from api.controllers.evaluations import (
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.database import get_db
-from api.middlewares.auth import require_roles, get_current_user
+from api.middlewares.auth import get_current_user, require_roles
 from api.models.evaluation import EvaluationModel as EvaluationORM
 from api.repositories.stats import StatsRepository, get_stats_repository
 from api.schemas.evaluation import (
@@ -36,13 +33,13 @@ from api.schemas.evaluation_summary import (
 )
 from api.schemas.user import RoleName
 from api.utils.dimensions import QUESTIONS
-from api.utils.evaluation_processor import (
-    analyze_evaluation_comments,
-    process_evaluation,
-)
 from api.utils.evaluation_excel_export import (
     build_evaluation_report,
     evaluation_streaming_response,
+)
+from api.utils.evaluation_processor import (
+    analyze_evaluation_comments,
+    process_evaluation,
 )
 from api.utils.teacher_excel_export import (
     build_teacher_report,
@@ -147,6 +144,33 @@ async def get_evaluation_by_id(
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return evaluation
+
+
+@router.get(
+    "/{evaluation_id}/pdf",
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def download_evaluation_pdf(
+    evaluation_id: int,
+    current_user=Depends(require_roles(_EVAL_ROLES)),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Download the PDF of an evaluation.
+
+    Only ADMIN or the DIRECTOR of the department the evaluation belongs to
+    may access the file — it is no longer served as a public static asset."""
+
+    pdf_path = await controller.get_pdf_path(evaluation_id, current_user)
+
+    if not os.path.isfile(pdf_path):
+        raise HTTPException(status_code=404, detail="El archivo PDF no existe")
+
+    return FileResponse(
+        pdf_path,
+        media_type="application/pdf",
+        filename=f"evaluacion_{evaluation_id}.pdf",
+        content_disposition_type="inline",
+    )
 
 
 @router.get(
@@ -263,9 +287,7 @@ async def export_teacher_evaluation(
 ):
     """Download an Excel report for a teacher's evaluation detail."""
 
-    detail = await controller.get_teacher_detail(
-        period_name, teacher_id, department_id
-    )
+    detail = await controller.get_teacher_detail(period_name, teacher_id, department_id)
     if not detail:
         raise HTTPException(
             status_code=404, detail="Evaluación o docente no encontrado"
@@ -301,7 +323,7 @@ async def export_teacher_evaluation(
 async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
-_=Depends(require_roles(_EVAL_ROLES)),
+    _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation."""

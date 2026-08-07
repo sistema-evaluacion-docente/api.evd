@@ -17,6 +17,7 @@ from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.users import UsersRepository
 from api.schemas.academic_period import AcademicPeriodCreate
 from api.schemas.evaluation import EvaluationFilters
+from api.schemas.user import RoleName
 from api.schemas.pagination import build_paginated_response
 from api.serializers.evaluations import evaluation_to_dict
 from api.services.audit_service import AuditService
@@ -80,6 +81,37 @@ class EvaluationService:
         """Retrieve an evaluation by academic period ID."""
 
         return self.evaluations_repository.get_by_period_id(period_id)
+
+    async def get_pdf_path(self, evaluation_id: int, current_user: dict) -> str:
+        """Return the absolute path to an evaluation's PDF on disk.
+
+        Only ADMIN or the DIRECTOR of the department the evaluation belongs
+        to may access the file."""
+
+        evaluation = self.evaluations_repository.get_by_id_as_dict(evaluation_id)
+
+        if not evaluation:
+            raise ResourceNotFoundError("evaluation", evaluation_id)
+
+        roles = set(current_user.get("roles", []))
+        is_admin = RoleName.ADMIN.value in roles
+        is_department_director = (
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
+            and evaluation.get("department_id") is not None
+            and evaluation.get("department_id") == current_user.get("department_id")
+        )
+
+        if not (is_admin or is_department_director):
+            raise PermissionDeniedError(
+                "No tiene permiso para acceder al PDF de esta evaluación"
+            )
+
+        pdf_url = evaluation.get("pdf_url")
+
+        if not pdf_url:
+            raise ResourceNotFoundError("evaluation pdf", evaluation_id)
+
+        return pdf_url
 
     async def get_summary(self, evaluation_id: int) -> dict | None:
         """Get aggregated statistics for an evaluation."""
