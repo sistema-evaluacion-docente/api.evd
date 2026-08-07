@@ -70,14 +70,29 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         )
 
     def get_by_id_as_dict(self, evaluation_id: int) -> dict | None:
-        """Get an evaluation by ID as a dict."""
+        """Get an evaluation by ID as a dict, including its overall_average."""
 
         evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
 
-        return evaluation_to_dict(evaluation)
+        data = evaluation_to_dict(evaluation)
+        data["overall_average"] = self._get_overall_average(evaluation_id)
+
+        return data
+
+    def _get_overall_average(self, evaluation_id: int) -> float | None:
+        """Average of EvaluationScoreModel.overall_average across every teacher
+        scored in this evaluation."""
+
+        avg = (
+            self.db.query(func.avg(EvaluationScoreModel.overall_average))
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+            .scalar()
+        )
+
+        return float(avg) if avg is not None else None
 
     def search(
         self,
