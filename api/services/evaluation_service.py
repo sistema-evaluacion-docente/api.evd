@@ -4,7 +4,6 @@ import os
 import uuid
 from math import ceil
 
-
 from fastapi import HTTPException
 
 from api.config import config
@@ -17,8 +16,8 @@ from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.users import UsersRepository
 from api.schemas.academic_period import AcademicPeriodCreate
 from api.schemas.evaluation import EvaluationFilters
-from api.schemas.user import RoleName
 from api.schemas.pagination import build_paginated_response
+from api.schemas.user import RoleName
 from api.serializers.evaluations import evaluation_to_dict
 from api.services.audit_service import AuditService
 from api.utils.file_validation import validate_file_size
@@ -73,9 +72,18 @@ class EvaluationService:
         return build_paginated_response(items, total, pagination)
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:
-        """Retrieve an evaluation by ID."""
+        """Retrieve an evaluation by ID, including its pedagogical dimension averages."""
 
-        return self.evaluations_repository.get_by_id_as_dict(evaluation_id)
+        evaluation = self.evaluations_repository.get_by_id_as_dict(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        evaluation["dimension_averages"] = (
+            self.evaluations_repository.get_dimension_averages(evaluation_id)
+        )
+
+        return evaluation
 
     async def get_by_period(self, period_id: int) -> dict | None:
         """Retrieve an evaluation by academic period ID."""

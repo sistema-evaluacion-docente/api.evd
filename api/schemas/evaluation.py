@@ -9,6 +9,8 @@ from typing import Annotated, Optional
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
+from api.schemas.evaluation_summary import DimensionAverageItem
+
 
 class EvaluationStatusUpdate(BaseModel):
     """Schema for activating/deactivating an evaluation."""
@@ -31,6 +33,7 @@ class EvaluationOut(BaseModel):
     ai_status: Optional[str] = None
     count: Optional[int]
     overall_average: Optional[float] = None
+    dimension_averages: Optional[list[DimensionAverageItem]] = None
     created_at: datetime
     updated_at: datetime
 
