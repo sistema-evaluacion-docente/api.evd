@@ -127,15 +127,28 @@ class TestEvaluationService:
         mock_evaluations_repo.search.assert_called_once_with(filters, pagination)
 
     @pytest.mark.asyncio
-    async def test_get_by_id_returns_evaluation(self, service, mock_evaluations_repo):
-        """Test get_by_id returns evaluation dict."""
+    async def test_get_by_id_returns_evaluation_with_dimension_averages(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_by_id merges dimension averages into the evaluation dict."""
 
         mock_evaluations_repo.get_by_id_as_dict.return_value = {"id": 1}
+        dimension_averages = [
+            {
+                "dimension": "Desarrollo del Conocimiento",
+                "average": 4.5,
+                "question_count": 6,
+                "questions": [],
+            }
+        ]
+        mock_evaluations_repo.get_dimension_averages.return_value = dimension_averages
 
         result = await service.get_by_id(1)
 
-        assert result == {"id": 1}
+        assert result["id"] == 1
+        assert result["dimension_averages"] == dimension_averages
         mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1)
+        mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_none_when_not_found(
@@ -148,6 +161,7 @@ class TestEvaluationService:
         result = await service.get_by_id(999)
 
         assert result is None
+        mock_evaluations_repo.get_dimension_averages.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_period_returns_evaluation(
