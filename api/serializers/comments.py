@@ -27,19 +27,31 @@ def comment_to_dict(
         "teacher_avatar_url": teacher_avatar_url,
         "course_name": course_name,
         "original_text": comment.original_text,
-        "risk_level": {
-            "id": risk.id,
-            "name": risk.name,
-            "color_hex": risk.color_hex,
-        } if risk else None,
+        "risk_level": (
+            {
+                "id": risk.id,
+                "name": risk.name,
+                "color_hex": risk.color_hex,
+            }
+            if risk
+            else None
+        ),
         "risk_score": comment.risk_score,
-        "pedagogical_category": {
-            "id": category.id,
-            "name": category.name,
-            "description": category.description,
-            "color_hex": category.color_hex,
-        } if category else None,
+        "pedagogical_category": (
+            {
+                "id": category.id,
+                "name": category.name,
+                "description": category.description,
+                "color_hex": category.color_hex,
+            }
+            if category
+            else None
+        ),
         "category_score": comment.category_score,
+        "risk_level_modified_by_director": comment.risk_level_modified_by_director,
+        "pedagogical_category_modified_by_director": (
+            comment.pedagogical_category_modified_by_director
+        ),
         "created_at": comment.created_at,
         "updated_at": comment.updated_at,
     }

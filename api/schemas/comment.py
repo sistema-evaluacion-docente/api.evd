@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 from fastapi import Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 
 class RiskLevelOut(BaseModel):
@@ -43,8 +43,31 @@ class CommentOut(BaseModel):
     risk_score: Optional[float] = None
     pedagogical_category: Optional[PedagogicalCategoryOut] = None
     category_score: Optional[float] = None
+    risk_level_modified_by_director: bool = False
+    pedagogical_category_modified_by_director: bool = False
     created_at: datetime
     updated_at: datetime
+
+
+class CommentUpdate(BaseModel):
+    """Schema for updating a comment's risk level and/or pedagogical category.
+
+    Only a department director may perform this update; each field actually
+    provided is flagged as modified by the director.
+    """
+
+    risk_level: Optional[int] = None
+    pedagogical_category_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def at_least_one_field(self):
+        """Validate that at least one of the two fields is provided."""
+
+        if self.risk_level is None and self.pedagogical_category_id is None:
+            raise ValueError(
+                "Debe proporcionar al menos risk_level o pedagogical_category_id"
+            )
+        return self
 
 
 @dataclass

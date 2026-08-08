@@ -6,7 +6,7 @@ from fastapi.param_functions import Depends
 
 from api.core.pagination import PaginationParams
 from api.dependencies.comments import get_comment_service
-from api.schemas.comment import CommentFilters
+from api.schemas.comment import CommentFilters, CommentUpdate
 from api.services.comment_service import CommentService
 
 
@@ -47,6 +47,16 @@ class CommentsController:
             pedagogical_category_id,
             teacher_id,
         )
+
+    async def update_classification(
+        self,
+        comment_id: int,
+        data: CommentUpdate,
+        current_user: dict,
+    ):
+        """Update a comment's risk level and/or pedagogical category (director only)."""
+
+        return await self.service.update_classification(comment_id, data, current_user)
 
 
 def get_comments_controller(

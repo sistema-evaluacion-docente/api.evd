@@ -1,9 +1,12 @@
 """Service for comment-related business operations."""
 
 from api.core.pagination import PaginationParams
+from api.exceptions import PermissionDeniedError, ResourceNotFoundError
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.comments import CommentsRepository
-from api.schemas.comment import CommentFilters
+from api.repositories.pedagogical_categories import PedagogicalCategoriesRepository
+from api.repositories.risk_levels import RiskLevelsRepository
+from api.schemas.comment import CommentFilters, CommentUpdate
 from api.schemas.pagination import build_paginated_response
 from api.services.audit_service import AuditService
 
@@ -15,10 +18,14 @@ class CommentService:
         self,
         comments_repository: CommentsRepository,
         academic_periods_repository: AcademicPeriodsRepository,
+        risk_levels_repository: RiskLevelsRepository,
+        pedagogical_categories_repository: PedagogicalCategoriesRepository,
         audit_service: AuditService,
     ):
         self.comments_repository = comments_repository
         self.academic_periods_repository = academic_periods_repository
+        self.risk_levels_repository = risk_levels_repository
+        self.pedagogical_categories_repository = pedagogical_categories_repository
         self.audit_service = audit_service
 
     async def get_all(
@@ -70,3 +77,61 @@ class CommentService:
             pedagogical_category_id,
             teacher_id,
         )
+
+    async def update_classification(
+        self,
+        comment_id: int,
+        data: CommentUpdate,
+        current_user: dict,
+    ) -> dict | None:
+        """Update a comment's risk_level and/or pedagogical_category_id.
+
+        Only the director of the department that owns the comment's evaluation
+        may perform this update. Returns None when the comment doesn't exist
+        (or has no department to authorize against), which the route maps to 404.
+        """
+
+        department_id = self.comments_repository.get_department_id(comment_id)
+
+        if department_id is None:
+            return None
+
+        if department_id != current_user.get("department_id"):
+            raise PermissionDeniedError(
+                "Solo el director del departamento asociado puede modificar este comentario"
+            )
+
+        if data.risk_level is not None:
+            risk = await self.risk_levels_repository.get_by_id(data.risk_level)
+
+            if not risk:
+                raise ResourceNotFoundError("Nivel de riesgo", data.risk_level)
+
+        if data.pedagogical_category_id is not None:
+            category = await self.pedagogical_categories_repository.get_by_id(
+                data.pedagogical_category_id
+            )
+
+            if not category:
+                raise ResourceNotFoundError(
+                    "Categoría pedagógica", data.pedagogical_category_id
+                )
+
+        updated = self.comments_repository.update_classification(
+            comment_id,
+            risk_level=data.risk_level,
+            pedagogical_category_id=data.pedagogical_category_id,
+        )
+
+        if not updated:
+            return None
+
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="comments",
+            entity_id=comment_id,
+            actor_id=current_user.get("id"),
+            description=f"El director modificó la clasificación del comentario {comment_id}",
+        )
+
+        return self.comments_repository.get_by_id_enriched(comment_id)

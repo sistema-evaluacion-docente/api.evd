@@ -12,6 +12,7 @@ from api.models.teacher import TeacherModel
 from api.schemas.comment import (
     CommentFiltersDep,
     CommentOut,
+    CommentUpdate,
 )
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
@@ -139,6 +140,32 @@ async def get_comment_by_id(
     """Get a comment by ID."""
 
     comment = await controller.get_by_id(comment_id)
+
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comentario no encontrado")
+
+    return comment
+
+
+@router.patch(
+    "/{comment_id}",
+    response_model=CommentOut,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def update_comment_classification(
+    comment_id: int,
+    payload: CommentUpdate,
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: CommentsController = Depends(get_comments_controller),
+):
+    """Update the risk level and/or pedagogical category of a comment.
+
+    Only the director of the department that owns the comment's evaluation
+    may perform this action. Each field provided is flagged as modified by
+    the director.
+    """
+
+    comment = await controller.update_classification(comment_id, payload, current_user)
 
     if not comment:
         raise HTTPException(status_code=404, detail="Comentario no encontrado")

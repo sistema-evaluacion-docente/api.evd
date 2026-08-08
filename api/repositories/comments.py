@@ -166,6 +166,55 @@ class CommentsRepository(BaseRepository[CommentModel]):
             course_name=course_name,
         )
 
+    def get_department_id(self, comment_id: int) -> int | None:
+        """Get the department_id of the evaluation a comment belongs to."""
+
+        result = (
+            self.db.query(EvaluationModel.department_id)
+            .join(CommentModel, CommentModel.evaluation_id == EvaluationModel.id)
+            .filter(CommentModel.id == comment_id)
+            .first()
+        )
+
+        return result[0] if result else None
+
+    def update_classification(
+        self,
+        comment_id: int,
+        risk_level: int | None = None,
+        pedagogical_category_id: int | None = None,
+    ) -> CommentModel | None:
+        """Update a comment's risk_level and/or pedagogical_category_id.
+
+        A field is only flagged as director-modified (and its confidence score
+        set to 1, i.e. 100%, since it now reflects a human decision instead of
+        the AI model's estimate) when the provided value actually differs from
+        the current one.
+        """
+
+        comment = self.get(comment_id)
+
+        if not comment:
+            return None
+
+        if risk_level is not None and risk_level != comment.risk_level:
+            comment.risk_level = risk_level
+            comment.risk_level_modified_by_director = True
+            comment.risk_score = 1
+
+        if (
+            pedagogical_category_id is not None
+            and pedagogical_category_id != comment.pedagogical_category_id
+        ):
+            comment.pedagogical_category_id = pedagogical_category_id
+            comment.pedagogical_category_modified_by_director = True
+            comment.category_score = 1
+
+        self.db.commit()
+        self.db.refresh(comment)
+
+        return comment
+
     def count_by_department_and_period(
         self,
         department_id: int,
