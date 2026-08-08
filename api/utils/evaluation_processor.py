@@ -35,6 +35,10 @@ from api.core.websockets.connection_manager import (
 
 logger = logging.getLogger(__name__)
 
+# id de RiskLevelModel para "ALTO" según el orden de inserción de
+# scripts/seed_risk_categories.py (BAJO=1, MEDIO=2, ALTO=3).
+HIGH_RISK_LEVEL_ID = 3
+
 
 def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
     try:
@@ -235,6 +239,66 @@ def _create_analysis_notification(
             )
 
 
+def _create_high_risk_comment_notification(
+    db,
+    director_user_id: int,
+    evaluation_id: int,
+    teacher_name: str,
+    comment: CommentModel,
+) -> None:
+    """
+    Create an alert notification for the department director when a
+    comment is classified with the highest risk level (ALTO).
+    """
+
+    preview = (comment.original_text or "").strip()
+    if len(preview) > 200:
+        preview = preview[:200] + "..."
+
+    title = "Alerta: comentario de riesgo alto"
+    message = (
+        f"Se detectó un comentario clasificado con riesgo ALTO para el "
+        f"docente {teacher_name} en la evaluación #{evaluation_id}: "
+        f'"{preview}"'
+    )
+    notification_type = "warning"
+
+    try:
+        notification = NotificationModel(
+            user_id=director_user_id,
+            title=title,
+            message=message,
+            type=notification_type,
+        )
+        db.add(notification)
+        db.flush()
+
+        event = NotificationEvent(
+            notification_id=notification.id,
+            user_id=director_user_id,
+            title=title,
+            message=message,
+            notification_type=notification_type,
+        )
+
+        channel = f"notifications:{director_user_id}"
+
+        try:
+            asyncio.get_running_loop()
+            asyncio.ensure_future(notification_manager.broadcast(channel, event))
+        except RuntimeError:
+            asyncio.run(notification_manager.broadcast(channel, event))
+
+    except Exception as exc:
+        logger.warning(
+            "Failed to create/broadcast high-risk comment notification "
+            "for user %d (comment %s): %s",
+            director_user_id,
+            comment.id,
+            exc,
+        )
+
+
 def process_evaluation(evaluation_id: int, parsed: dict) -> None:
     """Persist all data extracted from a teacher evaluation PDF.
 
@@ -250,7 +314,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
     _broadcast_log(
         evaluation_id,
         level="info",
-        message="Iniciando procesamiento de la evaluación..."
+        message="Iniciando procesamiento de la evaluación...",
     )
 
     try:
@@ -585,6 +649,14 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             c.name.lower(): c.id for c in all_categories
         }
 
+        director = (
+            db.query(DirectorsModel)
+            .filter(DirectorsModel.department_id == evaluation.department_id)
+            .first()
+        )
+        director_user_id = director.user_id if director else None
+        teacher_name_cache: dict[int, str] = {}
+
         analyzed_count = 0
 
         for comment in comments:
@@ -600,6 +672,27 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
 
                 comment.risk_level = risk_cache[risk_label]
                 comment.risk_score = result.get("risk_score")
+
+                if comment.risk_level == HIGH_RISK_LEVEL_ID and director_user_id:
+                    if comment.teacher_id not in teacher_name_cache:
+                        teacher = (
+                            db.query(TeacherModel)
+                            .filter(TeacherModel.id == comment.teacher_id)
+                            .first()
+                        )
+                        teacher_name_cache[comment.teacher_id] = (
+                            teacher.user.name
+                            if teacher and teacher.user
+                            else "Docente desconocido"
+                        )
+
+                    _create_high_risk_comment_notification(
+                        db,
+                        director_user_id=director_user_id,
+                        evaluation_id=evaluation_id,
+                        teacher_name=teacher_name_cache[comment.teacher_id],
+                        comment=comment,
+                    )
 
             category_label = result.get("category_label")
 
