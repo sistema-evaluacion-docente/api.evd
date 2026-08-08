@@ -323,12 +323,21 @@ async def export_teacher_evaluation(
 async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
+    compare_previous: bool = False,
     _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return per-course and per-dimension scores for a teacher within an evaluation."""
+    """Return per-course and per-dimension scores for a teacher within an evaluation.
 
-    detail = await controller.get_teacher_detail(period_name, teacher_id)
+    If `compare_previous` is true, the response also includes a `previous_period`
+    field with the same detail for the immediately preceding academic period
+    (e.g. "2025-2" -> "2025-1"), or null if the teacher has no evaluation there.
+    By default only the detail for `period_name` is returned.
+    """
+
+    detail = await controller.get_teacher_detail(
+        period_name, teacher_id, compare_previous=compare_previous
+    )
 
     if not detail:
         raise HTTPException(

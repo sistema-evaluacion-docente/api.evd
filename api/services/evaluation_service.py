@@ -132,9 +132,19 @@ class EvaluationService:
         return self.evaluations_repository.get_dimension_averages(evaluation_id)
 
     async def get_teacher_detail(
-        self, period_name: str, teacher_id: int, department_id: int | None = None
+        self,
+        period_name: str,
+        teacher_id: int,
+        department_id: int | None = None,
+        compare_previous: bool = False,
     ) -> dict | None:
-        """Get per-course and per-dimension detail for a teacher in an evaluation."""
+        """Get per-course and per-dimension detail for a teacher in an evaluation.
+
+        If `compare_previous` is True, the returned dict also includes a
+        `previous_period` key with the same detail for the semester immediately
+        before `period_name` (e.g. "2025-2" -> "2025-1"), or None if there is
+        no evaluation for that teacher in that period.
+        """
 
         period = self.academic_periods_repository.get_by_name(period_name)
         if not period:
@@ -150,8 +160,50 @@ class EvaluationService:
         if not evaluation_data:
             return None
 
-        return self.evaluations_repository.get_teacher_detail(
+        detail = self.evaluations_repository.get_teacher_detail(
             evaluation_data["id"], teacher_id
+        )
+
+        if detail and compare_previous:
+            detail["previous_period"] = self._get_previous_period_detail(
+                period, teacher_id, department_id
+            )
+
+        return detail
+
+    def _get_previous_period_detail(
+        self, period, teacher_id: int, department_id: int | None
+    ) -> dict | None:
+        """Get a teacher's evaluation detail for the semester right before `period`."""
+
+        prev_code = self.academic_periods_repository.get_previous_period_code(
+            period.code
+        )
+
+        if not prev_code:
+            return None
+
+        prev_period = self.academic_periods_repository.get_by_code(prev_code)
+
+        if not prev_period:
+            return None
+
+        if department_id is not None:
+            prev_evaluation_data = (
+                self.evaluations_repository.get_by_period_and_department(
+                    prev_period.id, department_id
+                )
+            )
+        else:
+            prev_evaluation_data = self.evaluations_repository.get_by_period_id(
+                prev_period.id
+            )
+
+        if not prev_evaluation_data:
+            return None
+
+        return self.evaluations_repository.get_teacher_detail(
+            prev_evaluation_data["id"], teacher_id
         )
 
     async def get_teacher_comments(

@@ -107,6 +107,7 @@ class TeacherEvaluationDetail(BaseModel):
     group_count: int
     courses: list[CourseGroupScore]
     dimensions: list[DimensionScore]
+    previous_period: Optional["TeacherEvaluationDetail"] = None
 
 
 class TeacherEvaluationDetailResponse(BaseModel):

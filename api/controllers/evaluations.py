@@ -51,12 +51,16 @@ class EvaluationsController:
         return await self.service.get_dimension_averages(evaluation_id)
 
     async def get_teacher_detail(
-        self, period_name: str, teacher_id: int, department_id: int | None = None
+        self,
+        period_name: str,
+        teacher_id: int,
+        department_id: int | None = None,
+        compare_previous: bool = False,
     ):
         """Get per-course and per-dimension detail for a teacher in an evaluation."""
 
         return await self.service.get_teacher_detail(
-            period_name, teacher_id, department_id
+            period_name, teacher_id, department_id, compare_previous
         )
 
     async def get_teacher_comments(self, evaluation_id: int, teacher_id: int):
