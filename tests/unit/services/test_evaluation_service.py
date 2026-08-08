@@ -207,6 +207,101 @@ class TestEvaluationService:
         mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)
 
     @pytest.mark.asyncio
+    async def test_get_teacher_detail_returns_none_when_period_not_found(
+        self, service, mock_academic_periods_repo
+    ):
+        """Test get_teacher_detail returns None when the period name doesn't exist."""
+
+        mock_academic_periods_repo.get_by_name.return_value = None
+
+        result = await service.get_teacher_detail("2099-1", 10)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_without_compare_previous_omits_previous_period(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test get_teacher_detail doesn't fetch or attach previous_period by default."""
+
+        period = MagicMock()
+        period.id = 2
+        period.code = "2024-1"
+        mock_academic_periods_repo.get_by_name.return_value = period
+        mock_evaluations_repo.get_by_period_id.return_value = {"id": 5}
+        mock_evaluations_repo.get_teacher_detail.return_value = {
+            "teacher_id": 10,
+            "overall_average": 4.0,
+        }
+
+        result = await service.get_teacher_detail("2024-1", 10)
+
+        assert "previous_period" not in result
+        mock_evaluations_repo.get_teacher_detail.assert_called_once_with(5, 10)
+        mock_academic_periods_repo.get_previous_period_code.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_with_compare_previous_includes_previous_period(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test compare_previous=True attaches the detail from the prior semester."""
+
+        period = MagicMock()
+        period.id = 2
+        period.code = "2024-2"
+        prev_period = MagicMock()
+        prev_period.id = 1
+        prev_period.code = "2024-1"
+
+        mock_academic_periods_repo.get_by_name.return_value = period
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2024-1"
+        mock_academic_periods_repo.get_by_code.return_value = prev_period
+        mock_evaluations_repo.get_by_period_id.side_effect = [
+            {"id": 5},
+            {"id": 4},
+        ]
+
+        current_detail = {"teacher_id": 10, "overall_average": 4.0}
+        previous_detail = {"teacher_id": 10, "overall_average": 3.5}
+        mock_evaluations_repo.get_teacher_detail.side_effect = [
+            current_detail,
+            previous_detail,
+        ]
+
+        result = await service.get_teacher_detail("2024-2", 10, compare_previous=True)
+
+        assert result["previous_period"] == previous_detail
+        mock_academic_periods_repo.get_previous_period_code.assert_called_once_with(
+            "2024-2"
+        )
+        mock_academic_periods_repo.get_by_code.assert_called_once_with("2024-1")
+        mock_evaluations_repo.get_teacher_detail.assert_any_call(5, 10)
+        mock_evaluations_repo.get_teacher_detail.assert_any_call(4, 10)
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_with_compare_previous_no_prior_evaluation(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test previous_period is None when the teacher has no evaluation that semester."""
+
+        period = MagicMock()
+        period.id = 2
+        period.code = "2024-1"
+
+        mock_academic_periods_repo.get_by_name.return_value = period
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2023-2"
+        mock_academic_periods_repo.get_by_code.return_value = None
+        mock_evaluations_repo.get_by_period_id.return_value = {"id": 5}
+        mock_evaluations_repo.get_teacher_detail.return_value = {
+            "teacher_id": 10,
+            "overall_average": 4.0,
+        }
+
+        result = await service.get_teacher_detail("2024-1", 10, compare_previous=True)
+
+        assert result["previous_period"] is None
+
+    @pytest.mark.asyncio
     async def test_trigger_analysis_raises_when_not_found(
         self, service, mock_evaluations_repo
     ):

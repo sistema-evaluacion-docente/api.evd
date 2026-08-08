@@ -125,7 +125,9 @@ class TestEvaluationsController:
 
         result = await controller.get_teacher_detail("2024-1", 10)
 
-        mock_service.get_teacher_detail.assert_called_once_with("2024-1", 10, None)
+        mock_service.get_teacher_detail.assert_called_once_with(
+            "2024-1", 10, None, False
+        )
         assert result["teacher_id"] == 10
 
     @pytest.mark.asyncio
