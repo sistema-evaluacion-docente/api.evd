@@ -151,6 +151,87 @@ class TestEvaluationService:
         mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)
 
     @pytest.mark.asyncio
+    async def test_get_by_id_includes_previous_period_comparison(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test get_by_id attaches a dimension/question growth comparison against
+        the department's evaluation in the previous academic period."""
+
+        current = {
+            "id": 1,
+            "academic_period_code": "2025-2",
+            "department_id": 5,
+            "overall_average": 4.0,
+        }
+        current_dims = [
+            {
+                "dimension": "Desarrollo del Conocimiento",
+                "average": 4.0,
+                "question_count": 1,
+                "questions": [{"code": "Q1", "text": "text", "score": 4.0}],
+            }
+        ]
+        prev_period = MagicMock(id=9, code="2025-1", name="2025-1")
+        prev_evaluation_ref = {"id": 2}
+        prev_evaluation_full = {"id": 2, "overall_average": 3.0}
+        prev_dims = [
+            {
+                "dimension": "Desarrollo del Conocimiento",
+                "average": 3.0,
+                "question_count": 1,
+                "questions": [{"code": "Q1", "text": "text", "score": 3.0}],
+            }
+        ]
+
+        mock_evaluations_repo.get_by_id_as_dict.side_effect = [
+            current,
+            prev_evaluation_full,
+        ]
+        mock_evaluations_repo.get_dimension_averages.side_effect = [
+            current_dims,
+            prev_dims,
+        ]
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2025-1"
+        mock_academic_periods_repo.get_by_code.return_value = prev_period
+        mock_evaluations_repo.get_by_period_and_department.return_value = (
+            prev_evaluation_ref
+        )
+
+        result = await service.get_by_id(1)
+
+        comparison = result["comparison"]
+        assert comparison["previous_period_code"] == "2025-1"
+        assert comparison["current_average"] == 4.0
+        assert comparison["old_average"] == 3.0
+        assert comparison["average_difference"] == 1.0
+        assert comparison["dimensions"][0]["difference"] == 1.0
+        assert comparison["dimensions"][0]["questions"][0]["difference"] == 1.0
+        mock_evaluations_repo.get_by_period_and_department.assert_called_once_with(
+            9, 5
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_comparison_is_none_without_previous_evaluation(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test get_by_id's comparison is None when there is no previous period
+        evaluation for the department."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "academic_period_code": "2025-2",
+            "department_id": 5,
+        }
+        mock_evaluations_repo.get_dimension_averages.return_value = []
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2025-1"
+        mock_academic_periods_repo.get_by_code.return_value = MagicMock(id=9)
+        mock_evaluations_repo.get_by_period_and_department.return_value = None
+
+        result = await service.get_by_id(1)
+
+        assert result["comparison"] is None
+
+    @pytest.mark.asyncio
     async def test_get_by_id_returns_none_when_not_found(
         self, service, mock_evaluations_repo
     ):
