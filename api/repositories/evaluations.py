@@ -82,6 +82,26 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return data
 
+    def _question_scores_by_evaluation_score_id(
+        self, score_ids: list[int]
+    ) -> dict[int, list[EvaluationQuestionScoreModel]]:
+        """Batch-fetch question scores for many evaluation_scores in a single query."""
+
+        if not score_ids:
+            return {}
+
+        rows = (
+            self.db.query(EvaluationQuestionScoreModel)
+            .filter(EvaluationQuestionScoreModel.evaluation_score_id.in_(score_ids))
+            .all()
+        )
+
+        grouped: dict[int, list[EvaluationQuestionScoreModel]] = {}
+        for row in rows:
+            grouped.setdefault(row.evaluation_score_id, []).append(row)
+
+        return grouped
+
     def _get_overall_average(self, evaluation_id: int) -> float | None:
         """Average of EvaluationScoreModel.overall_average across every teacher
         scored in this evaluation."""
@@ -405,14 +425,12 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         courses = []
         accumulated: dict[str, list[float]] = {}
 
+        scores_by_id = self._question_scores_by_evaluation_score_id(
+            [eval_score.id for eval_score, _, _ in score_rows]
+        )
+
         for eval_score, group, course in score_rows:
-            q_scores = (
-                self.db.query(EvaluationQuestionScoreModel)
-                .filter(
-                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
-                )
-                .all()
-            )
+            q_scores = scores_by_id.get(eval_score.id, [])
 
             group_q: dict[str, dict] = {
                 qs.question_code: {"id": qs.id, "score": float(qs.score)}
@@ -683,16 +701,12 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         accumulated: dict[str, list[float]] = {}
 
-        for eval_score in score_rows:
-            q_scores = (
-                self.db.query(EvaluationQuestionScoreModel)
-                .filter(
-                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
-                )
-                .all()
-            )
+        scores_by_id = self._question_scores_by_evaluation_score_id(
+            [eval_score.id for eval_score in score_rows]
+        )
 
-            for qs in q_scores:
+        for eval_score in score_rows:
+            for qs in scores_by_id.get(eval_score.id, []):
                 accumulated.setdefault(qs.question_code, []).append(float(qs.score))
 
         dimensions = []
@@ -760,16 +774,12 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         accumulated: dict[str, list[float]] = {}
 
-        for eval_score in score_rows:
-            q_scores = (
-                self.db.query(EvaluationQuestionScoreModel)
-                .filter(
-                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
-                )
-                .all()
-            )
+        scores_by_id = self._question_scores_by_evaluation_score_id(
+            [eval_score.id for eval_score in score_rows]
+        )
 
-            for qs in q_scores:
+        for eval_score in score_rows:
+            for qs in scores_by_id.get(eval_score.id, []):
                 accumulated.setdefault(qs.question_code, []).append(float(qs.score))
 
         dimensions = []

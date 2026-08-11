@@ -18,8 +18,12 @@ class EvaluationScoreModel(Base):
     __tablename__ = "evaluation_scores"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    evaluation_id = Column(Integer, ForeignKey("evaluations.id"), nullable=False)
-    academic_group_id = Column(Integer, ForeignKey("academic_groups.id"), nullable=False)
+    evaluation_id = Column(
+        Integer, ForeignKey("evaluations.id"), nullable=False, index=True
+    )
+    academic_group_id = Column(
+        Integer, ForeignKey("academic_groups.id"), nullable=False
+    )
     respondent_count = Column(Integer, nullable=False)
     overall_average = Column(Numeric(4, 2), nullable=True)
 

@@ -7,6 +7,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from api.models.evaluation import EvaluationModel
+from api.models.evaluation_question_score import EvaluationQuestionScoreModel
+from api.models.evaluation_score import EvaluationScoreModel
 from api.repositories.evaluations import EvaluationsRepository
 
 
@@ -115,3 +117,39 @@ class TestEvaluationsRepository:
 
         assert result is not None
         assert "overall" not in result
+
+    def test_get_dimension_averages_batches_question_scores_per_group(
+        self, repo, mock_db, mock_evaluation_model
+    ):
+        """Test get_dimension_averages attributes each group's question scores to
+        that group and not to another one — the case a broken batched query
+        (wrong grouping key) would silently get wrong by dropping a group."""
+
+        score_1 = MagicMock(spec=EvaluationScoreModel, id=10)
+        score_2 = MagicMock(spec=EvaluationScoreModel, id=20)
+
+        qs_group_1 = MagicMock(evaluation_score_id=10, question_code="001", score=3.0)
+        qs_group_2 = MagicMock(evaluation_score_id=20, question_code="002", score=5.0)
+
+        def query_side_effect(model, *_args):
+            query_mock = MagicMock()
+            if model is EvaluationScoreModel:
+                query_mock.filter.return_value.all.return_value = [score_1, score_2]
+            elif model is EvaluationQuestionScoreModel:
+                query_mock.filter.return_value.all.return_value = [
+                    qs_group_1,
+                    qs_group_2,
+                ]
+            return query_mock
+
+        mock_db.query.side_effect = query_side_effect
+
+        with patch.object(repo, "get_by_id", return_value=mock_evaluation_model):
+            result = repo.get_dimension_averages(1)
+
+        dimension = next(
+            d for d in result if d["dimension"] == "Desarrollo del Conocimiento"
+        )
+        questions_by_code = {q["code"]: q["score"] for q in dimension["questions"]}
+
+        assert questions_by_code == {"001": 3.0, "002": 5.0}
