@@ -277,27 +277,29 @@ class TestTeachersRepository:
 
         assert result is None
 
-    def test_get_teacher_averages_by_period_empty(self, repo, mock_db):
-        """Test get_teacher_averages_by_period returns empty dict for empty input."""
-
-        result = repo.get_teacher_averages_by_period([], 1)
-
-        assert result == {}
-
-    def test_get_teacher_averages_by_period(self, repo, mock_db):
-        """Test get_teacher_averages_by_period returns averages dict."""
-
-        mock_row = MagicMock()
-        mock_row.teacher_id = 1
-        mock_row.avg = 4.5
+    def test_search_with_averages_sort_by_name(self, repo, mock_db, mock_teacher_model):
+        """Test search_with_averages also honors non-average sort_by values, since
+        it's now the single query used for every /teachers/with-averages request
+        regardless of sort order (the avg_score is always selected in-query)."""
 
         mock_query = MagicMock()
         mock_db.query.return_value = mock_query
         mock_query.join.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.options.return_value = mock_query
         mock_query.filter.return_value = mock_query
         mock_query.group_by.return_value = mock_query
-        mock_query.all.return_value = [mock_row]
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            (mock_teacher_model, 4.5)
+        ]
 
-        result = repo.get_teacher_averages_by_period([1], 1)
+        filters = TeacherFilters(sort_by="name_asc")
+        pagination = PaginationParams(page=1, limit=10)
 
-        assert result == {1: 4.5}
+        rows, total = repo.search_with_averages(filters, pagination, 1)
+
+        assert total == 1
+        assert rows == [(mock_teacher_model, 4.5)]
+        mock_query.order_by.assert_called_once()

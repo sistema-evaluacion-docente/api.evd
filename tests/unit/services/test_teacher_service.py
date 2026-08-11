@@ -125,10 +125,13 @@ class TestTeacherService:
     async def test_get_all_with_averages(
         self, service, mock_teachers_repo, mock_teacher
     ):
-        """Test get_all_with_averages includes overall_average."""
+        """Test get_all_with_averages includes overall_average from the batched
+        (teacher, avg_score) rows search_with_averages returns."""
 
-        mock_teachers_repo.search.return_value = ([mock_teacher], 1)
-        mock_teachers_repo.get_teacher_averages_by_period.return_value = {1: 4.5}
+        mock_teachers_repo.search_with_averages.return_value = (
+            [(mock_teacher, 4.5)],
+            1,
+        )
 
         filters = TeacherFilters()
         pagination = PaginationParams(page=1, limit=10)
@@ -136,6 +139,27 @@ class TestTeacherService:
         result = await service.get_all_with_averages(filters, pagination, 1)
 
         assert result["items"][0]["overall_average"] == 4.5
+        mock_teachers_repo.search_with_averages.assert_called_once_with(
+            filters, pagination, 1, True
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_all_batches_role_lookup(
+        self, service, mock_teachers_repo, mock_users_repo, mock_teacher
+    ):
+        """Test get_all fetches roles for all teachers in one bulk call instead
+        of one query per teacher."""
+
+        mock_teachers_repo.search.return_value = ([mock_teacher], 1)
+        mock_users_repo.get_user_role_names_bulk.return_value = {1: ["DOCENTE"]}
+
+        filters = TeacherFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        await service.get_all(filters, pagination)
+
+        mock_users_repo.get_user_role_names_bulk.assert_called_once_with([1])
+        mock_users_repo.get_user_role_names.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_id_found(self, service, mock_teachers_repo, mock_teacher):
@@ -362,7 +386,9 @@ class TestTeacherService:
         current_user = MagicMock()
         current_user.uid = "test-uid"
 
-        result = await service.get_history(current_user, 1, pagination, "overall_average_desc")
+        result = await service.get_history(
+            current_user, 1, pagination, "overall_average_desc"
+        )
 
         assert result["teacher_id"] == 1
         assert result["institutional_code"] == "12345"
@@ -371,4 +397,6 @@ class TestTeacherService:
         assert result["limit"] == 10
         assert result["pages"] == 1
         assert len(result["items"]) == 1
-        mock_teachers_repo.get_history.assert_called_once_with(1, pagination, "overall_average_desc")
+        mock_teachers_repo.get_history.assert_called_once_with(
+            1, pagination, "overall_average_desc"
+        )
