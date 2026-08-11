@@ -9,6 +9,7 @@ from typing import Annotated, Optional
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
+from api.schemas.comparison import DimensionComparisonDetail
 from api.schemas.evaluation_summary import DimensionAverageItem
 
 
@@ -16,6 +17,18 @@ class EvaluationStatusUpdate(BaseModel):
     """Schema for activating/deactivating an evaluation."""
 
     active: bool
+
+
+class EvaluationPeriodComparison(BaseModel):
+    """Comparison of this evaluation's averages against the department's
+    evaluation in the immediately preceding academic period."""
+
+    previous_period_code: Optional[str]
+    previous_period_name: Optional[str]
+    current_average: Optional[float]
+    old_average: Optional[float]
+    average_difference: Optional[float]
+    dimensions: list[DimensionComparisonDetail]
 
 
 class EvaluationOut(BaseModel):
@@ -34,6 +47,7 @@ class EvaluationOut(BaseModel):
     count: Optional[int]
     overall_average: Optional[float] = None
     dimension_averages: Optional[list[DimensionAverageItem]] = None
+    comparison: Optional[EvaluationPeriodComparison] = None
     created_at: datetime
     updated_at: datetime
 

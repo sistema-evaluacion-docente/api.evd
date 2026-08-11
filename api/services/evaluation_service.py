@@ -72,7 +72,8 @@ class EvaluationService:
         return build_paginated_response(items, total, pagination)
 
     async def get_by_id(self, evaluation_id: int) -> dict | None:
-        """Retrieve an evaluation by ID, including its pedagogical dimension averages."""
+        """Retrieve an evaluation by ID, including its pedagogical dimension averages
+        and a comparison against the department's evaluation in the previous period."""
 
         evaluation = self.evaluations_repository.get_by_id_as_dict(evaluation_id)
 
@@ -82,8 +83,114 @@ class EvaluationService:
         evaluation["dimension_averages"] = (
             self.evaluations_repository.get_dimension_averages(evaluation_id)
         )
+        evaluation["comparison"] = self._get_previous_period_comparison(evaluation)
 
         return evaluation
+
+    def _get_previous_period_comparison(self, evaluation: dict) -> dict | None:
+        """Compare `evaluation` against the same department's evaluation in the
+        academic period immediately before it (e.g. "2025-2" -> "2025-1").
+
+        Returns None if there is no previous period or no evaluation for the
+        department there.
+        """
+
+        period_code = evaluation.get("academic_period_code")
+        department_id = evaluation.get("department_id")
+
+        if not period_code or department_id is None:
+            return None
+
+        prev_code = self.academic_periods_repository.get_previous_period_code(
+            period_code
+        )
+        if not prev_code:
+            return None
+
+        prev_period = self.academic_periods_repository.get_by_code(prev_code)
+        if not prev_period:
+            return None
+
+        prev_evaluation = self.evaluations_repository.get_by_period_and_department(
+            prev_period.id, department_id
+        )
+        if not prev_evaluation:
+            return None
+
+        prev_evaluation = self.evaluations_repository.get_by_id_as_dict(
+            prev_evaluation["id"]
+        )
+        prev_dimensions = self.evaluations_repository.get_dimension_averages(
+            prev_evaluation["id"]
+        )
+
+        current_avg = evaluation.get("overall_average")
+        old_avg = prev_evaluation.get("overall_average")
+
+        return {
+            "previous_period_code": prev_period.code,
+            "previous_period_name": prev_period.name,
+            "current_average": current_avg,
+            "old_average": old_avg,
+            "average_difference": (
+                round(current_avg - old_avg, 2)
+                if current_avg is not None and old_avg is not None
+                else None
+            ),
+            "dimensions": self._diff_dimensions(
+                evaluation["dimension_averages"], prev_dimensions
+            ),
+        }
+
+    @staticmethod
+    def _diff_dimensions(
+        current_dimensions: list[dict], old_dimensions: list[dict]
+    ) -> list[dict]:
+        """Merge two `get_dimension_averages()` results into a current-vs-old diff,
+        matching dimensions and questions by name/code."""
+
+        old_by_name = {d["dimension"]: d for d in old_dimensions}
+        comparison = []
+
+        for dim in current_dimensions:
+            old_dim = old_by_name.get(dim["dimension"])
+            old_avg = old_dim["average"] if old_dim else None
+            old_questions = (
+                {q["code"]: q["score"] for q in old_dim["questions"]} if old_dim else {}
+            )
+
+            questions = []
+            for q in dim["questions"]:
+                old_score = old_questions.get(q["code"])
+                questions.append(
+                    {
+                        "code": q["code"],
+                        "text": q["text"],
+                        "current_average": q["score"],
+                        "old_average": old_score,
+                        "difference": (
+                            round(q["score"] - old_score, 2)
+                            if old_score is not None
+                            else None
+                        ),
+                    }
+                )
+
+            comparison.append(
+                {
+                    "dimension": dim["dimension"],
+                    "current_average": dim["average"],
+                    "old_average": old_avg,
+                    "difference": (
+                        round(dim["average"] - old_avg, 2)
+                        if dim["average"] is not None and old_avg is not None
+                        else None
+                    ),
+                    "questions": questions,
+                }
+            )
+
+        return comparison
 
     async def get_by_period(self, period_id: int) -> dict | None:
         """Retrieve an evaluation by academic period ID."""
