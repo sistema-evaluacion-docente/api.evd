@@ -2,7 +2,9 @@
 
 from fastapi.param_functions import Depends
 
+from api.core.pagination import PaginationParams
 from api.dependencies.stats import get_stats_service
+from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
 from api.services.stats_service import StatsService
 
 
@@ -146,6 +148,32 @@ class StatsController:
         """Get teachers for a subject with per-dimension averages."""
 
         return await self.service.get_subject_teachers(course_id, academic_period_id)
+
+    async def get_department_period_range_report(
+        self,
+        department_id: int,
+        start_period_code: str,
+        end_period_code: str,
+    ) -> dict | None:
+        """Get department averages and dimension averages across a range of
+        academic periods."""
+
+        return await self.service.get_department_period_range_report(
+            department_id, start_period_code, end_period_code
+        )
+
+    async def get_department_period_range_subjects(
+        self,
+        department_id: int,
+        filters: DepartmentPeriodRangeSubjectFilters,
+        pagination: PaginationParams,
+    ) -> dict | None:
+        """Get department subject (course) averages across a range of
+        academic periods, filtered and paginated."""
+
+        return await self.service.get_department_period_range_subjects(
+            department_id, filters, pagination
+        )
 
 
 def get_stats_controller(

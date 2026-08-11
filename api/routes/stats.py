@@ -7,8 +7,14 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, Query
 
 from api.controllers.stats import StatsController, get_stats_controller
+from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
+from api.schemas.stats import (
+    DepartmentPeriodRangeReport,
+    DepartmentPeriodRangeSubject,
+    DepartmentPeriodRangeSubjectFiltersDep,
+)
 from api.schemas.user import RoleName
 
 router = EnvelopeRouter(prefix="/stats", tags=["Stats"])
@@ -52,6 +58,82 @@ async def get_department_average_with_previous(
         raise HTTPException(
             status_code=404, detail="Departamento o periodo académico no encontrado"
         )
+
+    return result
+
+
+@router.get(
+    "/departments/period-range",
+    response_model=DepartmentPeriodRangeReport,
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_department_period_range_report(
+    start_period: Annotated[
+        str, Query(..., description="Código del periodo inicial (ej. '2020-1')")
+    ],
+    end_period: Annotated[
+        str, Query(..., description="Código del periodo final (ej. '2022-1')")
+    ],
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """
+    Get overall/per-period averages and pedagogical dimension averages for
+    the director's own department across a range of academic periods
+    (e.g. from "2020-1" to "2022-1"). Only the department's director can
+    access this report.
+    """
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    result = await controller.get_department_period_range_report(
+        department_id, start_period, end_period
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
+
+    return result
+
+
+@router.get(
+    "/departments/period-range/subjects",
+    response_model=list[DepartmentPeriodRangeSubject],
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_department_period_range_subjects(
+    filters: DepartmentPeriodRangeSubjectFiltersDep,
+    pagination: PaginationDep,
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """
+    Get subject (course) averages for the director's own department
+    across a range of academic periods (e.g. from "2020-1" to "2022-1"),
+    with pagination and an optional search filter by subject name. Only
+    the department's director can access this report.
+    """
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    result = await controller.get_department_period_range_subjects(
+        department_id, filters, pagination
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Departamento no encontrado")
 
     return result
 

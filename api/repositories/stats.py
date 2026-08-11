@@ -8,6 +8,7 @@ from fastapi.params import Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
@@ -20,6 +21,7 @@ from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
 from api.utils.dimensions import DIMENSION_MAP, QUESTIONS
 
 
@@ -1437,6 +1439,401 @@ class StatsRepository:
             }
             for row in rows
         ]
+
+    def _get_periods_in_range(
+        self, start_period_code: str, end_period_code: str
+    ) -> list[AcademicPeriodModel]:
+        """Return academic periods whose code falls within [start, end]."""
+
+        return (
+            self.db.query(AcademicPeriodModel)
+            .filter(
+                AcademicPeriodModel.code >= start_period_code,
+                AcademicPeriodModel.code <= end_period_code,
+            )
+            .order_by(AcademicPeriodModel.code.asc())
+            .all()
+        )
+
+    async def get_department_period_range_report(
+        self,
+        department_id: int,
+        start_period_code: str,
+        end_period_code: str,
+    ) -> dict | None:
+        """
+        Get a department's overall/per-period averages and pedagogical
+        dimension averages aggregated across a range of academic periods
+        (e.g. from "2020-1" to "2022-1").
+        """
+
+        department = (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+
+        if not department:
+            return None
+
+        periods = self._get_periods_in_range(start_period_code, end_period_code)
+
+        base_result = {
+            "department_id": department.id,
+            "department_name": department.name,
+            "department_code": department.code,
+            "start_period_code": start_period_code,
+            "end_period_code": end_period_code,
+            "periods": [
+                {
+                    "academic_period_id": period.id,
+                    "academic_period_code": period.code,
+                    "academic_period_name": period.name,
+                }
+                for period in periods
+            ],
+        }
+
+        period_ids = [period.id for period in periods]
+
+        if not period_ids:
+            return {
+                **base_result,
+                "overall_average": None,
+                "total_respondents": 0,
+                "evaluation_count": 0,
+                "period_averages": [],
+                "dimensions": [],
+            }
+
+        overall_row = (
+            self.db.query(
+                func.avg(EvaluationScoreModel.overall_average).label("global_average"),
+                func.sum(EvaluationScoreModel.respondent_count).label(
+                    "total_respondents"
+                ),
+                func.count(EvaluationScoreModel.id).label("evaluation_count"),
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id.in_(period_ids),
+            )
+            .first()
+        )
+
+        period_rows = (
+            self.db.query(
+                AcademicPeriodModel.id.label("academic_period_id"),
+                AcademicPeriodModel.code.label("academic_period_code"),
+                AcademicPeriodModel.name.label("academic_period_name"),
+                func.avg(EvaluationScoreModel.overall_average).label("global_average"),
+                func.sum(EvaluationScoreModel.respondent_count).label(
+                    "total_respondents"
+                ),
+                func.count(EvaluationScoreModel.id).label("evaluation_count"),
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.academic_period_id == AcademicPeriodModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                AcademicPeriodModel.id.in_(period_ids),
+            )
+            .group_by(
+                AcademicPeriodModel.id,
+                AcademicPeriodModel.code,
+                AcademicPeriodModel.name,
+            )
+            .order_by(AcademicPeriodModel.code.asc())
+            .all()
+        )
+
+        question_rows = (
+            self.db.query(
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id.in_(period_ids),
+            )
+            .group_by(EvaluationQuestionScoreModel.question_code)
+            .all()
+        )
+        question_avg_by_code = {
+            row.question_code: float(row.avg_score) for row in question_rows
+        }
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            dim_scores = [
+                question_avg_by_code[code]
+                for code in codes
+                if code in question_avg_by_code
+            ]
+            avg = round(sum(dim_scores) / len(dim_scores), 2) if dim_scores else None
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "average": avg,
+                    "percentage": round(avg * 20, 2) if avg is not None else None,
+                }
+            )
+
+        return {
+            **base_result,
+            "overall_average": (
+                float(overall_row.global_average)
+                if overall_row.global_average
+                else None
+            ),
+            "total_respondents": overall_row.total_respondents or 0,
+            "evaluation_count": overall_row.evaluation_count or 0,
+            "period_averages": [
+                {
+                    "academic_period_id": row.academic_period_id,
+                    "academic_period_code": row.academic_period_code,
+                    "academic_period_name": row.academic_period_name,
+                    "overall_average": (
+                        float(row.global_average) if row.global_average else None
+                    ),
+                    "total_respondents": row.total_respondents or 0,
+                    "evaluation_count": row.evaluation_count,
+                }
+                for row in period_rows
+            ],
+            "dimensions": dimensions,
+        }
+
+    async def get_department_period_range_subjects(
+        self,
+        department_id: int,
+        filters: DepartmentPeriodRangeSubjectFilters,
+        pagination: PaginationParams,
+    ) -> tuple[list[dict], int] | None:
+        """
+        Get a department's subject (course) averages aggregated across a
+        range of academic periods (e.g. from "2020-1" to "2022-1"), one
+        entry per subject with its academic groups from every period
+        nested inside. Subjects can be filtered by subject name and/or
+        teacher name, sorted, and are paginated. When filtered by teacher
+        name, averages/counts are recomputed over that teacher's groups
+        only (not the whole subject).
+
+        Returns None when the department doesn't exist.
+        """
+
+        department = (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+
+        if not department:
+            return None
+
+        periods = self._get_periods_in_range(
+            filters.start_period_code, filters.end_period_code
+        )
+        period_ids = [period.id for period in periods]
+
+        if not period_ids:
+            return [], 0
+
+        search_term = filters.search.strip() if filters.search else None
+        teacher_name_term = (
+            filters.teacher_name.strip() if filters.teacher_name else None
+        )
+
+        def _base_query(*columns):
+            """Build the common department/period/subject/teacher-name query."""
+
+            query = (
+                self.db.query(*columns)
+                .join(
+                    AcademicGroupModel, AcademicGroupModel.course_id == CourseModel.id
+                )
+                .join(
+                    EvaluationScoreModel,
+                    EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+                )
+                .join(
+                    EvaluationModel,
+                    EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+                )
+                .join(
+                    AcademicPeriodModel,
+                    AcademicPeriodModel.id == AcademicGroupModel.academic_period_id,
+                )
+                .outerjoin(
+                    TeacherModel, TeacherModel.id == AcademicGroupModel.teacher_id
+                )
+                .outerjoin(UserModel, UserModel.id == TeacherModel.user_id)
+                .filter(
+                    EvaluationModel.department_id == department_id,
+                    EvaluationModel.academic_period_id.in_(period_ids),
+                )
+            )
+
+            if search_term:
+                query = query.filter(CourseModel.name.ilike(f"%{search_term}%"))
+
+            if teacher_name_term:
+                query = query.filter(UserModel.name.ilike(f"%{teacher_name_term}%"))
+
+            return query
+
+        sort_by = filters.sort_by
+
+        def _apply_sort(query):
+            if sort_by == "course_name_asc":
+                return query.order_by(CourseModel.name.asc())
+            if sort_by == "course_name_desc":
+                return query.order_by(CourseModel.name.desc())
+            if sort_by == "overall_average_asc":
+                return query.order_by(
+                    func.avg(EvaluationScoreModel.overall_average).asc()
+                )
+            if sort_by == "overall_average_desc":
+                return query.order_by(
+                    func.avg(EvaluationScoreModel.overall_average).desc()
+                )
+            if sort_by == "group_count_asc":
+                return query.order_by(
+                    func.count(func.distinct(AcademicGroupModel.id)).asc()
+                )
+            if sort_by == "group_count_desc":
+                return query.order_by(
+                    func.count(func.distinct(AcademicGroupModel.id)).desc()
+                )
+            if sort_by == "teacher_count_asc":
+                return query.order_by(
+                    func.count(func.distinct(AcademicGroupModel.teacher_id)).asc()
+                )
+            if sort_by == "teacher_count_desc":
+                return query.order_by(
+                    func.count(func.distinct(AcademicGroupModel.teacher_id)).desc()
+                )
+            if sort_by == "total_respondents_asc":
+                return query.order_by(
+                    func.sum(EvaluationScoreModel.respondent_count).asc()
+                )
+            if sort_by == "total_respondents_desc":
+                return query.order_by(
+                    func.sum(EvaluationScoreModel.respondent_count).desc()
+                )
+            # Default (also covers "overall_average_desc")
+            return query.order_by(func.avg(EvaluationScoreModel.overall_average).desc())
+
+        # Different course rows (course_id/code) can carry the same subject
+        # name across periods (e.g. re-parsed with a different code), so
+        # subjects are merged by name rather than by course_id/code.
+        count_query = _base_query(func.count(func.distinct(CourseModel.name)))
+        total = count_query.scalar() or 0
+
+        subject_query = _base_query(
+            CourseModel.name.label("course_name"),
+            func.count(func.distinct(AcademicGroupModel.teacher_id)).label(
+                "teacher_count"
+            ),
+            func.count(func.distinct(AcademicGroupModel.id)).label("group_count"),
+            func.avg(EvaluationScoreModel.overall_average).label("overall_average"),
+            func.sum(EvaluationScoreModel.respondent_count).label("total_respondents"),
+        )
+
+        subject_rows = (
+            _apply_sort(subject_query.group_by(CourseModel.name))
+            .offset(pagination.offset)
+            .limit(pagination.limit)
+            .all()
+        )
+
+        if not subject_rows:
+            return [], total
+
+        subject_names = [row.course_name for row in subject_rows]
+
+        group_rows = (
+            _base_query(
+                CourseModel.name.label("course_name"),
+                CourseModel.id.label("course_id"),
+                CourseModel.code.label("course_code"),
+                AcademicGroupModel.id.label("academic_group_id"),
+                AcademicGroupModel.group_name,
+                TeacherModel.id.label("teacher_id"),
+                UserModel.name.label("teacher_name"),
+                UserModel.avatar_url.label("teacher_avatar_url"),
+                AcademicPeriodModel.id.label("academic_period_id"),
+                AcademicPeriodModel.code.label("academic_period_code"),
+                EvaluationScoreModel.overall_average,
+                EvaluationScoreModel.respondent_count,
+            )
+            .filter(CourseModel.name.in_(subject_names))
+            .order_by(
+                AcademicPeriodModel.code.asc(),
+                AcademicGroupModel.group_name.asc(),
+            )
+            .all()
+        )
+
+        groups_by_name: dict[str | None, list[dict]] = {}
+        course_codes_by_name: dict[str | None, list[str]] = {}
+        for row in group_rows:
+            groups_by_name.setdefault(row.course_name, []).append(
+                {
+                    "academic_group_id": row.academic_group_id,
+                    "group_name": row.group_name,
+                    "course_id": row.course_id,
+                    "course_code": row.course_code,
+                    "teacher_id": row.teacher_id,
+                    "teacher_name": row.teacher_name,
+                    "teacher_avatar_url": row.teacher_avatar_url,
+                    "academic_period_id": row.academic_period_id,
+                    "academic_period_code": row.academic_period_code,
+                    "overall_average": (
+                        float(row.overall_average) if row.overall_average else None
+                    ),
+                    "respondent_count": row.respondent_count,
+                }
+            )
+            codes = course_codes_by_name.setdefault(row.course_name, [])
+            if row.course_code not in codes:
+                codes.append(row.course_code)
+
+        items = [
+            {
+                "course_name": row.course_name,
+                "course_codes": course_codes_by_name.get(row.course_name, []),
+                "teacher_count": row.teacher_count,
+                "group_count": row.group_count,
+                "overall_average": (
+                    float(row.overall_average) if row.overall_average else None
+                ),
+                "total_respondents": row.total_respondents or 0,
+                "groups": groups_by_name.get(row.course_name, []),
+            }
+            for row in subject_rows
+        ]
+
+        return items, total
 
     async def get_subject_teachers(
         self, course_id: int, academic_period_id: int

@@ -1,6 +1,14 @@
 """Service for statistics-related business operations."""
 
+import re
+
+from api.core.pagination import PaginationParams
+from api.exceptions import ValidationError
 from api.repositories.stats import StatsRepository
+from api.schemas.pagination import build_paginated_response
+from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
+
+_PERIOD_CODE_PATTERN = re.compile(r"^\d{4}-[12]$")
 
 
 class StatsService:
@@ -151,3 +159,62 @@ class StatsService:
         return await self.stats_repository.get_subject_teachers(
             course_id, academic_period_id
         )
+
+    def _validate_period_range(
+        self, start_period_code: str, end_period_code: str
+    ) -> None:
+        """Validate that both period codes are well-formed and in order."""
+
+        if not _PERIOD_CODE_PATTERN.match(
+            start_period_code
+        ) or not _PERIOD_CODE_PATTERN.match(end_period_code):
+            raise ValidationError(
+                "El código de periodo académico debe tener el formato 'AAAA-N' "
+                "(ej. '2020-1')"
+            )
+
+        if start_period_code > end_period_code:
+            raise ValidationError(
+                "El periodo inicial debe ser anterior o igual al periodo final"
+            )
+
+    async def get_department_period_range_report(
+        self,
+        department_id: int,
+        start_period_code: str,
+        end_period_code: str,
+    ) -> dict | None:
+        """
+        Get a department's overall/per-period averages and pedagogical
+        dimension averages aggregated across a range of academic periods.
+        """
+
+        self._validate_period_range(start_period_code, end_period_code)
+
+        return await self.stats_repository.get_department_period_range_report(
+            department_id, start_period_code, end_period_code
+        )
+
+    async def get_department_period_range_subjects(
+        self,
+        department_id: int,
+        filters: DepartmentPeriodRangeSubjectFilters,
+        pagination: PaginationParams,
+    ) -> dict | None:
+        """
+        Get a department's subject (course) averages aggregated across a
+        range of academic periods, filtered by subject name and paginated.
+        """
+
+        self._validate_period_range(filters.start_period_code, filters.end_period_code)
+
+        result = await self.stats_repository.get_department_period_range_subjects(
+            department_id, filters, pagination
+        )
+
+        if result is None:
+            return None
+
+        items, total = result
+
+        return build_paginated_response(items, total, pagination)

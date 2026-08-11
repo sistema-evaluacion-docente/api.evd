@@ -2,10 +2,12 @@
 Schemas for request and response bodies related to statistics.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Annotated, Optional
 
+from fastapi import Depends, Query
 from pydantic import BaseModel
 
 
@@ -395,6 +397,160 @@ class SubjectTeachersResponse(BaseModel):
     status: int
     message: str
     data: SubjectTeachersData | None = None
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class DepartmentPeriodRangePeriod(BaseModel):
+    """Single academic period included in a period range report."""
+
+    academic_period_id: int
+    academic_period_code: str
+    academic_period_name: str | None
+
+
+class DepartmentPeriodRangePeriodAverage(BaseModel):
+    """Average scores for a single academic period within a range."""
+
+    academic_period_id: int
+    academic_period_code: str
+    academic_period_name: str | None
+    overall_average: float | None
+    total_respondents: int
+    evaluation_count: int
+
+
+class DepartmentPeriodRangeDimension(BaseModel):
+    """Average score for a single pedagogical dimension across a period range."""
+
+    dimension: str
+    average: float | None
+    percentage: float | None
+
+
+class DepartmentPeriodRangeSubjectGroup(BaseModel):
+    """Single academic group (course-teacher-period-group) within a subject."""
+
+    academic_group_id: int
+    group_name: str | None
+    course_id: int
+    course_code: str
+    teacher_id: int | None
+    teacher_name: str | None
+    teacher_avatar_url: str | None
+    academic_period_id: int
+    academic_period_code: str
+    overall_average: float | None
+    respondent_count: int
+
+
+class DepartmentPeriodRangeSubject(BaseModel):
+    """Average scores for a single subject aggregated by subject name across
+    a period range, with its academic groups from every period (and every
+    underlying course code sharing that name) nested inside."""
+
+    course_name: str | None
+    course_codes: list[str]
+    teacher_count: int
+    group_count: int
+    overall_average: float | None
+    total_respondents: int
+    groups: list[DepartmentPeriodRangeSubjectGroup]
+
+
+@dataclass
+class DepartmentPeriodRangeSubjectFilters:
+    """Dataclass to hold filters for the department period-range subjects report."""
+
+    start_period_code: str
+    end_period_code: str
+    search: str | None = None
+    teacher_name: str | None = None
+    sort_by: str | None = None
+
+
+def department_period_range_subject_filters(
+    start_period: str = Query(
+        ..., description="Código del periodo inicial (ej. '2020-1')"
+    ),
+    end_period: str = Query(..., description="Código del periodo final (ej. '2022-1')"),
+    search: str | None = Query(
+        default=None,
+        min_length=1,
+        description="Buscar por nombre de la asignatura",
+    ),
+    teacher_name: str | None = Query(
+        default=None,
+        min_length=1,
+        description=(
+            "Buscar por nombre del docente. Cuando se envía, los promedios "
+            "y conteos de cada asignatura se recalculan solo con los "
+            "grupos de ese docente."
+        ),
+    ),
+    sort_by: str | None = Query(
+        default=None,
+        description=(
+            "Ordenar por: course_name_asc, course_name_desc, "
+            "overall_average_asc, overall_average_desc, group_count_asc, "
+            "group_count_desc, teacher_count_asc, teacher_count_desc, "
+            "total_respondents_asc, total_respondents_desc. "
+            "Por defecto: overall_average_desc."
+        ),
+    ),
+) -> DepartmentPeriodRangeSubjectFilters:
+    """Dependency function to extract period-range subject filters from query parameters."""
+
+    return DepartmentPeriodRangeSubjectFilters(
+        start_period_code=start_period,
+        end_period_code=end_period,
+        search=search,
+        teacher_name=teacher_name,
+        sort_by=sort_by,
+    )
+
+
+DepartmentPeriodRangeSubjectFiltersDep = Annotated[
+    DepartmentPeriodRangeSubjectFilters,
+    Depends(department_period_range_subject_filters),
+]
+
+
+class DepartmentPeriodRangeReport(BaseModel):
+    """Department overall/per-period averages and pedagogical dimension
+    averages aggregated across a range of academic periods."""
+
+    department_id: int
+    department_name: str
+    department_code: str
+    start_period_code: str
+    end_period_code: str
+    periods: list[DepartmentPeriodRangePeriod]
+    overall_average: float | None
+    total_respondents: int
+    evaluation_count: int
+    period_averages: list[DepartmentPeriodRangePeriodAverage]
+    dimensions: list[DepartmentPeriodRangeDimension]
+
+
+class DepartmentPeriodRangeReportResponse(BaseModel):
+    """Response envelope for the department period range report."""
+
+    status: int
+    message: str
+    data: DepartmentPeriodRangeReport | None = None
+    error: str | None = None
+    timestamp: datetime
+    path: str
+
+
+class DepartmentPeriodRangeSubjectsResponse(BaseModel):
+    """Response envelope for the department period range subjects list."""
+
+    status: int
+    message: str
+    data: list[DepartmentPeriodRangeSubject] | None = None
     error: str | None = None
     timestamp: datetime
     path: str
