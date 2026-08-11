@@ -24,6 +24,7 @@ class TestEvaluationsController:
         service.get_by_period = AsyncMock()
         service.get_summary = AsyncMock()
         service.get_dimension_averages = AsyncMock()
+        service.get_dimension_detail = AsyncMock()
         service.get_teacher_detail = AsyncMock()
         service.get_teacher_comments = AsyncMock()
         service.get_teachers_by_period = AsyncMock()
@@ -111,6 +112,43 @@ class TestEvaluationsController:
 
         mock_service.get_dimension_averages.assert_called_once_with(1)
         assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_delegates_to_service(
+        self, controller, mock_service
+    ):
+        """Test get_dimension_detail delegates to service."""
+
+        current_user = {"uid": "director-uid"}
+        mock_service.get_dimension_detail.return_value = {
+            "evaluation_id": 1,
+            "dimensions": [],
+        }
+
+        result = await controller.get_dimension_detail(1, current_user)
+
+        mock_service.get_dimension_detail.assert_called_once_with(
+            1, current_user, None, None
+        )
+        assert result["evaluation_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_passes_teacher_and_course_filters(
+        self, controller, mock_service
+    ):
+        """Test get_dimension_detail forwards teacher_id/course_id to the service."""
+
+        current_user = {"uid": "director-uid"}
+        mock_service.get_dimension_detail.return_value = {
+            "evaluation_id": 1,
+            "dimensions": [],
+        }
+
+        await controller.get_dimension_detail(
+            1, current_user, teacher_id=7, course_id=3
+        )
+
+        mock_service.get_dimension_detail.assert_called_once_with(1, current_user, 7, 3)
 
     @pytest.mark.asyncio
     async def test_get_teacher_detail_delegates_to_service(

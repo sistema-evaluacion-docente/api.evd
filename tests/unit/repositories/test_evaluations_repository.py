@@ -74,3 +74,44 @@ class TestEvaluationsRepository:
 
         assert result == 3.75
         assert isinstance(result, float)
+
+    def test_get_dimension_detail_includes_overall_when_filtered(
+        self, repo, mock_db, mock_evaluation_model
+    ):
+        """Test get_dimension_detail nests an unfiltered 'overall' breakdown
+        when narrowed by teacher_id/course_id, so it can be compared against."""
+
+        mock_evaluation_model.academic_period = MagicMock(code="2024-1", name="2024-1")
+
+        query_mock = mock_db.query.return_value
+        # 1 filter (evaluation_id only) — the recursive unfiltered call
+        query_mock.join.return_value.filter.return_value.all.return_value = []
+        # 2 filters (evaluation_id + teacher_id) — the outer filtered call
+        query_mock.join.return_value.filter.return_value.filter.return_value.all.return_value = (
+            []
+        )
+        query_mock.filter.return_value.scalar.return_value = None
+
+        with patch.object(repo, "get_by_id", return_value=mock_evaluation_model):
+            result = repo.get_dimension_detail(1, teacher_id=7)
+
+        assert result is not None
+        assert result["overall"] is not None
+        assert "overall" not in result["overall"]
+
+    def test_get_dimension_detail_omits_overall_when_unfiltered(
+        self, repo, mock_db, mock_evaluation_model
+    ):
+        """Test get_dimension_detail has no 'overall' key without a filter."""
+
+        mock_evaluation_model.academic_period = MagicMock(code="2024-1", name="2024-1")
+
+        query_mock = mock_db.query.return_value
+        query_mock.join.return_value.filter.return_value.all.return_value = []
+        query_mock.filter.return_value.scalar.return_value = None
+
+        with patch.object(repo, "get_by_id", return_value=mock_evaluation_model):
+            result = repo.get_dimension_detail(1)
+
+        assert result is not None
+        assert "overall" not in result

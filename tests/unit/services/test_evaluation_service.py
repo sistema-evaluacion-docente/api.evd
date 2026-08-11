@@ -207,6 +207,136 @@ class TestEvaluationService:
         mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)
 
     @pytest.mark.asyncio
+    async def test_get_dimension_detail_returns_none_when_not_found(
+        self, service, mock_evaluations_repo
+    ):
+        """Test get_dimension_detail returns None when evaluation not found."""
+
+        mock_evaluations_repo.get_by_id.return_value = None
+
+        result = await service.get_dimension_detail(999, {"uid": "director-uid"})
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_raises_permission_denied_when_user_not_found(
+        self, service, mock_evaluations_repo, mock_users_repo, mock_evaluation
+    ):
+        """Test get_dimension_detail raises PermissionDeniedError when uid not in DB."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_users_repo.get_by_uid.return_value = None
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_dimension_detail(1, {"uid": "unknown-uid"})
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_raises_permission_denied_when_not_director(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test get_dimension_detail raises PermissionDeniedError when user is not a director."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_directors_repo.get_by_user_id.return_value = None
+
+        with pytest.raises(PermissionDeniedError, match="departamento asociado"):
+            await service.get_dimension_detail(1, {"uid": "director-uid"})
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_raises_permission_denied_wrong_department(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test get_dimension_detail raises PermissionDeniedError for a director
+        of a different department."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 999
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
+        with pytest.raises(PermissionDeniedError, match="departamento asociado"):
+            await service.get_dimension_detail(1, {"uid": "director-uid"})
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_returns_detail_for_own_department_director(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test get_dimension_detail returns the repository detail when the
+        director belongs to the evaluation's department."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
+        detail = {
+            "evaluation_id": 1,
+            "period_code": "2024-1",
+            "period_name": "2024-1",
+            "department_average": 4.1,
+            "dimensions": [],
+        }
+        mock_evaluations_repo.get_dimension_detail.return_value = detail
+
+        result = await service.get_dimension_detail(1, {"uid": "director-uid"})
+
+        assert result == detail
+        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(1, None, None)
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_passes_teacher_and_course_filters(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test get_dimension_detail forwards teacher_id/course_id to the repository."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+        mock_evaluations_repo.get_dimension_detail.return_value = {
+            "evaluation_id": 1,
+            "dimensions": [],
+        }
+
+        await service.get_dimension_detail(
+            1, {"uid": "director-uid"}, teacher_id=7, course_id=3
+        )
+
+        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(1, 7, 3)
+
+    @pytest.mark.asyncio
     async def test_get_teacher_detail_returns_none_when_period_not_found(
         self, service, mock_academic_periods_repo
     ):
