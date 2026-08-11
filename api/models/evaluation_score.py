@@ -22,7 +22,7 @@ class EvaluationScoreModel(Base):
         Integer, ForeignKey("evaluations.id"), nullable=False, index=True
     )
     academic_group_id = Column(
-        Integer, ForeignKey("academic_groups.id"), nullable=False
+        Integer, ForeignKey("academic_groups.id"), nullable=False, index=True
     )
     respondent_count = Column(Integer, nullable=False)
     overall_average = Column(Numeric(4, 2), nullable=True)

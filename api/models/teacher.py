@@ -22,7 +22,7 @@ class TeacherModel(Base):
         Integer, primary_key=True, index=True, autoincrement=True
     )
     department_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("departments.id"), nullable=True
+        Integer, ForeignKey("departments.id"), nullable=True, index=True
     )
     contract_type: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     user_id: Mapped[Optional[int]] = mapped_column(

@@ -36,8 +36,10 @@ class AcademicGroupModel(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     course_id = Column(Integer, ForeignKey("courses.id"), nullable=True)
-    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True)
-    academic_period_id = Column(Integer, ForeignKey("academic_periods.id"), nullable=True)
+    teacher_id = Column(Integer, ForeignKey("teachers.id"), nullable=True, index=True)
+    academic_period_id = Column(
+        Integer, ForeignKey("academic_periods.id"), nullable=True
+    )
     group_name = Column(String(255), nullable=True)
 
     course = relationship("CourseModel", back_populates="academic_groups")

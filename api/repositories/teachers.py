@@ -62,8 +62,6 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         self,
         filters: TeacherFilters,
         pagination: PaginationParams,
-        academic_period_id: int | None = None,
-        has_average: bool | None = None,
     ) -> tuple[list[TeacherModel], int]:
         """Search for teachers based on filters and pagination parameters."""
 
@@ -72,11 +70,6 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
             .options(contains_eager(TeacherModel.user))
         )
-
-        if academic_period_id is not None and has_average is not None:
-            avg_subq = self._build_average_subquery(academic_period_id)
-            query = query.outerjoin(avg_subq, TeacherModel.id == avg_subq.c.teacher_id)
-            query = self._filter_by_has_average(query, avg_subq, has_average)
 
         if filters.search:
             term = filters.search.strip()
@@ -122,9 +115,11 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         academic_period_id: int,
         has_average: bool = True,
     ) -> tuple[list[tuple[TeacherModel, float | None]], int]:
-        """Search teachers sorted by overall_average for a given academic period.
+        """Search teachers with their overall_average for a given academic period,
+        selecting the average in the same query so callers don't need a second
+        aggregate lookup. Honors `filters.sort_by`, including sorting by average.
 
-        Returns a list of (teacher, avg_score) tuples sorted by average.
+        Returns a list of (teacher, avg_score) tuples.
         """
 
         avg_subq = self._build_average_subquery(academic_period_id)
@@ -167,11 +162,21 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 func.coalesce(avg_subq.c.avg_score, 0).asc(),
                 TeacherModel.id.asc(),
             )
-        else:
+        elif filters.sort_by == "overall_average_desc":
             query = query.order_by(
                 func.coalesce(avg_subq.c.avg_score, 0).desc(),
                 TeacherModel.id.asc(),
             )
+        elif filters.sort_by == "institutional_code_asc":
+            query = query.order_by(UserModel.institutional_code.asc())
+        elif filters.sort_by == "institutional_code_desc":
+            query = query.order_by(UserModel.institutional_code.desc())
+        elif filters.sort_by == "name_asc":
+            query = query.order_by(UserModel.name.asc())
+        elif filters.sort_by == "name_desc":
+            query = query.order_by(UserModel.name.desc())
+        else:
+            query = query.order_by(TeacherModel.created_at.desc())
 
         total = query.count()
         rows = query.offset(pagination.offset).limit(pagination.limit).all()
@@ -239,36 +244,6 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         self.db.refresh(teacher)
 
         return teacher
-
-    def get_teacher_averages_by_period(
-        self, teacher_ids: list[int], academic_period_id: int
-    ) -> dict[int, float]:
-        """Get average evaluation scores for teachers in a given academic period."""
-
-        if not teacher_ids:
-            return {}
-
-        avg_query = (
-            self.db.query(
-                AcademicGroupModel.teacher_id,
-                func.avg(EvaluationScoreModel.overall_average).label("avg"),
-            )
-            .join(
-                EvaluationScoreModel,
-                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
-            )
-            .join(
-                EvaluationModel,
-                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
-            )
-            .filter(
-                AcademicGroupModel.teacher_id.in_(teacher_ids),
-                EvaluationModel.academic_period_id == academic_period_id,
-            )
-            .group_by(AcademicGroupModel.teacher_id)
-        )
-
-        return {row.teacher_id: float(row.avg) for row in avg_query.all()}
 
     def count_by_department(
         self,

@@ -49,7 +49,14 @@ class TeacherService:
         """Retrieve all teachers based on filters and pagination."""
 
         teachers, total = self.teachers_repository.search(filters, pagination)
-        items = [self._enrich_teacher_to_dict(t) for t in teachers]
+
+        roles_by_user = self.users_repository.get_user_role_names_bulk(
+            [t.user_id for t in teachers if t.user_id]
+        )
+        items = [
+            self._enrich_teacher_to_dict(t, roles=roles_by_user.get(t.user_id, []))
+            for t in teachers
+        ]
 
         return build_paginated_response(items, total, pagination)
 
@@ -62,41 +69,23 @@ class TeacherService:
     ) -> dict:
         """Retrieve teachers with overall_average for a given academic period."""
 
-        sort_by_average = filters.sort_by in (
-            "overall_average_asc",
-            "overall_average_desc",
+        rows, total = self.teachers_repository.search_with_averages(
+            filters, pagination, academic_period_id, has_average
         )
 
-        if sort_by_average:
-            rows, total = self.teachers_repository.search_with_averages(
-                filters, pagination, academic_period_id, has_average
+        roles_by_user = self.users_repository.get_user_role_names_bulk(
+            [teacher.user_id for teacher, _ in rows if teacher.user_id]
+        )
+
+        items = []
+
+        for teacher, avg_score in rows:
+            d = self._enrich_teacher_to_dict(
+                teacher, roles=roles_by_user.get(teacher.user_id, [])
             )
+            d["overall_average"] = float(avg_score) if avg_score is not None else None
 
-            items = []
-
-            for teacher, avg_score in rows:
-                d = self._enrich_teacher_to_dict(teacher)
-                d["overall_average"] = (
-                    float(avg_score) if avg_score is not None else None
-                )
-
-                items.append(d)
-        else:
-            teachers, total = self.teachers_repository.search(
-                filters, pagination, academic_period_id, has_average
-            )
-            teacher_ids = [t.id for t in teachers]
-
-            avgs = self.teachers_repository.get_teacher_averages_by_period(
-                teacher_ids, academic_period_id
-            )
-
-            items = []
-
-            for t in teachers:
-                d = self._enrich_teacher_to_dict(t)
-                d["overall_average"] = avgs.get(t.id)
-                items.append(d)
+            items.append(d)
 
         return build_paginated_response(items, total, pagination)
 
@@ -522,13 +511,19 @@ class TeacherService:
             "errors": errors,
         }
 
-    def _enrich_teacher_to_dict(self, teacher) -> dict:
-        """Convert TeacherModel to dict with user data attached if available."""
+    def _enrich_teacher_to_dict(self, teacher, roles: list[str] | None = None) -> dict:
+        """Convert TeacherModel to dict with user data attached if available.
+
+        Pass `roles` when the caller already bulk-fetched them for a list of
+        teachers (see `get_all`/`get_all_with_averages`); otherwise this fetches
+        them with a single-user query, fine for the single-teacher call sites
+        (`get_by_id`, `create`, `create_with_user`, `update`, `delete`)."""
 
         data = teacher_to_dict(teacher)
 
         if teacher.user_id and teacher.user:
-            roles = self.users_repository.get_user_role_names(teacher.user.id)
+            if roles is None:
+                roles = self.users_repository.get_user_role_names(teacher.user.id)
             data["user"] = user_to_dict(teacher.user, roles=roles)
 
         return data
