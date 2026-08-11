@@ -50,6 +50,20 @@ class EvaluationsController:
 
         return await self.service.get_dimension_averages(evaluation_id)
 
+    async def get_dimension_detail(
+        self,
+        evaluation_id: int,
+        current_user: dict,
+        teacher_id: int | None = None,
+        course_id: int | None = None,
+    ):
+        """Get an evaluation's pedagogical dimensions with per-question averages,
+        optionally restricted to a single teacher and/or course (materia)."""
+
+        return await self.service.get_dimension_detail(
+            evaluation_id, current_user, teacher_id, course_id
+        )
+
     async def get_teacher_detail(
         self,
         period_name: str,

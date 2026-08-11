@@ -131,6 +131,40 @@ class EvaluationService:
 
         return self.evaluations_repository.get_dimension_averages(evaluation_id)
 
+    async def get_dimension_detail(
+        self,
+        evaluation_id: int,
+        current_user: dict,
+        teacher_id: int | None = None,
+        course_id: int | None = None,
+    ) -> dict | None:
+        """Get an evaluation's pedagogical dimensions with per-question averages,
+        optionally restricted to a single teacher and/or course (materia).
+
+        Only the director of the evaluation's department may access it."""
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        user = self.users_repository.get_by_uid(current_user["uid"])
+
+        if not user:
+            raise PermissionDeniedError()
+
+        director = self.directors_repository.get_by_user_id(user.id)
+
+        if not director or director.department_id != evaluation.department_id:
+            raise PermissionDeniedError(
+                "Solo el director del departamento asociado puede consultar el "
+                "detalle de dimensiones de esta evaluación"
+            )
+
+        return self.evaluations_repository.get_dimension_detail(
+            evaluation_id, teacher_id, course_id
+        )
+
     async def get_teacher_detail(
         self,
         period_name: str,

@@ -724,6 +724,104 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return dimensions
 
+    def get_dimension_detail(
+        self,
+        evaluation_id: int,
+        teacher_id: int | None = None,
+        course_id: int | None = None,
+    ) -> dict | None:
+        """Return an evaluation's pedagogical dimensions with per-question averages,
+        optionally restricted to a single `teacher_id` and/or `course_id` (materia).
+
+        When a filter is given, the result also carries an `overall` key with
+        the unfiltered breakdown so the caller can compare against it."""
+
+        evaluation = self.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        query = (
+            self.db.query(EvaluationScoreModel)
+            .join(
+                AcademicGroupModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+        )
+
+        if teacher_id is not None:
+            query = query.filter(AcademicGroupModel.teacher_id == teacher_id)
+
+        if course_id is not None:
+            query = query.filter(AcademicGroupModel.course_id == course_id)
+
+        score_rows = query.all()
+
+        accumulated: dict[str, list[float]] = {}
+
+        for eval_score in score_rows:
+            q_scores = (
+                self.db.query(EvaluationQuestionScoreModel)
+                .filter(
+                    EvaluationQuestionScoreModel.evaluation_score_id == eval_score.id
+                )
+                .all()
+            )
+
+            for qs in q_scores:
+                accumulated.setdefault(qs.question_code, []).append(float(qs.score))
+
+        dimensions = []
+        for dim_name, codes in DIMENSION_MAP.items():
+            questions = []
+            for code in codes:
+                scores = accumulated.get(code, [])
+                if scores:
+                    questions.append(
+                        {
+                            "code": code,
+                            "text": QUESTION_TEXT.get(code, code),
+                            "average": round(sum(scores) / len(scores), 2),
+                        }
+                    )
+
+            dim_scores = [s for c in codes for s in accumulated.get(c, [])]
+
+            dimensions.append(
+                {
+                    "dimension": dim_name,
+                    "average": (
+                        round(sum(dim_scores) / len(dim_scores), 2)
+                        if dim_scores
+                        else None
+                    ),
+                    "question_count": len(codes),
+                    "questions": questions,
+                }
+            )
+
+        dept_avg = (
+            self.db.query(func.avg(EvaluationScoreModel.overall_average))
+            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
+            .scalar()
+        )
+
+        period = evaluation.academic_period
+
+        result = {
+            "evaluation_id": evaluation_id,
+            "period_code": period.code if period else None,
+            "period_name": period.name if period else None,
+            "department_average": float(dept_avg) if dept_avg else None,
+            "dimensions": dimensions,
+        }
+
+        if teacher_id is not None or course_id is not None:
+            result["overall"] = self.get_dimension_detail(evaluation_id)
+
+        return result
+
 
 def get_evaluations_repository(db: Annotated[Session, Depends(get_db)]):
     """Dependency injection for EvaluationsRepository."""

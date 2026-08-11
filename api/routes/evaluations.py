@@ -25,6 +25,7 @@ from api.schemas.evaluation import (
 )
 from api.schemas.evaluation_summary import (
     DimensionAverageItem,
+    EvaluationDimensionDetailOut,
     EvaluationSummaryOut,
     QuestionItem,
     TeacherCommentsOut,
@@ -239,6 +240,34 @@ async def get_evaluation_dimension_averages(
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
 
     return dimensions
+
+
+@router.get(
+    "/{evaluation_id}/dimensions/detail",
+    response_model=EvaluationDimensionDetailOut,
+)
+async def get_evaluation_dimension_detail(
+    evaluation_id: int,
+    teacher_id: int | None = None,
+    course_id: int | None = None,
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Return an evaluation's pedagogical dimensions with overall and per-question
+    averages. Only the director of the evaluation's department may access it.
+
+    Pass `teacher_id` and/or `course_id` to restrict the breakdown to a single
+    docente or materia; the response then also includes an `overall` field
+    with the unfiltered evaluation-wide breakdown for comparison."""
+
+    detail = await controller.get_dimension_detail(
+        evaluation_id, current_user, teacher_id, course_id
+    )
+
+    if not detail:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+
+    return detail
 
 
 @router.get(
