@@ -217,6 +217,49 @@ class DimensionAverageItem(BaseModel):
     questions: list[QuestionScore] = []
 
 
+class DimensionQuestionDetail(BaseModel):
+    """Per-question average score within a dimension."""
+
+    code: str
+    text: str
+    average: Optional[float]
+
+
+class DimensionDetailItem(BaseModel):
+    """Full detail of one pedagogical dimension within an evaluation."""
+
+    dimension: str
+    average: Optional[float]
+    question_count: int
+    questions: list[DimensionQuestionDetail] = []
+
+
+class EvaluationDimensionDetailOut(BaseModel):
+    """Breakdown of an evaluation's pedagogical dimensions.
+
+    When filtered by `teacher_id` and/or `course_id`, `overall` carries the
+    same breakdown for the whole evaluation so the filtered result can be
+    compared against it."""
+
+    evaluation_id: int
+    period_code: Optional[str]
+    period_name: Optional[str]
+    department_average: Optional[float]
+    dimensions: list[DimensionDetailItem]
+    overall: Optional["EvaluationDimensionDetailOut"] = None
+
+
+class EvaluationDimensionDetailResponse(BaseModel):
+    """Response envelope for the dimension detail endpoint."""
+
+    status: int
+    message: str
+    data: Optional[EvaluationDimensionDetailOut] = None
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
 class TeacherDashboardOut(BaseModel):
     """Combined dashboard data for a teacher: evaluation detail, period comparison, comments, and matrix."""
 
