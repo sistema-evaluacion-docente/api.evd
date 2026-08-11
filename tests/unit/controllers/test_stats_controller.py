@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api.controllers.stats import StatsController
+from api.core.pagination import PaginationParams
+from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
 
 
 class TestStatsController:
@@ -32,6 +34,8 @@ class TestStatsController:
         service.get_teacher_matrix = AsyncMock()
         service.get_subjects = AsyncMock()
         service.get_subject_teachers = AsyncMock()
+        service.get_department_period_range_report = AsyncMock()
+        service.get_department_period_range_subjects = AsyncMock()
         return service
 
     @pytest.fixture
@@ -237,3 +241,49 @@ class TestStatsController:
 
         mock_service.get_subject_teachers.assert_awaited_once_with(1, 1)
         assert result["course_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report(self, controller, mock_service):
+        """Test get_department_period_range_report delegates to service."""
+
+        mock_service.get_department_period_range_report.return_value = {
+            "department_id": 1,
+            "dimensions": [],
+        }
+
+        result = await controller.get_department_period_range_report(
+            1, "2020-1", "2022-1"
+        )
+
+        mock_service.get_department_period_range_report.assert_awaited_once_with(
+            1, "2020-1", "2022-1"
+        )
+        assert result["department_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_subjects(self, controller, mock_service):
+        """Test get_department_period_range_subjects delegates to service."""
+
+        mock_service.get_department_period_range_subjects.return_value = {
+            "items": [
+                {"course_name": "Cálculo I", "course_codes": ["MAT101"], "groups": []}
+            ],
+            "total": 1,
+            "page": 1,
+            "limit": 10,
+            "pages": 1,
+        }
+
+        filters = DepartmentPeriodRangeSubjectFilters(
+            start_period_code="2020-1", end_period_code="2022-1"
+        )
+        pagination = PaginationParams(page=1, limit=10)
+
+        result = await controller.get_department_period_range_subjects(
+            1, filters, pagination
+        )
+
+        mock_service.get_department_period_range_subjects.assert_awaited_once_with(
+            1, filters, pagination
+        )
+        assert result["total"] == 1

@@ -6,6 +6,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from api.core.pagination import PaginationParams
+from api.exceptions import ValidationError
+from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
 from api.services.stats_service import StatsService
 
 
@@ -279,3 +282,149 @@ class TestStatsService:
 
         mock_stats_repo.get_subject_teachers.assert_awaited_once_with(1, 1)
         assert result["course_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_with_valid_range_delegates_to_repository(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_report delegates to repository when
+        the period codes are well-formed and in order."""
+
+        mock_stats_repo.get_department_period_range_report = AsyncMock(
+            return_value={
+                "department_id": 1,
+                "dimensions": [],
+            }
+        )
+
+        result = await service.get_department_period_range_report(1, "2020-1", "2022-1")
+
+        mock_stats_repo.get_department_period_range_report.assert_awaited_once_with(
+            1, "2020-1", "2022-1"
+        )
+        assert result["department_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_with_malformed_code_raises_validation_error(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_report rejects period codes that
+        don't match the 'AAAA-N' format."""
+
+        mock_stats_repo.get_department_period_range_report = AsyncMock()
+
+        with pytest.raises(ValidationError):
+            await service.get_department_period_range_report(1, "2020-I", "2022-1")
+
+        mock_stats_repo.get_department_period_range_report.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_with_inverted_range_raises_validation_error(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_report rejects a start period
+        that is after the end period."""
+
+        mock_stats_repo.get_department_period_range_report = AsyncMock()
+
+        with pytest.raises(ValidationError):
+            await service.get_department_period_range_report(1, "2022-1", "2020-1")
+
+        mock_stats_repo.get_department_period_range_report.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_subjects_with_valid_range_returns_paginated_response(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_subjects builds a paginated
+        response from the repository's (items, total) tuple when the
+        period codes are well-formed and in order."""
+
+        mock_stats_repo.get_department_period_range_subjects = AsyncMock(
+            return_value=(
+                [
+                    {
+                        "course_name": "Cálculo I",
+                        "course_codes": ["MAT101"],
+                        "overall_average": 4.5,
+                        "groups": [{"academic_group_id": 1, "group_name": "A"}],
+                    }
+                ],
+                1,
+            )
+        )
+
+        filters = DepartmentPeriodRangeSubjectFilters(
+            start_period_code="2020-1", end_period_code="2022-1"
+        )
+        pagination = PaginationParams(page=1, limit=10)
+
+        result = await service.get_department_period_range_subjects(
+            1, filters, pagination
+        )
+
+        mock_stats_repo.get_department_period_range_subjects.assert_awaited_once_with(
+            1, filters, pagination
+        )
+        assert result["total"] == 1
+        assert len(result["items"]) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_subjects_with_missing_department_returns_none(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_subjects returns None when the
+        repository can't find the department."""
+
+        mock_stats_repo.get_department_period_range_subjects = AsyncMock(
+            return_value=None
+        )
+
+        filters = DepartmentPeriodRangeSubjectFilters(
+            start_period_code="2020-1", end_period_code="2022-1"
+        )
+        pagination = PaginationParams(page=1, limit=10)
+
+        result = await service.get_department_period_range_subjects(
+            1, filters, pagination
+        )
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_subjects_with_malformed_code_raises_validation_error(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_subjects rejects period codes
+        that don't match the 'AAAA-N' format."""
+
+        mock_stats_repo.get_department_period_range_subjects = AsyncMock()
+
+        filters = DepartmentPeriodRangeSubjectFilters(
+            start_period_code="2020-I", end_period_code="2022-1"
+        )
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(ValidationError):
+            await service.get_department_period_range_subjects(1, filters, pagination)
+
+        mock_stats_repo.get_department_period_range_subjects.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_subjects_with_inverted_range_raises_validation_error(
+        self, service, mock_stats_repo
+    ):
+        """Test get_department_period_range_subjects rejects a start period
+        that is after the end period."""
+
+        mock_stats_repo.get_department_period_range_subjects = AsyncMock()
+
+        filters = DepartmentPeriodRangeSubjectFilters(
+            start_period_code="2022-1", end_period_code="2020-1"
+        )
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(ValidationError):
+            await service.get_department_period_range_subjects(1, filters, pagination)
+
+        mock_stats_repo.get_department_period_range_subjects.assert_not_awaited()
