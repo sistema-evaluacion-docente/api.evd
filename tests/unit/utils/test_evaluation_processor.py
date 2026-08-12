@@ -116,11 +116,13 @@ def _added_notifications(db, title: str) -> list[NotificationModel]:
 class TestAnalyzeEvaluationCommentsHighRiskNotification:
     """Tests for the risk-level-3 (ALTO) alert wired into analyze_evaluation_comments."""
 
-    def _make_evaluation(self, department_id=1):
+    def _make_evaluation(self, department_id=1, academic_period_name="2024-1"):
         evaluation = MagicMock(spec=EvaluationModel)
         evaluation.id = 1
         evaluation.department_id = department_id
         evaluation.user_id = 99
+        evaluation.academic_period = MagicMock()
+        evaluation.academic_period.name = academic_period_name
         return evaluation
 
     def _make_comment(self, comment_id, teacher_id, text="Comentario de prueba"):
@@ -185,6 +187,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         assert alerts[0].type == "warning"
         assert "Juan Perez" in alerts[0].message
         assert str(evaluation.id) in alerts[0].message
+        assert alerts[0].link == "/docentes/7?period=2024-1"
 
         channels_notified = {
             call.args[0] for call in mock_notification_manager.broadcast.call_args_list
@@ -419,10 +422,11 @@ class TestCreateHighRiskCommentNotification:
         db.flush.side_effect = fake_flush
         return db
 
-    def _make_comment(self, comment_id=1, text="Comentario"):
+    def _make_comment(self, comment_id=1, text="Comentario", teacher_id=7):
         comment = MagicMock(spec=CommentModel)
         comment.id = comment_id
         comment.original_text = text
+        comment.teacher_id = teacher_id
         return comment
 
     @patch("api.utils.evaluation_processor.notification_manager")
@@ -447,6 +451,7 @@ class TestCreateHighRiskCommentNotification:
         assert notification.type == "warning"
         assert "Ana Gomez" in notification.message
         assert "Este docente no explica nada" in notification.message
+        assert notification.link == "/docentes/7"
 
         db.flush.assert_called_once()
         mock_notification_manager.broadcast.assert_called_once()
@@ -454,6 +459,60 @@ class TestCreateHighRiskCommentNotification:
         assert channel == "notifications:55"
         assert event.user_id == 55
         assert event.notification_type == "warning"
+        assert event.link == "/docentes/7"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    def test_link_includes_period_when_provided(self, mock_notification_manager):
+        mock_notification_manager.broadcast = AsyncMock()
+        db = self._make_db()
+        comment = self._make_comment(comment_id=4, teacher_id=9)
+
+        _create_high_risk_comment_notification(
+            db,
+            director_user_id=55,
+            evaluation_id=3,
+            teacher_name="Ana Gomez",
+            comment=comment,
+            academic_period_name="2024-1",
+        )
+
+        notification = db.add.call_args.args[0]
+        assert notification.link == "/docentes/9?period=2024-1"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    def test_link_url_encodes_period_name(self, mock_notification_manager):
+        mock_notification_manager.broadcast = AsyncMock()
+        db = self._make_db()
+        comment = self._make_comment(comment_id=5, teacher_id=9)
+
+        _create_high_risk_comment_notification(
+            db,
+            director_user_id=55,
+            evaluation_id=3,
+            teacher_name="Ana Gomez",
+            comment=comment,
+            academic_period_name="2024 Primer Semestre",
+        )
+
+        notification = db.add.call_args.args[0]
+        assert notification.link == "/docentes/9?period=2024%20Primer%20Semestre"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    def test_no_link_when_comment_has_no_teacher(self, mock_notification_manager):
+        mock_notification_manager.broadcast = AsyncMock()
+        db = self._make_db()
+        comment = self._make_comment(comment_id=3, teacher_id=None)
+
+        _create_high_risk_comment_notification(
+            db,
+            director_user_id=55,
+            evaluation_id=3,
+            teacher_name="Ana Gomez",
+            comment=comment,
+        )
+
+        notification = db.add.call_args.args[0]
+        assert notification.link is None
 
     @patch("api.utils.evaluation_processor.notification_manager")
     def test_truncates_long_comment_text(self, mock_notification_manager):

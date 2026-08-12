@@ -50,6 +50,7 @@ class TestNotificationService:
             "message": "Test message",
             "type": "info",
             "read": False,
+            "link": None,
         }
         defaults.update(overrides)
         n = MagicMock()
