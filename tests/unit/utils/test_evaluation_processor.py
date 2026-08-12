@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from api.models.comment import CommentModel
+from api.models.comment_pedagogical_category import CommentPedagogicalCategoryModel
 from api.models.director import DirectorsModel
 from api.models.evaluation import EvaluationModel
 from api.models.notification import NotificationModel
@@ -33,6 +34,13 @@ def _risk_level(level_id: int, name: str) -> MagicMock:
     risk_level.id = level_id
     risk_level.name = name
     return risk_level
+
+
+def _category(category_id: int, name: str) -> MagicMock:
+    category = MagicMock()
+    category.id = category_id
+    category.name = name
+    return category
 
 
 class _FakeQuery:
@@ -122,8 +130,6 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         comment.original_text = text
         comment.risk_level = None
         comment.risk_score = None
-        comment.pedagogical_category_id = None
-        comment.category_score = None
         return comment
 
     def _make_director(self, user_id=55):
@@ -165,8 +171,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         mock_analyze_comment.return_value = {
             "risk_label": "ALTO",
             "risk_score": 0.95,
-            "category_label": None,
-            "category_score": None,
+            "category_labels": [],
         }
         mock_notification_manager.broadcast = AsyncMock()
 
@@ -211,8 +216,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         mock_analyze_comment.return_value = {
             "risk_label": "BAJO",
             "risk_score": 0.1,
-            "category_label": None,
-            "category_score": None,
+            "category_labels": [],
         }
         mock_notification_manager.broadcast = AsyncMock()
 
@@ -245,8 +249,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         mock_analyze_comment.return_value = {
             "risk_label": "ALTO",
             "risk_score": 0.95,
-            "category_label": None,
-            "category_score": None,
+            "category_labels": [],
         }
         mock_notification_manager.broadcast = AsyncMock()
 
@@ -291,8 +294,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         mock_analyze_comment.return_value = {
             "risk_label": "ALTO",
             "risk_score": 0.9,
-            "category_label": None,
-            "category_score": None,
+            "category_labels": [],
         }
         mock_notification_manager.broadcast = AsyncMock()
 
@@ -303,6 +305,101 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         ]
         assert len(teacher_query_calls) == 1
         assert len(_added_notifications(db, "Alerta: comentario de riesgo alto")) == 2
+
+
+class TestAnalyzeEvaluationCommentsPedagogicalCategories:
+    """Tests for the 0..N pedagogical category assignment in analyze_evaluation_comments."""
+
+    def _make_evaluation(self, department_id=1):
+        evaluation = MagicMock(spec=EvaluationModel)
+        evaluation.id = 1
+        evaluation.department_id = department_id
+        evaluation.user_id = 99
+        return evaluation
+
+    def _make_comment(self, comment_id, teacher_id=7, text="Comentario de prueba"):
+        comment = MagicMock(spec=CommentModel)
+        comment.id = comment_id
+        comment.teacher_id = teacher_id
+        comment.original_text = text
+        comment.risk_level = None
+        comment.risk_score = None
+        return comment
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_creates_one_row_per_category_above_threshold(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=30)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[
+                _category(1, "CLARIDAD"),
+                _category(2, "PUNTUALIDAD"),
+            ],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [
+                {"label": "CLARIDAD", "score": 0.9},
+                {"label": "PUNTUALIDAD", "score": 0.6},
+            ],
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        added_links = [
+            call.args[0]
+            for call in db.add.call_args_list
+            if isinstance(call.args[0], CommentPedagogicalCategoryModel)
+        ]
+        assert len(added_links) == 2
+        assert {link.pedagogical_category_id for link in added_links} == {1, 2}
+        assert {link.score for link in added_links} == {0.9, 0.6}
+        assert all(link.comment_id == comment.id for link in added_links)
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_no_labels_creates_no_category_rows(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=31)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [],
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        added_links = [
+            call.args[0]
+            for call in db.add.call_args_list
+            if isinstance(call.args[0], CommentPedagogicalCategoryModel)
+        ]
+        assert added_links == []
 
 
 class TestCreateHighRiskCommentNotification:

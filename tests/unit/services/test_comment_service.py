@@ -237,7 +237,7 @@ class TestCommentService:
         with pytest.raises(ResourceNotFoundError):
             await service.update_classification(
                 1,
-                CommentUpdate(pedagogical_category_id=999),
+                CommentUpdate(pedagogical_category_ids=[999]),
                 {"id": 1, "department_id": 1},
             )
 
@@ -268,7 +268,7 @@ class TestCommentService:
 
         assert result["risk_level_modified_by_director"] is True
         mock_comments_repo.update_classification.assert_called_once_with(
-            1, risk_level=2, pedagogical_category_id=None
+            1, risk_level=2, pedagogical_category_ids=None
         )
         mock_audit_service.log.assert_called_once_with(
             action="UPDATE",
