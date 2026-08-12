@@ -14,6 +14,7 @@ from api.database import SessionLocal
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.comment import CommentModel
+from api.models.comment_pedagogical_category import CommentPedagogicalCategoryModel
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
@@ -483,7 +484,6 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                             academic_groups_id=academic_group.id,
                             original_text=text,
                             risk_level=None,
-                            pedagogical_category_id=None,
                         )
                     )
                 comments_count += len(group_comments)
@@ -694,15 +694,24 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                         comment=comment,
                     )
 
-            category_label = result.get("category_label")
+            for category in result.get("category_labels", []):
+                category_label = category["label"]
 
-            if category_label is not None:
                 if category_label not in category_cache:
                     category_cache[category_label] = category_name_to_id.get(
                         category_label.lower()
                     )
-                comment.pedagogical_category_id = category_cache[category_label]
-                comment.category_score = result.get("category_score")
+
+                category_id = category_cache[category_label]
+
+                if category_id is not None:
+                    db.add(
+                        CommentPedagogicalCategoryModel(
+                            comment_id=comment.id,
+                            pedagogical_category_id=category_id,
+                            score=category["score"],
+                        )
+                    )
 
             analyzed_count += 1
 

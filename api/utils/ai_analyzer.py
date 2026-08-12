@@ -14,6 +14,9 @@ logger = logging.getLogger(__name__)
 _risk_pipeline = None
 _category_pipeline = None
 
+# ponytail: fixed cutoff, expose via config if it ever needs tuning per model.
+CATEGORY_SCORE_THRESHOLD = 0.5
+
 
 def _get_risk_pipeline():
     """Get the HuggingFace pipeline for risk level classification."""
@@ -52,15 +55,16 @@ def _get_category_pipeline():
 def analyze_comment(text: str) -> dict:
     """Run both classification models on a comment text.
 
-    Returns the top label and confidence score for risk level and pedagogical
-    category. Any field is None if the model fails or is not configured.
+    Returns the top label/score for risk level, and every pedagogical
+    category whose confidence clears ``CATEGORY_SCORE_THRESHOLD`` (0, 1 or
+    several — a comment can touch more than one pedagogical dimension).
+    Fields are None/empty if the model fails or is not configured.
     """
 
     result = {
         "risk_label": None,
         "risk_score": None,
-        "category_label": None,
-        "category_score": None,
+        "category_labels": [],
     }
 
     risk_pipe = _get_risk_pipeline()
@@ -78,10 +82,13 @@ def analyze_comment(text: str) -> dict:
 
     if category_pipe:
         try:
-            output = category_pipe(text)
+            output = category_pipe(text, top_k=None)
 
-            result["category_label"] = output[0]["label"]
-            result["category_score"] = round(output[0]["score"], 4)
+            result["category_labels"] = [
+                {"label": item["label"], "score": round(item["score"], 4)}
+                for item in output
+                if item["score"] >= CATEGORY_SCORE_THRESHOLD
+            ]
         except Exception as exc:
             logger.error("Category model inference failed: %s", exc)
 
