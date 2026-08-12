@@ -46,6 +46,7 @@ class EvaluationOut(BaseModel):
     ai_status: Optional[str] = None
     count: Optional[int]
     overall_average: Optional[float] = None
+    comments_risk_counts: Optional[dict[str, int]] = None
     dimension_averages: Optional[list[DimensionAverageItem]] = None
     comparison: Optional[EvaluationPeriodComparison] = None
     created_at: datetime

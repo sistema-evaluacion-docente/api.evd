@@ -178,12 +178,12 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 func.coalesce(avg_subq.c.avg_score, 0).desc(),
                 TeacherModel.id.asc(),
             )
-        elif filters.sort_by == "high_risk_comments_asc":
+        elif filters.sort_by == "high_risk_comments_count_asc":
             query = query.order_by(
                 func.coalesce(high_risk_subq.c.high_risk_count, 0).asc(),
                 TeacherModel.id.asc(),
             )
-        elif filters.sort_by == "high_risk_comments_desc":
+        elif filters.sort_by == "high_risk_comments_count_desc":
             query = query.order_by(
                 func.coalesce(high_risk_subq.c.high_risk_count, 0).desc(),
                 TeacherModel.id.asc(),
@@ -199,10 +199,7 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         else:
             query = query.order_by(TeacherModel.created_at.desc())
 
-        total = query.count()
-        rows = query.offset(pagination.offset).limit(pagination.limit).all()
-
-        return rows, total
+        return self.paginate(query, pagination)
 
     def _build_average_subquery(self, academic_period_id: int):
         """Build a subquery of teacher average scores for an academic period."""

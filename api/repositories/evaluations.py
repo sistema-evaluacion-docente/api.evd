@@ -18,6 +18,7 @@ from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.repositories.base import BaseRepository
@@ -79,6 +80,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         data = evaluation_to_dict(evaluation)
         data["overall_average"] = self._get_overall_average(evaluation_id)
+        data["comments_risk_counts"] = self._get_comment_risk_counts(evaluation_id)
 
         return data
 
@@ -113,6 +115,22 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         )
 
         return float(avg) if avg is not None else None
+
+    def _get_comment_risk_counts(self, evaluation_id: int) -> dict[str, int]:
+        """Count comments by risk level (BAJO/MEDIO/ALTO) for this evaluation."""
+
+        rows = (
+            self.db.query(RiskLevelModel.name, func.count(CommentModel.id))
+            .join(CommentModel, CommentModel.risk_level == RiskLevelModel.id)
+            .filter(CommentModel.evaluation_id == evaluation_id)
+            .group_by(RiskLevelModel.name)
+            .all()
+        )
+
+        counts = {"BAJO": 0, "MEDIO": 0, "ALTO": 0}
+        counts.update(dict(rows))
+
+        return counts
 
     def search(
         self,
