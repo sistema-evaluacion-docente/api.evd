@@ -125,11 +125,12 @@ class TestTeacherService:
     async def test_get_all_with_averages(
         self, service, mock_teachers_repo, mock_teacher
     ):
-        """Test get_all_with_averages includes overall_average from the batched
-        (teacher, avg_score) rows search_with_averages returns."""
+        """Test get_all_with_averages includes overall_average and
+        high_risk_comments_count from the batched
+        (teacher, avg_score, high_risk_count) rows search_with_averages returns."""
 
         mock_teachers_repo.search_with_averages.return_value = (
-            [(mock_teacher, 4.5)],
+            [(mock_teacher, 4.5, 3)],
             1,
         )
 
@@ -139,6 +140,7 @@ class TestTeacherService:
         result = await service.get_all_with_averages(filters, pagination, 1)
 
         assert result["items"][0]["overall_average"] == 4.5
+        assert result["items"][0]["high_risk_comments_count"] == 3
         mock_teachers_repo.search_with_averages.assert_called_once_with(
             filters, pagination, 1, True
         )

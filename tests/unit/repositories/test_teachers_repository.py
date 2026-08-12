@@ -292,7 +292,7 @@ class TestTeachersRepository:
         mock_query.order_by.return_value = mock_query
         mock_query.count.return_value = 1
         mock_query.offset.return_value.limit.return_value.all.return_value = [
-            (mock_teacher_model, 4.5)
+            (mock_teacher_model, 4.5, 2)
         ]
 
         filters = TeacherFilters(sort_by="name_asc")
@@ -301,5 +301,32 @@ class TestTeachersRepository:
         rows, total = repo.search_with_averages(filters, pagination, 1)
 
         assert total == 1
-        assert rows == [(mock_teacher_model, 4.5)]
+        assert rows == [(mock_teacher_model, 4.5, 2)]
+        mock_query.order_by.assert_called_once()
+
+    def test_search_with_averages_sort_by_high_risk_comments(
+        self, repo, mock_db, mock_teacher_model
+    ):
+        """Test search_with_averages honors sort_by=high_risk_comments_(asc|desc)."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.outerjoin.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.group_by.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            (mock_teacher_model, 4.5, 5)
+        ]
+
+        filters = TeacherFilters(sort_by="high_risk_comments_desc")
+        pagination = PaginationParams(page=1, limit=10)
+
+        rows, total = repo.search_with_averages(filters, pagination, 1)
+
+        assert total == 1
+        assert rows == [(mock_teacher_model, 4.5, 5)]
         mock_query.order_by.assert_called_once()
