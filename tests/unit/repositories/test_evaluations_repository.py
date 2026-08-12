@@ -77,6 +77,20 @@ class TestEvaluationsRepository:
         assert result == 3.75
         assert isinstance(result, float)
 
+    def test_get_comment_risk_counts_defaults_missing_levels_to_zero(
+        self, repo, mock_db
+    ):
+        """Test _get_comment_risk_counts fills in BAJO/MEDIO/ALTO with 0 when
+        the evaluation has no comments for that risk level."""
+
+        mock_db.query.return_value.join.return_value.filter.return_value.group_by.return_value.all.return_value = [
+            ("ALTO", 3),
+        ]
+
+        result = repo._get_comment_risk_counts(1)
+
+        assert result == {"BAJO": 0, "MEDIO": 0, "ALTO": 3}
+
     def test_get_dimension_detail_includes_overall_when_filtered(
         self, repo, mock_db, mock_evaluation_model
     ):
