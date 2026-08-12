@@ -13,6 +13,7 @@ from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.comment import CommentModel
+from api.models.comment_pedagogical_category import CommentPedagogicalCategoryModel
 from api.models.course import CourseModel
 from api.models.evaluation import EvaluationModel
 from api.models.teacher import TeacherModel
@@ -89,7 +90,9 @@ class CommentsRepository(BaseRepository[CommentModel]):
 
         if filters.pedagogical_category_id is not None:
             base_query = base_query.filter(
-                CommentModel.pedagogical_category_id == filters.pedagogical_category_id
+                CommentModel.pedagogical_categories.any(
+                    pedagogical_category_id=filters.pedagogical_category_id
+                )
             )
 
         if filters.search:
@@ -182,14 +185,14 @@ class CommentsRepository(BaseRepository[CommentModel]):
         self,
         comment_id: int,
         risk_level: int | None = None,
-        pedagogical_category_id: int | None = None,
+        pedagogical_category_ids: list[int] | None = None,
     ) -> CommentModel | None:
-        """Update a comment's risk_level and/or pedagogical_category_id.
+        """Update a comment's risk_level and/or pedagogical categories.
 
         A field is only flagged as director-modified (and its confidence score
         set to 1, i.e. 100%, since it now reflects a human decision instead of
         the AI model's estimate) when the provided value actually differs from
-        the current one.
+        the current one. Categories are replaced wholesale as a set.
         """
 
         comment = self.get(comment_id)
@@ -202,13 +205,19 @@ class CommentsRepository(BaseRepository[CommentModel]):
             comment.risk_level_modified_by_director = True
             comment.risk_score = 1
 
-        if (
-            pedagogical_category_id is not None
-            and pedagogical_category_id != comment.pedagogical_category_id
-        ):
-            comment.pedagogical_category_id = pedagogical_category_id
-            comment.pedagogical_category_modified_by_director = True
-            comment.category_score = 1
+        if pedagogical_category_ids is not None:
+            current_ids = {
+                link.pedagogical_category_id for link in comment.pedagogical_categories
+            }
+
+            if set(pedagogical_category_ids) != current_ids:
+                comment.pedagogical_categories = [
+                    CommentPedagogicalCategoryModel(
+                        pedagogical_category_id=category_id, score=1
+                    )
+                    for category_id in pedagogical_category_ids
+                ]
+                comment.pedagogical_category_modified_by_director = True
 
         self.db.commit()
         self.db.refresh(comment)
@@ -235,7 +244,9 @@ class CommentsRepository(BaseRepository[CommentModel]):
             base_filters.append(CommentModel.risk_level == risk_level)
         if pedagogical_category_id is not None:
             base_filters.append(
-                CommentModel.pedagogical_category_id == pedagogical_category_id
+                CommentModel.pedagogical_categories.any(
+                    pedagogical_category_id=pedagogical_category_id
+                )
             )
         if teacher_id is not None:
             base_filters.append(CommentModel.teacher_id == teacher_id)
@@ -257,7 +268,9 @@ class CommentsRepository(BaseRepository[CommentModel]):
                 prev_filters.append(CommentModel.risk_level == risk_level)
             if pedagogical_category_id is not None:
                 prev_filters.append(
-                    CommentModel.pedagogical_category_id == pedagogical_category_id
+                    CommentModel.pedagogical_categories.any(
+                        pedagogical_category_id=pedagogical_category_id
+                    )
                 )
             if teacher_id is not None:
                 prev_filters.append(CommentModel.teacher_id == teacher_id)
