@@ -84,7 +84,7 @@ class CommentService:
         data: CommentUpdate,
         current_user: dict,
     ) -> dict | None:
-        """Update a comment's risk_level and/or pedagogical_category_id.
+        """Update a comment's risk_level and/or pedagogical categories.
 
         Only the director of the department that owns the comment's evaluation
         may perform this update. Returns None when the comment doesn't exist
@@ -107,20 +107,19 @@ class CommentService:
             if not risk:
                 raise ResourceNotFoundError("Nivel de riesgo", data.risk_level)
 
-        if data.pedagogical_category_id is not None:
-            category = await self.pedagogical_categories_repository.get_by_id(
-                data.pedagogical_category_id
-            )
-
-            if not category:
-                raise ResourceNotFoundError(
-                    "Categoría pedagógica", data.pedagogical_category_id
+        if data.pedagogical_category_ids is not None:
+            for category_id in data.pedagogical_category_ids:
+                category = await self.pedagogical_categories_repository.get_by_id(
+                    category_id
                 )
+
+                if not category:
+                    raise ResourceNotFoundError("Categoría pedagógica", category_id)
 
         updated = self.comments_repository.update_classification(
             comment_id,
             risk_level=data.risk_level,
-            pedagogical_category_id=data.pedagogical_category_id,
+            pedagogical_category_ids=data.pedagogical_category_ids,
         )
 
         if not updated:

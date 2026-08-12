@@ -54,7 +54,7 @@ class CommentsController:
         data: CommentUpdate,
         current_user: dict,
     ):
-        """Update a comment's risk level and/or pedagogical category (director only)."""
+        """Update a comment's risk level and/or pedagogical categories (director only)."""
 
         return await self.service.update_classification(comment_id, data, current_user)
 

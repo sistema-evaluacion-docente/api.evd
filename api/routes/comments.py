@@ -158,11 +158,12 @@ async def update_comment_classification(
     current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
-    """Update the risk level and/or pedagogical category of a comment.
+    """Update the risk level and/or pedagogical categories of a comment.
 
     Only the director of the department that owns the comment's evaluation
     may perform this action. Each field provided is flagged as modified by
-    the director.
+    the director. ``pedagogical_category_ids`` replaces the full set of
+    categories (accepts one, several, or an empty list to clear them all).
     """
 
     comment = await controller.update_classification(comment_id, payload, current_user)
