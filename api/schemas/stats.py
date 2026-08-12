@@ -532,6 +532,7 @@ class DepartmentPeriodRangeReport(BaseModel):
     evaluation_count: int
     period_averages: list[DepartmentPeriodRangePeriodAverage]
     dimensions: list[DepartmentPeriodRangeDimension]
+    comments_risk_counts: dict[str, int]
 
 
 class DepartmentPeriodRangeReportResponse(BaseModel):

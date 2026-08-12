@@ -19,6 +19,7 @@ from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
@@ -1455,6 +1456,32 @@ class StatsRepository:
             .all()
         )
 
+    def _get_department_comment_risk_counts(
+        self, department_id: int, period_ids: list[int]
+    ) -> dict[str, int]:
+        """Count comments by risk level (BAJO/MEDIO/ALTO) for a department
+        across a set of academic periods."""
+
+        rows = (
+            self.db.query(RiskLevelModel.name, func.count(CommentModel.id))
+            .join(CommentModel, CommentModel.risk_level == RiskLevelModel.id)
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == CommentModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id.in_(period_ids),
+            )
+            .group_by(RiskLevelModel.name)
+            .all()
+        )
+
+        counts = {"BAJO": 0, "MEDIO": 0, "ALTO": 0}
+        counts.update(dict(rows))
+
+        return counts
+
     async def get_department_period_range_report(
         self,
         department_id: int,
@@ -1504,6 +1531,7 @@ class StatsRepository:
                 "evaluation_count": 0,
                 "period_averages": [],
                 "dimensions": [],
+                "comments_risk_counts": {"BAJO": 0, "MEDIO": 0, "ALTO": 0},
             }
 
         overall_row = (
@@ -1582,6 +1610,10 @@ class StatsRepository:
             row.question_code: float(row.avg_score) for row in question_rows
         }
 
+        comments_risk_counts = self._get_department_comment_risk_counts(
+            department_id, period_ids
+        )
+
         dimensions = []
         for dim_name, codes in DIMENSION_MAP.items():
             dim_scores = [
@@ -1621,6 +1653,7 @@ class StatsRepository:
                 for row in period_rows
             ],
             "dimensions": dimensions,
+            "comments_risk_counts": comments_risk_counts,
         }
 
     async def get_department_period_range_subjects(
