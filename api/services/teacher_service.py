@@ -74,16 +74,17 @@ class TeacherService:
         )
 
         roles_by_user = self.users_repository.get_user_role_names_bulk(
-            [teacher.user_id for teacher, _ in rows if teacher.user_id]
+            [teacher.user_id for teacher, _, _ in rows if teacher.user_id]
         )
 
         items = []
 
-        for teacher, avg_score in rows:
+        for teacher, avg_score, high_risk_count in rows:
             d = self._enrich_teacher_to_dict(
                 teacher, roles=roles_by_user.get(teacher.user_id, [])
             )
             d["overall_average"] = float(avg_score) if avg_score is not None else None
+            d["high_risk_comments_count"] = int(high_risk_count or 0)
 
             items.append(d)
 

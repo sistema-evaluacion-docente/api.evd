@@ -11,8 +11,10 @@ from api.core.pagination import PaginationParams
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.comment import CommentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.repositories.base import BaseRepository
@@ -114,20 +116,29 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
-    ) -> tuple[list[tuple[TeacherModel, float | None]], int]:
-        """Search teachers with their overall_average for a given academic period,
-        selecting the average in the same query so callers don't need a second
-        aggregate lookup. Honors `filters.sort_by`, including sorting by average.
+    ) -> tuple[list[tuple[TeacherModel, float | None, int]], int]:
+        """Search teachers with their overall_average and count of ALTO-risk
+        comments for a given academic period, selecting both in the same query
+        so callers don't need extra aggregate lookups. Honors `filters.sort_by`,
+        including sorting by average and by high-risk comment count.
 
-        Returns a list of (teacher, avg_score) tuples.
+        Returns a list of (teacher, avg_score, high_risk_comments_count) tuples.
         """
 
         avg_subq = self._build_average_subquery(academic_period_id)
+        high_risk_subq = self._build_high_risk_comments_subquery(academic_period_id)
 
         query = (
-            self.db.query(TeacherModel, avg_subq.c.avg_score)
+            self.db.query(
+                TeacherModel,
+                avg_subq.c.avg_score,
+                func.coalesce(high_risk_subq.c.high_risk_count, 0).label(
+                    "high_risk_comments_count"
+                ),
+            )
             .outerjoin(UserModel, TeacherModel.user_id == UserModel.id)
             .outerjoin(avg_subq, TeacherModel.id == avg_subq.c.teacher_id)
+            .outerjoin(high_risk_subq, TeacherModel.id == high_risk_subq.c.teacher_id)
             .options(contains_eager(TeacherModel.user))
         )
 
@@ -167,6 +178,16 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 func.coalesce(avg_subq.c.avg_score, 0).desc(),
                 TeacherModel.id.asc(),
             )
+        elif filters.sort_by == "high_risk_comments_asc":
+            query = query.order_by(
+                func.coalesce(high_risk_subq.c.high_risk_count, 0).asc(),
+                TeacherModel.id.asc(),
+            )
+        elif filters.sort_by == "high_risk_comments_desc":
+            query = query.order_by(
+                func.coalesce(high_risk_subq.c.high_risk_count, 0).desc(),
+                TeacherModel.id.asc(),
+            )
         elif filters.sort_by == "institutional_code_asc":
             query = query.order_by(UserModel.institutional_code.asc())
         elif filters.sort_by == "institutional_code_desc":
@@ -201,6 +222,25 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             )
             .filter(EvaluationModel.academic_period_id == academic_period_id)
             .group_by(AcademicGroupModel.teacher_id)
+            .subquery()
+        )
+
+    def _build_high_risk_comments_subquery(self, academic_period_id: int):
+        """Build a subquery counting ALTO-risk comments per teacher for an
+        academic period."""
+
+        return (
+            self.db.query(
+                CommentModel.teacher_id.label("teacher_id"),
+                func.count(CommentModel.id).label("high_risk_count"),
+            )
+            .join(RiskLevelModel, CommentModel.risk_level == RiskLevelModel.id)
+            .join(EvaluationModel, CommentModel.evaluation_id == EvaluationModel.id)
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                RiskLevelModel.name == "ALTO",
+            )
+            .group_by(CommentModel.teacher_id)
             .subquery()
         )
 
