@@ -13,12 +13,14 @@ from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.comment import CommentModel
+from api.models.comment_pedagogical_category import CommentPedagogicalCategoryModel
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
+from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -1482,6 +1484,40 @@ class StatsRepository:
 
         return counts
 
+    def _get_department_comment_pedagogical_category_counts(
+        self, department_id: int, period_ids: list[int]
+    ) -> dict[str, int]:
+        """Count comments by pedagogical category for a department across a
+        set of academic periods. A comment can carry 0..N categories, so
+        counts are not mutually exclusive and don't sum to the comment total."""
+
+        rows = (
+            self.db.query(
+                PedagogicalCategoryModel.name, func.count(CommentModel.id)
+            )
+            .join(
+                CommentPedagogicalCategoryModel,
+                CommentPedagogicalCategoryModel.pedagogical_category_id
+                == PedagogicalCategoryModel.id,
+            )
+            .join(
+                CommentModel,
+                CommentModel.id == CommentPedagogicalCategoryModel.comment_id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == CommentModel.evaluation_id,
+            )
+            .filter(
+                EvaluationModel.department_id == department_id,
+                EvaluationModel.academic_period_id.in_(period_ids),
+            )
+            .group_by(PedagogicalCategoryModel.name)
+            .all()
+        )
+
+        return dict(rows)
+
     async def get_department_period_range_report(
         self,
         department_id: int,
@@ -1532,6 +1568,7 @@ class StatsRepository:
                 "period_averages": [],
                 "dimensions": [],
                 "comments_risk_counts": {"BAJO": 0, "MEDIO": 0, "ALTO": 0},
+                "comments_pedagogical_category_counts": {},
             }
 
         overall_row = (
@@ -1613,6 +1650,11 @@ class StatsRepository:
         comments_risk_counts = self._get_department_comment_risk_counts(
             department_id, period_ids
         )
+        comments_pedagogical_category_counts = (
+            self._get_department_comment_pedagogical_category_counts(
+                department_id, period_ids
+            )
+        )
 
         dimensions = []
         for dim_name, codes in DIMENSION_MAP.items():
@@ -1654,6 +1696,7 @@ class StatsRepository:
             ],
             "dimensions": dimensions,
             "comments_risk_counts": comments_risk_counts,
+            "comments_pedagogical_category_counts": comments_pedagogical_category_counts,
         }
 
     async def get_department_period_range_subjects(
