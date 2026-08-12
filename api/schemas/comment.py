@@ -27,6 +27,12 @@ class PedagogicalCategoryOut(BaseModel):
     color_hex: Optional[str] = None
 
 
+class PedagogicalCategoryScoreOut(PedagogicalCategoryOut):
+    """Pedagogical category output with the confidence score of this assignment."""
+
+    score: Optional[float] = None
+
+
 class CommentOut(BaseModel):
     """Schema for outputting a comment."""
 
@@ -41,8 +47,7 @@ class CommentOut(BaseModel):
     original_text: Optional[str]
     risk_level: Optional[RiskLevelOut] = None
     risk_score: Optional[float] = None
-    pedagogical_category: Optional[PedagogicalCategoryOut] = None
-    category_score: Optional[float] = None
+    pedagogical_categories: list[PedagogicalCategoryScoreOut] = []
     risk_level_modified_by_director: bool = False
     pedagogical_category_modified_by_director: bool = False
     created_at: datetime
@@ -50,22 +55,24 @@ class CommentOut(BaseModel):
 
 
 class CommentUpdate(BaseModel):
-    """Schema for updating a comment's risk level and/or pedagogical category.
+    """Schema for updating a comment's risk level and/or pedagogical categories.
 
     Only a department director may perform this update; each field actually
-    provided is flagged as modified by the director.
+    provided is flagged as modified by the director. ``pedagogical_category_ids``
+    replaces the comment's full set of categories — pass one, several, or an
+    empty list to clear them all.
     """
 
     risk_level: Optional[int] = None
-    pedagogical_category_id: Optional[int] = None
+    pedagogical_category_ids: Optional[list[int]] = None
 
     @model_validator(mode="after")
     def at_least_one_field(self):
         """Validate that at least one of the two fields is provided."""
 
-        if self.risk_level is None and self.pedagogical_category_id is None:
+        if self.risk_level is None and self.pedagogical_category_ids is None:
             raise ValueError(
-                "Debe proporcionar al menos risk_level o pedagogical_category_id"
+                "Debe proporcionar al menos risk_level o pedagogical_category_ids"
             )
         return self
 
