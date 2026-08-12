@@ -94,6 +94,7 @@ class NotificationService:
             title=notification.title,
             message=notification.message,
             notification_type=notification.type,
+            link=notification.link,
         )
 
         try:

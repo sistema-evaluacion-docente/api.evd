@@ -32,6 +32,8 @@ class NotificationModel(Base):
     message = Column(Text, nullable=False)
     type = Column(String(50), nullable=False, default="info")
     read = Column(Boolean, nullable=False, default=False)
+    # Optional CTA — frontend path the notification should navigate to when clicked.
+    link = Column(String(255), nullable=True)
 
     user = relationship("UserModel", backref="notifications")
 

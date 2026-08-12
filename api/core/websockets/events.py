@@ -48,6 +48,7 @@ class NotificationEvent(BaseWebSocketEvent):
     title: str
     message: str
     notification_type: str
+    link: Optional[str] = None
 
 
 class DevLogEvent(BaseWebSocketEvent):

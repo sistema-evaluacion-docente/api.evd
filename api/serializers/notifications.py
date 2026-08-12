@@ -13,6 +13,7 @@ def notification_to_dict(notification: NotificationModel) -> dict:
         "message": notification.message,
         "type": notification.type,
         "read": notification.read,
+        "link": notification.link,
         "created_at": notification.created_at,
         "updated_at": notification.updated_at,
     }

@@ -7,6 +7,7 @@ validate period/department before queuing the task — no double-parsing.
 
 import asyncio
 import logging
+from urllib.parse import quote
 
 from api.routes.ws_evaluations import manager as connection_manager
 from api.core.websockets.events import EvaluationProgressEvent, EvaluationLogEvent
@@ -246,6 +247,7 @@ def _create_high_risk_comment_notification(
     evaluation_id: int,
     teacher_name: str,
     comment: CommentModel,
+    academic_period_name: str | None = None,
 ) -> None:
     """
     Create an alert notification for the department director when a
@@ -264,12 +266,19 @@ def _create_high_risk_comment_notification(
     )
     notification_type = "warning"
 
+    link = None
+    if comment.teacher_id:
+        link = f"/docentes/{comment.teacher_id}"
+        if academic_period_name:
+            link += f"?period={quote(academic_period_name)}"
+
     try:
         notification = NotificationModel(
             user_id=director_user_id,
             title=title,
             message=message,
             type=notification_type,
+            link=link,
         )
         db.add(notification)
         db.flush()
@@ -280,6 +289,7 @@ def _create_high_risk_comment_notification(
             title=title,
             message=message,
             notification_type=notification_type,
+            link=link,
         )
 
         channel = f"notifications:{director_user_id}"
@@ -692,6 +702,11 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                         evaluation_id=evaluation_id,
                         teacher_name=teacher_name_cache[comment.teacher_id],
                         comment=comment,
+                        academic_period_name=(
+                            evaluation.academic_period.name
+                            if evaluation.academic_period
+                            else None
+                        ),
                     )
 
             for category in result.get("category_labels", []):

@@ -27,6 +27,7 @@ class NotificationCreate(BaseModel):
     title: str
     message: str
     type: NotificationType = NotificationType.INFO
+    link: Optional[str] = None
 
 
 class NotificationOut(BaseModel):
@@ -38,6 +39,7 @@ class NotificationOut(BaseModel):
     message: str
     type: str
     read: bool
+    link: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
