@@ -26,10 +26,6 @@ class CommentModel(Base):
     original_text = Column(Text, nullable=True)
     risk_level = Column(Integer, ForeignKey("risk_levels.id"), nullable=True)
     risk_score = Column(Float, nullable=True)
-    pedagogical_category_id = Column(
-        Integer, ForeignKey("pedagogical_categories.id"), nullable=True
-    )
-    category_score = Column(Float, nullable=True)
     risk_level_modified_by_director = Column(Boolean, nullable=False, default=False)
     pedagogical_category_modified_by_director = Column(
         Boolean, nullable=False, default=False
@@ -38,10 +34,12 @@ class CommentModel(Base):
     risk_level_rel = relationship(
         "RiskLevelModel", lazy="joined", foreign_keys=[risk_level]
     )
-    pedagogical_category_rel = relationship(
-        "PedagogicalCategoryModel",
-        lazy="joined",
-        foreign_keys=[pedagogical_category_id],
+    # 0..N pedagogical categories, each with its own confidence score.
+    pedagogical_categories = relationship(
+        "CommentPedagogicalCategoryModel",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(

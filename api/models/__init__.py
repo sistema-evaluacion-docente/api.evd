@@ -9,6 +9,7 @@ from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
 from api.models.audit import AuditModel
 from api.models.comment import CommentModel
+from api.models.comment_pedagogical_category import CommentPedagogicalCategoryModel
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.director import DirectorsModel
@@ -20,13 +21,13 @@ from api.models.improvement_plan import ImprovementPlanModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
+from api.models.notification import NotificationModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.role import RoleModel
 from api.models.setting import SettingModel
 from api.models.setting_history import SettingHistoryModel
 from api.models.teacher import TeacherModel
-from api.models.notification import NotificationModel
 from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 
@@ -35,6 +36,7 @@ __all__ = [
     "AcademicPeriodModel",
     "AuditModel",
     "CommentModel",
+    "CommentPedagogicalCategoryModel",
     "CourseModel",
     "DepartmentModel",
     "DirectorsModel",
