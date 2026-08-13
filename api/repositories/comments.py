@@ -105,12 +105,12 @@ class CommentsRepository(BaseRepository[CommentModel]):
 
         total = base_query.count()
 
-        results = (
-            base_query.order_by(CommentModel.created_at.desc())
-            .offset(pagination.offset)
-            .limit(pagination.limit)
-            .all()
-        )
+        if filters.risk_level is not None:
+            base_query = base_query.order_by(CommentModel.risk_score.desc())
+        else:
+            base_query = base_query.order_by(CommentModel.created_at.desc())
+
+        results = base_query.offset(pagination.offset).limit(pagination.limit).all()
 
         items = [
             comment_to_dict(
