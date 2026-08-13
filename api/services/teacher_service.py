@@ -8,6 +8,7 @@ import openpyxl
 from api.core.pagination import PaginationParams
 from api.exceptions import ResourceAlreadyExistsError, ValidationError
 from api.repositories.academic_periods import AcademicPeriodsRepository
+from api.repositories.stats import StatsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
 from api.schemas.pagination import build_paginated_response
@@ -34,10 +35,12 @@ class TeacherService:
         audit_service: AuditService,
         academic_periods_repository: AcademicPeriodsRepository,
         user_service: UserService,
+        stats_repository: StatsRepository | None = None,
     ):
         self.teachers_repository = teachers_repository
         self.users_repository = users_repository
         self.audit_service = audit_service
+        self.stats_repository = stats_repository
         self.academic_periods_repository = academic_periods_repository
         self.user_service = user_service
 
@@ -364,6 +367,39 @@ class TeacherService:
         paginated = build_paginated_response(items, total, pagination)
 
         return {**teacher_info, **paginated}
+
+    async def get_course_history(
+        self,
+        current_user: TokenUser,
+        teacher_id: int,
+        course_code: str,
+        limit: int | None = None,
+    ) -> dict | None:
+        """Get per-period history for a teacher's course."""
+
+        user = self.users_repository.get_by_uid(current_user.uid)
+        teacher = self.teachers_repository.get_by_id(teacher_id)
+        roles = self.users_repository.get_user_role_names(user.id) if user else []
+
+        if not user or not teacher:
+            raise ValidationError("Usuario no encontrado")
+
+        is_admin = RoleName.ADMIN in roles
+        is_own_teacher = RoleName.DOCENTE in roles and teacher.user_id == user.id
+        is_department_director = False
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in roles:
+            director = self.users_repository.get_director_by_user_id(user.id)
+            is_department_director = bool(
+                director and director.department_id == teacher.department_id
+            )
+
+        if not (is_admin or is_own_teacher or is_department_director):
+            raise PermissionError("No tiene permiso para ver el historial de este docente")
+
+        return self.stats_repository.get_course_history(
+            teacher_id, course_code, teacher.department_id, limit
+        )
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict

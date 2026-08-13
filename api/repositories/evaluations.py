@@ -382,6 +382,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         return {
             "teacher_id": teacher_id,
             "evaluation_id": evaluation_id,
+            "ai_status": evaluation.ai_status,
             "courses": list(grouped.values()),
         }
 

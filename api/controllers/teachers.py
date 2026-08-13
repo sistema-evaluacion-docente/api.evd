@@ -101,6 +101,19 @@ class TeachersController:
             file_bytes, filename, department_id, current_user
         )
 
+    async def get_course_history(
+        self,
+        current_user,
+        teacher_id: int,
+        course_code: str,
+        limit: int | None = None,
+    ):
+        """Get per-period history for a teacher's course."""
+
+        return await self.service.get_course_history(
+            current_user, teacher_id, course_code, limit
+        )
+
     async def get_dashboard(
         self, teacher_id: int, period_name: str, department_id: int
     ):
