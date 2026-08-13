@@ -6,7 +6,11 @@ from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
-from api.schemas.evaluation_summary import TeacherDashboardOut, TeacherHistoryOut
+from api.schemas.evaluation_summary import (
+    CourseHistoryOut,
+    TeacherDashboardOut,
+    TeacherHistoryOut,
+)
 from api.schemas.teacher import (
     BulkUploadResult,
     TeacherCreate,
@@ -129,6 +133,31 @@ async def count_teachers(
         )
 
     return await controller.count_by_department(department_id, academic_period_id)
+
+
+@router.get("/{teacher_id}/courses/{course_code}/history", response_model=CourseHistoryOut)
+async def get_teacher_course_history(
+    teacher_id: int,
+    course_code: str,
+    limit: int | None = Query(default=None, ge=1, description="Máximo de periodos a retornar"),
+    current_user=Depends(get_current_user),
+    _=Depends(
+        require_roles(
+            [RoleName.DOCENTE, RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+        )
+    ),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Return per-period score history for a teacher's course, with dimensions and department average."""
+
+    result = await controller.get_course_history(
+        current_user, teacher_id, course_code, limit
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Docente no encontrado")
+
+    return result
 
 
 @router.get("/{teacher_id}/history", response_model=TeacherHistoryOut)

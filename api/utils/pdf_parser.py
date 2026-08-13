@@ -22,6 +22,7 @@ import pikepdf
 QUESTION_CODES = [f"{i:03d}" for i in range(1, 23)]
 
 _PERIOD_MAP = {"primer": "1", "segundo": "2"}
+_CONTRACT_TYPES = {"TC", "CT", "HC"}
 
 
 def _load_nlp():
@@ -68,24 +69,44 @@ def _parse_department(text: str) -> tuple[str, str] | None:
     return match.group(1).strip(), match.group(2).strip()
 
 
+def _is_instrument_page(text: str) -> bool:
+    """Detect the questionnaire instrument page (page 1), which contains no teacher data."""
+    markers = [
+        "DESARROLLO DEL CONOCIMIENTO",
+        "DESEMPEÑO DOCENTE",
+        "PROCESOS DE EVALUACIÓN",
+        "INTEGRACIÓN INTERPERSONAL",
+    ]
+    return all(m in text for m in markers)
+
+
 def _parse_teacher_header(text: str) -> dict | None:
     """
     Extract teacher code, name, and contract type from a single line:
     '04041 ADARME JAIMES MARCO ANTONIO TC'
+
+    Contract type (TC, CT, HC) is optional — some evaluations omit it.
+    Detection is done by inspecting the last token of the line against
+    _CONTRACT_TYPES to avoid regex backtracking ambiguity.
     """
     match = re.search(
-        r"^\s*(\d{5,})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ ]+?)(?:\s+(TC|TP|HC|HORA\s+CATEDRA))?\s*$",
+        r"^\s*(\d{5,})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9 ]+)\s*$",
         text,
         re.MULTILINE,
     )
     if not match:
         return None
 
-    return {
-        "code": match.group(1).strip(),
-        "name": match.group(2).strip(),
-        "contract_type": match.group(3).strip() if match.group(3) else None,
-    }
+    code = match.group(1).strip()
+    raw = match.group(2).strip()
+
+    parts = raw.rsplit(None, 1)
+    if len(parts) == 2 and parts[1].upper() in _CONTRACT_TYPES:
+        name, contract_type = parts[0].strip(), parts[1].upper()
+    else:
+        name, contract_type = raw, None
+
+    return {"code": code, "name": name, "contract_type": contract_type}
 
 
 def _parse_score_table(tables: list) -> tuple[list[dict], Decimal | None]:
@@ -155,7 +176,12 @@ def _parse_score_table(tables: list) -> tuple[list[dict], Decimal | None]:
     return groups, teacher_overall
 
 
-def _extract_comments(text: str, nlp) -> dict[str, list[str]]:
+def _extract_comments(
+    text: str,
+    nlp,
+    start_from_top: bool = False,
+    default_key: str | None = None,
+) -> dict[str, list[str]]:
     """
     Extract comments from the 'Observaciones realizadas' section.
 
@@ -163,17 +189,24 @@ def _extract_comments(text: str, nlp) -> dict[str, list[str]]:
     Comment lines start with '- '.
 
     Returns dict keyed by '{course_code}_{group}_{section}', e.g. '1155304_B_01'.
+
+    start_from_top: skip the 'Observaciones realizadas' marker and scan from line 0.
+                    Used for continuation pages that carry no section header.
+    default_key:    key to use for comments before the first group header is found.
+                    Required when a continuation page has no group header at all.
     """
     lines = text.splitlines()
 
-    start_idx = None
-    for i, line in enumerate(lines):
-        if "Observaciones realizadas" in line:
-            start_idx = i + 1
-            break
-
-    if start_idx is None:
-        return {}
+    if start_from_top:
+        start_idx = 0
+    else:
+        start_idx = None
+        for i, line in enumerate(lines):
+            if "Observaciones realizadas" in line:
+                start_idx = i + 1
+                break
+        if start_idx is None:
+            return {}
 
     group_header = re.compile(
         r"^\s*(\d{3})\s+(\d{4})\s+([A-Z])\s+(\d{2})\s+", re.IGNORECASE
@@ -183,7 +216,7 @@ def _extract_comments(text: str, nlp) -> dict[str, list[str]]:
     )
 
     result: dict[str, list[str]] = {}
-    current_key: str | None = None
+    current_key: str | None = default_key
     buffer = ""
 
     def flush():
@@ -296,6 +329,9 @@ def parse_pdf(file_bytes: bytes) -> dict:
                     if dept:
                         result["department_code"], result["department_name"] = dept
 
+                if _is_instrument_page(text):
+                    continue
+
                 teacher = _parse_teacher_header(text)
                 if not teacher:
                     continue
@@ -306,15 +342,34 @@ def parse_pdf(file_bytes: bytes) -> dict:
                         "horizontal_strategy": "lines",
                     }
                 )
-                groups, teacher["overall_average"] = _parse_score_table(tables)
+                groups, overall_average = _parse_score_table(tables)
 
-                comments_by_group = _extract_comments(text, nlp)
-                for group in groups:
-                    key = f"{group['course_code']}_{group['group']}_{group['section']}"
-                    group["comments"] = comments_by_group.get(key, [])
+                is_continuation = (
+                    not groups
+                    and result["teachers"]
+                    and result["teachers"][-1]["code"] == teacher["code"]
+                )
 
-                teacher["groups"] = groups
-                result["teachers"].append(teacher)
+                if is_continuation:
+                    last_groups = result["teachers"][-1]["groups"]
+                    default_key = None
+                    if last_groups:
+                        lg = last_groups[-1]
+                        default_key = f"{lg['course_code']}_{lg['group']}_{lg['section']}"
+                    comments_by_group = _extract_comments(
+                        text, nlp, start_from_top=True, default_key=default_key
+                    )
+                    for group in last_groups:
+                        key = f"{group['course_code']}_{group['group']}_{group['section']}"
+                        group["comments"].extend(comments_by_group.get(key, []))
+                else:
+                    comments_by_group = _extract_comments(text, nlp)
+                    teacher["overall_average"] = overall_average
+                    for group in groups:
+                        key = f"{group['course_code']}_{group['group']}_{group['section']}"
+                        group["comments"] = comments_by_group.get(key, [])
+                    teacher["groups"] = groups
+                    result["teachers"].append(teacher)
 
         return result
 
