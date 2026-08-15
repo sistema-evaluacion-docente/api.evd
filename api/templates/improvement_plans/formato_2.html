@@ -1,0 +1,110 @@
+{# Formato 2 — Ficha de acuerdo de mejoramiento y compromiso docente.
+   The five numbered sections are the ASPECTS catalogue; items are grouped by
+   their `aspect` and printed as "descripción del indicador" + "compromiso".
+
+   Laid out against the printed original: ruled lines rather than boxes, three
+   rules per block whether or not there is anything to write on them. #}
+{% extends "_base.html" %}
+{% from "_macros.html" import ruled, ruled_inline with context %}
+
+{% block content %}
+<table class="grid" style="margin-bottom: 14px;" {{ word_table_attrs }}>
+  <tr>
+    <th style="width: 14.4%;">CODIGO</th>
+    <th style="width: 32.8%;">NOMBRE DEL DOCENTE</th>
+    <th style="width: 25.9%;">FACULTAD</th>
+    <th style="width: 26.9%;">DEPARTAMENTO</th>
+  </tr>
+  <tr>
+    <td>{{ teacher_code or "" }}</td>
+    <td>{{ teacher_name or "" }}</td>
+    <td>{{ faculty_name or "" }}</td>
+    <td>{{ department_name or "" }}</td>
+  </tr>
+</table>
+
+<table class="grid" style="margin-bottom: 18px;" {{ word_table_attrs }}>
+  <tr>
+    <th style="width: 50%;">ASIGNATURA</th>
+    <th style="width: 50%;">PROGRAMA ACADEMICO</th>
+  </tr>
+  {% for course in courses %}
+  <tr>
+    <td>{{ course.course_name }}{% if course.group_name %} — Grupo {{ course.group_name }}{% endif %}</td>
+    <td>{{ course.program_name or program_name or "" }}</td>
+  </tr>
+  {% endfor %}
+  {# The printed form always shows four rows, filled or not. #}
+  {% for _ in range([0, 4 - courses|length]|max) %}
+  <tr><td>&nbsp;</td><td>&nbsp;</td></tr>
+  {% endfor %}
+</table>
+
+{% for aspect in aspects %}
+{% set commitments = aspect.entries|selectattr("commitment")|list %}
+{% set commitment_lines = [commitments|length, 1]|max %}
+<div style="page-break-inside: avoid; margin-bottom: 16px;">
+  {# Uppercased here rather than with `text-transform`, which word processors
+     drop on import. #}
+  {# The gap after the number is a fixed-width box in the PDF; Word drops the
+     box, so there it is spelled with hard spaces. #}
+  <p class="section-title"><span class="num">{{ aspect.aspect }}.{% if word %}&nbsp;&nbsp;&nbsp;&nbsp;{% endif %}</span>{{ aspect.label|upper }}:</p>
+
+  {% if aspect.aspect == student_comments_aspect %}
+    <p class="field-label">Descripción del aspecto o situación negativa que describe el estudiante</p>
+  {% else %}
+    <p class="field-label">Descripción del indicador(es) de evaluación comprometido(s) (describirlo):</p>
+  {% endif %}
+
+  {% for item in aspect.entries %}
+    {{ ruled(item.description) }}
+    {% for comment in item.comments %}
+      {{ ruled("“%s”%s"|format(comment.original_text, " [riesgo %s]"|format(comment.risk_level_name|lower) if comment.risk_level_name else ""), "quoted") }}
+    {% endfor %}
+  {% endfor %}
+  {% for _ in range([0, 3 - aspect.entries|length]|max) %}
+    {{ ruled() }}
+  {% endfor %}
+
+  {# "Compromiso:" shares its line with the first rule, as in the original. #}
+  {{ ruled_inline("Compromiso:", commitments[0].commitment if commitments else "") }}
+  {% for item in commitments[1:] %}
+    {{ ruled(item.commitment) }}
+  {% endfor %}
+  {% for _ in range([0, 3 - commitment_lines]|max) %}
+    {{ ruled() }}
+  {% endfor %}
+</div>
+{% endfor %}
+
+<div style="page-break-inside: avoid; margin-top: 22px;">
+  {% set observations = (plan.council_observations or "").split("\n") if plan.council_observations else [] %}
+  <p class="field-label">OBSERVACIONES DEL CONSEJO DE DEPARTAMENTO:</p>
+  {% for line in observations %}
+    {{ ruled(line) }}
+  {% endfor %}
+  {% for _ in range([0, 6 - observations|length]|max) %}
+    {{ ruled() }}
+  {% endfor %}
+
+  <p class="note-center">(Si es necesario adjunte los soportes que considere necesarios)</p>
+
+  <p style="margin-top: 22px;">
+    ACTO ADMINISTRATIVO: ACTA No. <span class="blank">{{ plan.acta_number or ("______" if word else "") }}</span>
+    &nbsp;&nbsp;FECHA: <span class="blank" style="min-width: 3.6cm;">{{ plan.acta_date|date_es or ("____________" if word else "") }}</span>
+  </p>
+
+  <table class="signatures">
+    <tr>
+      <td class="signature" style="width: 50%;">
+        <div class="line">{% if word %}______________________________{% endif %}</div>
+        <div class="caption">FIRMA DOCENTE</div>
+      </td>
+      <td class="signature" style="width: 50%;">
+        <div class="line">{% if word %}______________________________{% endif %}</div>
+        <div class="caption">FIRMA DIRECTOR DEPARTAMENTO</div>
+      </td>
+    </tr>
+  </table>
+</div>
+{% endblock %}

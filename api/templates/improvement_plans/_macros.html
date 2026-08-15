@@ -1,0 +1,37 @@
+{# Building blocks shared by the forms.
+
+   The ruled lines the forms are written on have to survive two very different
+   renderers. WeasyPrint draws them as a CSS bottom border, which lands exactly
+   on the text column; word processors drop borders off empty blocks, so the
+   Word copy spells the rules out with underscore characters — which is what the
+   printed original does anyway. #}
+
+{# Underscores that fill a 14.97 cm column at 11pt Times. #}
+{% set RULE_LENGTH = 77 %}
+
+{% macro _underscores(text, length) -%}
+{{ text }}{{ "_" * [length - (text|string|length), 2]|max }}
+{%- endmacro %}
+
+{# One ruled line carrying `text`, blank when there is nothing to write. #}
+{% macro ruled(text="", cls="") -%}
+{% if word %}
+<p class="ruled-word {{ cls }}">{{ _underscores(text, RULE_LENGTH) }}</p>
+{% else %}
+<div class="field-line {{ cls }}">{{ text if text else "&nbsp;"|safe }}</div>
+{% endif %}
+{%- endmacro %}
+
+{# A label and its rule sharing one line, as in "Compromiso:______________". #}
+{% macro ruled_inline(label, text="") -%}
+{% if word %}
+<p class="ruled-word">{{ label }}{{ _underscores(text, RULE_LENGTH - (label|length)) }}</p>
+{% else %}
+<table class="inline-field">
+  <tr>
+    <td class="lbl">{{ label }}</td>
+    <td class="rule">{{ text }}</td>
+  </tr>
+</table>
+{% endif %}
+{%- endmacro %}

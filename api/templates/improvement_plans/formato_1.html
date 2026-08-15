@@ -1,0 +1,29 @@
+{# Formato 1 — Casos de docentes reportados por programas académicos a las
+   direcciones de departamento. #}
+{% extends "_base.html" %}
+
+{% block content %}
+<table class="grid">
+  <tr><th class="label">FACULTAD</th><td>{{ faculty_name or "" }}</td></tr>
+  <tr><th class="label">PROGRAMA</th><td>{{ program_name or "" }}</td></tr>
+  <tr><th class="label">DEPARTAMENTO</th><td>{{ department_name or "" }}</td></tr>
+  <tr><th class="label">DOCENTE</th><td>{{ teacher_name or "" }}</td></tr>
+  <tr><th class="label">CÓDIGO</th><td>{{ teacher_code or "" }}</td></tr>
+</table>
+
+<p class="section-title">Queja presentada:</p>
+<div class="textbox">{{ case_report.complaint if case_report and case_report.complaint else "" }}</div>
+
+<p class="section-title">Observaciones y anexos:</p>
+<div class="textbox" style="min-height: 6cm;">{{ case_report.observations if case_report and case_report.observations else "" }}</div>
+
+<div style="margin-top: 34px;">
+  <p style="margin-bottom: 2px;">Acta del Comité Curricular donde se analizó el caso:</p>
+  <div class="field-line" style="width: 60%;">{{ case_report.committee_act_reference if case_report and case_report.committee_act_reference else "" }}</div>
+</div>
+
+<div style="margin-top: 40px; width: 60%;">
+  <div class="field-line">&nbsp;</div>
+  <div style="font-size: 9pt;">Firma Director y/o Coordinador de Programa</div>
+</div>
+{% endblock %}
