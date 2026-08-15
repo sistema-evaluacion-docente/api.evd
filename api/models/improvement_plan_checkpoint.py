@@ -16,7 +16,8 @@ class ImprovementPlanCheckpointModel(Base):
     """
     Improvement plan checkpoint model.
 
-    ``stage`` is one of INICIO / MITAD / SEMANA_16.
+    ``stage`` is one of PRIMER_SEGUIMIENTO / SEGUNDO_SEGUIMIENTO — the two formal
+    follow-ups of the official form (week 8 and weeks 15/16 respectively).
     ``status`` is PENDIENTE / COMPLETADO.
     """
 
@@ -45,6 +46,16 @@ class ImprovementPlanCheckpointModel(Base):
 
     plan: Mapped["ImprovementPlanModel"] = relationship(
         "ImprovementPlanModel", back_populates="checkpoints"
+    )
+    # One row per aspect (1-5): the cells of the seguimiento columns in the
+    # Formato 3 matrix.
+    aspect_notes: Mapped[list["ImprovementPlanCheckpointNoteModel"]] = relationship(
+        "ImprovementPlanCheckpointNoteModel",
+        back_populates="checkpoint",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="ImprovementPlanCheckpointNoteModel.aspect",
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
