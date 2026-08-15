@@ -51,12 +51,37 @@ class ImprovementPlanModel(Base):
     closed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
-    # Acta de compromiso firmada con el docente (PDF + descripción). Optional
-    # at creation and replaceable while the plan is open.
-    acta_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    acta_description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    acta_uploaded_at: Mapped[Optional[datetime.datetime]] = mapped_column(
+    # "PROGRAMA ACADÉMICO" of the official forms. Free text: the schema has no
+    # academic programs entity.
+    program_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # "FACULTAD" / "DEPARTAMENTO ACADÉMICO" of the header table. Free text as
+    # well: the director can override what the teacher record says, because the
+    # printed form must match the acta even if the teacher moves department.
+    # When empty the document falls back to the teacher's own faculty/department.
+    faculty_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    department_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # "ACTO ADMINISTRATIVO: ACTA No. ___ FECHA: ___" (Formato 2).
+    acta_number: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    acta_date: Mapped[Optional[datetime.date]] = mapped_column(Date, nullable=True)
+    # Acta lifecycle, independent from the plan status: BORRADOR / CERRADA /
+    # FIRMADA. Once CERRADA the acta content freezes so it can be printed and
+    # signed; FIRMADA is reached by uploading the signed Formato 2 back.
+    acta_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="BORRADOR"
+    )
+    acta_closed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
+    )
+    acta_closed_by: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    # Free-text observation blocks of the official forms.
+    council_observations: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    department_director_observations: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
+    )
+    program_director_observations: Mapped[Optional[str]] = mapped_column(
+        Text, nullable=True
     )
 
     items: Mapped[list["ImprovementPlanItemModel"]] = relationship(
@@ -75,6 +100,26 @@ class ImprovementPlanModel(Base):
         back_populates="plan",
         cascade="all, delete-orphan",
         order_by="ImprovementPlanEvidenceModel.created_at",
+    )
+    # Asignaturas/grupos shown on the header table of Formatos 2 and 3.
+    courses: Mapped[list["ImprovementPlanCourseModel"]] = relationship(
+        "ImprovementPlanCourseModel",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="ImprovementPlanCourseModel.order",
+    )
+    # Formato 1 (caso reportado por el programa académico), 0..1 per plan.
+    case_report: Mapped[Optional["ImprovementPlanCaseReportModel"]] = relationship(
+        "ImprovementPlanCaseReportModel",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    # Generated / signed PDFs of the three official forms.
+    documents: Mapped[list["ImprovementPlanDocumentModel"]] = relationship(
+        "ImprovementPlanDocumentModel",
+        back_populates="plan",
+        cascade="all, delete-orphan",
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
