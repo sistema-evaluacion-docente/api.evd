@@ -18,9 +18,22 @@ from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
 from api.models.improvement_plan import ImprovementPlanModel
+from api.models.improvement_plan_case_report import ImprovementPlanCaseReportModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.improvement_plan_checkpoint_note import (
+    ImprovementPlanCheckpointNoteModel,
+)
+from api.models.improvement_plan_course import ImprovementPlanCourseModel
+from api.models.improvement_plan_document import ImprovementPlanDocumentModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
+from api.models.improvement_plan_evidence_comment import (
+    ImprovementPlanEvidenceCommentModel,
+)
+from api.models.improvement_plan_evidence_request import (
+    ImprovementPlanEvidenceRequestModel,
+)
 from api.models.improvement_plan_item import ImprovementPlanItemModel
+from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
 from api.models.notification import NotificationModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
@@ -45,9 +58,16 @@ __all__ = [
     "EvaluationScoreModel",
     "FacultyModel",
     "ImprovementPlanModel",
+    "ImprovementPlanCaseReportModel",
     "ImprovementPlanCheckpointModel",
+    "ImprovementPlanCheckpointNoteModel",
+    "ImprovementPlanCourseModel",
+    "ImprovementPlanDocumentModel",
     "ImprovementPlanEvidenceModel",
+    "ImprovementPlanEvidenceCommentModel",
+    "ImprovementPlanEvidenceRequestModel",
     "ImprovementPlanItemModel",
+    "ImprovementPlanItemCommentModel",
     "PedagogicalCategoryModel",
     "RiskLevelModel",
     "RoleModel",
