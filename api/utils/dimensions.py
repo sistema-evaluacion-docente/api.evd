@@ -42,3 +42,48 @@ DIMENSION_MAP = {
 QUESTION_TEXT: dict[str, str] = {q["code"]: q["text"] for q in QUESTIONS}
 
 QUESTION_DIMENSION: dict[str, str] = {q["code"]: q["dimension"] for q in QUESTIONS}
+
+# The five "aspectos en seguimiento" of the official UFPS forms (Formato 2 "Ficha
+# de acuerdo de mejoramiento" and Formato 3 "Plan seguimiento y mejoramiento").
+# Aspects 1-4 are the evaluation dimensions above; aspect 5 has no quantitative
+# indicator — it is justified with the students' written comments instead.
+ASPECTS = [
+    {"aspect": 1, "label": "Desarrollo de Conocimiento", "dimension": "Desarrollo del Conocimiento"},
+    {"aspect": 2, "label": "Desempeño Docente", "dimension": "Desempeño Docente"},
+    {"aspect": 3, "label": "Procesos de Evaluación", "dimension": "Procesos de Evaluación"},
+    {"aspect": 4, "label": "Integración Interpersonal", "dimension": "Integración Interpersonal"},
+    {"aspect": 5, "label": "Observaciones de los Estudiantes", "dimension": None},
+]
+
+STUDENT_COMMENTS_ASPECT = 5
+
+ASPECT_NUMBERS: list[int] = [a["aspect"] for a in ASPECTS]
+
+ASPECT_LABEL: dict[int, str] = {a["aspect"]: a["label"] for a in ASPECTS}
+
+DIMENSION_ASPECT: dict[str, int] = {
+    a["dimension"]: a["aspect"] for a in ASPECTS if a["dimension"]
+}
+
+ASPECT_DIMENSION: dict[int, str | None] = {
+    a["aspect"]: a["dimension"] for a in ASPECTS
+}
+
+
+def aspect_for_target(target_type: str, target_ref: str | None) -> int | None:
+    """Resolve which official form aspect (1-5) an item belongs to.
+
+    DIMENSION items map through their dimension name, QUESTION items through the
+    dimension owning the question code. Everything else (overall average,
+    qualitative, pedagogical category) has no aspect and is left unassigned so the
+    director can place it manually.
+    """
+
+    if target_type == "DIMENSION" and target_ref:
+        return DIMENSION_ASPECT.get(target_ref)
+
+    if target_type == "QUESTION" and target_ref:
+        dimension = QUESTION_DIMENSION.get(target_ref)
+        return DIMENSION_ASPECT.get(dimension) if dimension else None
+
+    return None
