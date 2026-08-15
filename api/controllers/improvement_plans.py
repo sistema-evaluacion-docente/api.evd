@@ -4,24 +4,32 @@ Improvement plans controller (Plan de Seguimiento Docente)
 
 from fastapi.param_functions import Depends
 
-from api.repositories.audits import AuditsRepository, get_audits_repository
-from api.repositories.improvement_plans import (
-    ImprovementPlansRepository,
-    get_improvement_plans_repository,
+from api.core.pagination import PaginationParams
+from api.dependencies.improvement_plans import (
+    get_improvement_plan_document_service,
+    get_improvement_plan_evidence_service,
+    get_improvement_plan_service,
 )
-from api.repositories.settings import SettingsRepository, get_settings_repository
-from api.repositories.users import UsersRepository, get_users_repository
-from api.schemas.audit import AuditCreate
 from api.schemas.improvement_plan import (
+    ImprovementPlanCaseReportUpsert,
+    ImprovementPlanCheckpointUpdate,
     ImprovementPlanClose,
     ImprovementPlanCreate,
+    ImprovementPlanEvidenceCommentCreate,
+    ImprovementPlanEvidenceRequestCreate,
+    ImprovementPlanEvidenceRequestUpdate,
+    ImprovementPlanEvidenceReview,
     ImprovementPlanUpdate,
 )
-from api.schemas.user import RoleName
+from api.services.improvement_plan_document_service import (
+    ImprovementPlanDocumentService,
+)
+from api.services.improvement_plan_evidence_service import (
+    ImprovementPlanEvidenceService,
+)
+from api.services.improvement_plan_service import ImprovementPlanService
+from api.utils.dimensions import ASPECTS
 from api.utils.improvement_suggestions import build_indicator_catalog
-
-THRESHOLD_KEY = "improvement_plan.score_threshold"
-DEFAULT_THRESHOLD = 3.5
 
 
 class ImprovementPlansController:
@@ -29,364 +37,271 @@ class ImprovementPlansController:
 
     def __init__(
         self,
-        repository: ImprovementPlansRepository,
-        audits_repository: AuditsRepository,
-        users_repository: UsersRepository,
-        settings_repository: SettingsRepository,
+        service: ImprovementPlanService,
+        document_service: ImprovementPlanDocumentService,
+        evidence_service: ImprovementPlanEvidenceService,
     ):
-        self.repository = repository
-        self.audits_repository = audits_repository
-        self.users_repository = users_repository
-        self.settings_repository = settings_repository
-
-    async def _resolve_user_id(self, current_user) -> int | None:
-        if isinstance(current_user, dict):
-            return current_user.get("id")
-
-        user = self.users_repository.get_by_uid(current_user.uid)
-
-        return user.id if user else None
-
-    async def _get_threshold(self) -> float:
-        setting = await self.settings_repository.get_by_key(THRESHOLD_KEY)
-        if setting and setting.get("value"):
-            try:
-                return float(setting["value"])
-            except (TypeError, ValueError):
-                return DEFAULT_THRESHOLD
-        return DEFAULT_THRESHOLD
-
-    async def create(self, data: ImprovementPlanCreate, current_user) -> dict:
-        """Create a new improvement plan."""
-
-        user_id = await self._resolve_user_id(current_user)
-        plan = await self.repository.create(data, created_by=user_id)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=user_id,
-                table_name="improvement_plans",
-                operation="CREATE",
-                element=f"ImprovementPlan {plan.get('id')}",
-                description=(
-                    f"Se creó el plan de seguimiento '{data.title}' para el docente "
-                    f"#{data.teacher_id} con {len(data.items)} ítem(s)"
-                ),
-                created_at=None,
-            )
-        )
-
-        return plan
+        self.service = service
+        self.document_service = document_service
+        self.evidence_service = evidence_service
 
     async def get_all(
         self,
+        current_user,
+        pagination: PaginationParams,
         department_id: int | None = None,
         period_id: int | None = None,
         status: str | None = None,
         search: str | None = None,
         teacher_id: int | None = None,
-        page: int = 1,
-        limit: int = 10,
-    ) -> dict:
-        """List plans with filters and pagination."""
+    ):
+        """List improvement plans with pagination and filters."""
 
-        return await self.repository.get_all(
+        return await self.service.get_all(
+            current_user,
+            pagination,
             department_id=department_id,
             period_id=period_id,
             status=status,
             search=search,
             teacher_id=teacher_id,
-            page=page,
-            limit=limit,
         )
 
-    async def get_by_id(self, plan_id: int) -> dict | None:
-        """Get a plan by id."""
+    async def get_by_id(self, plan_id: int, current_user):
+        """Get an improvement plan by id."""
 
-        return await self.repository.get_by_id(plan_id)
+        return await self.service.get_by_id(plan_id, current_user)
 
-    def can_access_plan(self, current_user: dict, plan: dict) -> bool:
-        """Whether the user may see/touch this plan.
+    async def get_my_plans(self, current_user):
+        """Plans belonging to the calling teacher."""
 
-        ADMIN always; a director within their department; a DOCENTE only when
-        the plan belongs to their own teacher record."""
+        return await self.service.get_my_plans(current_user)
 
-        roles = set(current_user.get("roles", []))
+    async def get_candidates(
+        self, current_user, period_id: int, department_id: int | None = None
+    ):
+        """Teachers of the department with their per-indicator averages."""
 
-        if RoleName.ADMIN.value in roles:
-            return True
+        return await self.service.get_candidates(current_user, period_id, department_id)
 
-        if (
-            RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
-            and plan.get("department_id") is not None
-            and plan.get("department_id") == current_user.get("department_id")
-        ):
-            return True
+    async def get_at_risk(
+        self, current_user, period_id: int, department_id: int | None = None
+    ):
+        """Teachers below the institutional threshold without a plan yet."""
 
-        if RoleName.DOCENTE.value in roles:
-            teacher_user_id = self.repository.get_teacher_user_id(
-                plan["teacher_id"]
-            )
-            return (
-                teacher_user_id is not None
-                and teacher_user_id == current_user.get("id")
-            )
+        return await self.service.get_at_risk(current_user, period_id, department_id)
 
-        return False
+    async def get_evaluated_periods(self, current_user, department_id: int | None = None):
+        """Academic periods with evaluations loaded."""
 
-    async def get_my_plans(self, current_user: dict) -> list[dict]:
-        """Plans of the authenticated teacher (empty if no teacher record)."""
+        return await self.service.get_evaluated_periods(current_user, department_id)
 
-        user_id = current_user.get("id")
-        teacher = (
-            self.repository.get_teacher_by_user_id(user_id) if user_id else None
-        )
-        if not teacher:
-            return []
+    async def get_indicators(self):
+        """Catalogue of selectable indicators and official form aspects."""
 
-        return await self.repository.get_by_teacher(teacher.id)
+        return {
+            "threshold": self.service.get_threshold(),
+            "aspects": ASPECTS,
+            **build_indicator_catalog(),
+        }
 
-    async def get_history(self, teacher_id: int) -> dict | None:
-        """Cross-period history of a teacher with plans and recurrences."""
+    async def get_history(self, teacher_id: int, current_user):
+        """Cross-period history and plan recurrences of a teacher."""
 
-        return await self.repository.get_history(teacher_id)
+        return await self.service.get_history(teacher_id, current_user)
 
-    async def set_acta(
+    async def create(self, data: ImprovementPlanCreate, current_user):
+        """Create an improvement plan."""
+
+        return await self.service.create(data, current_user)
+
+    async def update(self, plan_id: int, data: ImprovementPlanUpdate, current_user):
+        """Update an improvement plan."""
+
+        return await self.service.update(plan_id, data, current_user)
+
+    async def upsert_case_report(
+        self, plan_id: int, data: ImprovementPlanCaseReportUpsert, current_user
+    ):
+        """Create or update the Formato 1 case report of a plan."""
+
+        return await self.service.upsert_case_report(plan_id, data, current_user)
+
+    async def update_checkpoint(
         self,
         plan_id: int,
+        checkpoint_id: int,
+        data: ImprovementPlanCheckpointUpdate,
         current_user,
-        file_url: str | None = None,
-        description: str | None = None,
-    ) -> dict | None:
-        """Attach/replace the acta de compromiso of a plan."""
+    ):
+        """Record one of the two formal seguimientos."""
 
-        result = await self.repository.set_acta(
-            plan_id, file_url=file_url, description=description
-        )
-        if not result:
-            return None
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="improvement_plans",
-                operation="ACTA_UPLOAD",
-                element=f"ImprovementPlan {plan_id}",
-                description=(
-                    f"Se {'adjuntó el PDF del' if file_url else 'actualizó el'} "
-                    f"acta de compromiso del plan #{plan_id}"
-                ),
-                created_at=None,
-            )
+        return await self.service.update_checkpoint(
+            plan_id, checkpoint_id, data, current_user
         )
 
-        return result
+    async def close_acta(self, plan_id: int, current_user):
+        """Freeze the acta content ahead of signing."""
+
+        return await self.service.close_acta(plan_id, current_user)
+
+    async def reopen_acta(self, plan_id: int, current_user):
+        """Reopen a closed acta (ADMIN only)."""
+
+        return await self.service.reopen_acta(plan_id, current_user)
+
+    async def close(self, plan_id: int, data: ImprovementPlanClose, current_user):
+        """Close an improvement plan with the confirmed result."""
+
+        return await self.service.close(plan_id, data, current_user)
+
+    async def evaluate(self, plan_id: int, current_user):
+        """Verify compliance against the verification period."""
+
+        return await self.service.evaluate(plan_id, current_user)
+
+    async def get_teacher_courses(self, teacher_id: int, period_id: int, current_user):
+        """Asignaturas of a teacher in a period, to prefill the forms."""
+
+        return await self.service.get_teacher_courses(
+            teacher_id, period_id, current_user
+        )
+
+    async def generate_document(self, plan_id: int, format_type: str, current_user):
+        """Render one of the three official forms filled with the plan data."""
+
+        return await self.document_service.generate(plan_id, format_type, current_user)
+
+    async def render_document_word(self, plan_id: int, format_type: str, current_user):
+        """Editable Word copy of an official form."""
+
+        return await self.document_service.render_word(
+            plan_id, format_type, current_user
+        )
+
+    async def upload_signed_document(
+        self, plan_id: int, format_type: str, pdf_bytes: bytes, current_user
+    ):
+        """Attach the physically signed copy of an official form."""
+
+        return await self.document_service.upload_signed(
+            plan_id, format_type, pdf_bytes, current_user
+        )
+
+    async def get_document_file(
+        self,
+        plan_id: int,
+        format_type: str,
+        current_user,
+        prefer_generated: bool = False,
+    ):
+        """Path and filename of an official form, for download."""
+
+        return await self.document_service.get_file(
+            plan_id, format_type, current_user, prefer_generated=prefer_generated
+        )
+
+
+    async def list_evidence_requests(self, plan_id: int, current_user):
+        """Deliverables requested on a plan."""
+
+        return await self.evidence_service.list_requests(plan_id, current_user)
+
+    async def get_evidence_request(self, plan_id: int, request_id: int, current_user):
+        """One request with its submissions and thread."""
+
+        return await self.evidence_service.get_request(plan_id, request_id, current_user)
+
+    async def create_evidence_request(
+        self, plan_id: int, data: ImprovementPlanEvidenceRequestCreate, current_user
+    ):
+        """Ask the teacher for a specific deliverable."""
+
+        return await self.evidence_service.create_request(plan_id, data, current_user)
+
+    async def update_evidence_request(
+        self,
+        plan_id: int,
+        request_id: int,
+        data: ImprovementPlanEvidenceRequestUpdate,
+        current_user,
+    ):
+        """Edit a requested deliverable."""
+
+        return await self.evidence_service.update_request(
+            plan_id, request_id, data, current_user
+        )
+
+    async def add_evidence_comment(
+        self,
+        plan_id: int,
+        request_id: int,
+        data: ImprovementPlanEvidenceCommentCreate,
+        current_user,
+    ):
+        """Post a message on a request thread."""
+
+        return await self.evidence_service.add_comment(
+            plan_id, request_id, data, current_user
+        )
 
     async def add_evidence(
         self,
         plan_id: int,
-        current_user,
         file_url: str,
+        current_user,
         description: str | None = None,
         item_id: int | None = None,
-    ) -> dict | None:
-        """Attach an evidence PDF to a plan."""
+        request_id: int | None = None,
+    ):
+        """Attach a submitted evidence file."""
 
-        user_id = await self._resolve_user_id(current_user)
-
-        plan = await self.repository.add_evidence(
+        return await self.evidence_service.add_evidence(
             plan_id,
-            file_url=file_url,
+            file_url,
+            current_user,
             description=description,
             item_id=item_id,
-            uploaded_by=user_id,
-        )
-        if not plan:
-            return None
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=user_id,
-                table_name="improvement_plan_evidences",
-                operation="EVIDENCE_ADD",
-                element=f"ImprovementPlan {plan_id}",
-                description=(
-                    f"Se adjuntó una evidencia al plan #{plan_id}"
-                    + (f" (ítem #{item_id})" if item_id else "")
-                ),
-                created_at=None,
-            )
+            request_id=request_id,
         )
 
-        return plan
-
-    def get_evidence(self, plan_id: int, evidence_id: int):
-        """Raw evidence record (for authorization before deleting)."""
-
-        return self.repository.get_evidence(plan_id, evidence_id)
-
-    async def delete_evidence(
-        self, plan_id: int, evidence_id: int, current_user
-    ) -> dict | None:
-        """Delete an evidence from a plan."""
-
-        result = await self.repository.delete_evidence(plan_id, evidence_id)
-        if not result:
-            return None
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="improvement_plan_evidences",
-                operation="EVIDENCE_DELETE",
-                element=f"ImprovementPlan {plan_id}",
-                description=(
-                    f"Se eliminó la evidencia #{evidence_id} del plan #{plan_id}"
-                ),
-                created_at=None,
-            )
-        )
-
-        return result
-
-    async def update(
-        self, plan_id: int, data: ImprovementPlanUpdate, current_user
-    ) -> dict | None:
-        """Update a plan and its items."""
-
-        existing = await self.repository.get_by_id(plan_id)
-        if not existing:
-            return None
-
-        updated = await self.repository.update(plan_id, data)
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="improvement_plans",
-                operation="UPDATE",
-                element=f"ImprovementPlan {plan_id}",
-                description=f"Se actualizó el plan de seguimiento #{plan_id}",
-                created_at=None,
-            )
-        )
-
-        return updated
-
-    async def close(
-        self, plan_id: int, data: ImprovementPlanClose, current_user
-    ) -> dict | None:
-        """Close a plan with a result."""
-
-        existing = await self.repository.get_by_id(plan_id)
-        if not existing:
-            return None
-
-        closed = await self.repository.close(
-            plan_id, data.result.value, data.reason
-        )
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="improvement_plans",
-                operation="CLOSE",
-                element=f"ImprovementPlan {plan_id}",
-                description=(
-                    f"Se cerró el plan #{plan_id} con resultado {data.result.value}"
-                    + (f": {data.reason}" if data.reason else "")
-                ),
-                created_at=None,
-            )
-        )
-
-        return closed
-
-    async def evaluate(self, plan_id: int, current_user) -> dict | None:
-        """Recompute plan compliance against the verification period."""
-
-        existing = await self.repository.get_by_id(plan_id)
-        if not existing:
-            return None
-
-        evaluated = await self.repository.evaluate(
-            plan_id, threshold=await self._get_threshold()
-        )
-
-        await self.audits_repository.create(
-            AuditCreate(
-                user_id=await self._resolve_user_id(current_user),
-                table_name="improvement_plans",
-                operation="EVALUATE",
-                element=f"ImprovementPlan {plan_id}",
-                description=(
-                    f"Se recalculó el cumplimiento del plan #{plan_id}. "
-                    f"Sugerencia: {evaluated.get('suggested_result') if evaluated else None}"
-                ),
-                created_at=None,
-            )
-        )
-
-        return evaluated
-
-    async def get_at_risk(
-        self, period_id: int, department_id: int
-    ) -> list[dict]:
-        """Teachers below threshold without a plan for the given period."""
-
-        threshold = await self._get_threshold()
-
-        return await self.repository.get_at_risk(
-            department_id=department_id,
-            period_id=period_id,
-            threshold=threshold,
-        )
-
-    async def get_candidates(
+    async def review_evidence(
         self,
-        period_id: int,
-        department_id: int,
-        only_at_risk: bool = False,
-        search: str | None = None,
-    ) -> dict:
-        """Teachers eligible for a plan with their indicator averages."""
+        plan_id: int,
+        evidence_id: int,
+        data: ImprovementPlanEvidenceReview,
+        current_user,
+    ):
+        """Approve a submitted evidence or send it back."""
 
-        threshold = await self._get_threshold()
-
-        teachers = await self.repository.get_candidates(
-            department_id=department_id,
-            period_id=period_id,
-            threshold=threshold,
-            only_at_risk=only_at_risk,
-            search=search,
+        return await self.evidence_service.review_evidence(
+            plan_id, evidence_id, data, current_user
         )
 
-        return {"threshold": threshold, "teachers": teachers}
+    async def delete_evidence(self, plan_id: int, evidence_id: int, current_user):
+        """Remove a submitted evidence."""
 
-    async def get_evaluated_periods(self, department_id: int) -> list[dict]:
-        """Periods with grades already loaded (selectable as plan origin)."""
+        return await self.evidence_service.delete_evidence(
+            plan_id, evidence_id, current_user
+        )
 
-        return await self.repository.get_evaluated_periods(department_id)
+    async def get_evidence_file(self, plan_id: int, evidence_id: int, current_user):
+        """Path and filename of an evidence, for download."""
 
-    async def get_indicators(self) -> dict:
-        """Catalogue of selectable indicators for a plan item (compromiso)."""
-
-        return {
-            "threshold": await self._get_threshold(),
-            **build_indicator_catalog(),
-        }
+        return await self.evidence_service.get_evidence_file(
+            plan_id, evidence_id, current_user
+        )
 
 
 def get_improvement_plans_controller(
-    repository: ImprovementPlansRepository = Depends(
-        get_improvement_plans_repository
+    service: ImprovementPlanService = Depends(get_improvement_plan_service),
+    document_service: ImprovementPlanDocumentService = Depends(
+        get_improvement_plan_document_service
     ),
-    audits_repository: AuditsRepository = Depends(get_audits_repository),
-    users_repository: UsersRepository = Depends(get_users_repository),
-    settings_repository: SettingsRepository = Depends(get_settings_repository),
+    evidence_service: ImprovementPlanEvidenceService = Depends(
+        get_improvement_plan_evidence_service
+    ),
 ):
     """Get improvement plans controller"""
 
-    return ImprovementPlansController(
-        repository, audits_repository, users_repository, settings_repository
-    )
+    return ImprovementPlansController(service, document_service, evidence_service)
