@@ -149,6 +149,18 @@ class StatsController:
 
         return await self.service.get_subject_teachers(course_id, academic_period_id)
 
+    async def get_subject_teachers_comparison(
+        self,
+        department_id: int,
+        course_code: str,
+        period_code: str,
+    ) -> list[dict]:
+        """Get per-(teacher, group) comparison for a course in a period."""
+
+        return await self.service.get_subject_teachers_comparison(
+            department_id, course_code, period_code
+        )
+
     async def get_department_period_range_report(
         self,
         department_id: int,

@@ -34,6 +34,12 @@ class CourseUpdate(BaseModel):
     department_id: Optional[int] = None
 
 
+class CourseNameUpdate(BaseModel):
+    """Schema for a director patching only the course name."""
+
+    name: str
+
+
 class CourseOut(BaseModel):
     """Schema for outputting a course."""
 

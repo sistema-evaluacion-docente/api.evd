@@ -5,7 +5,7 @@ Stats repository
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from api.core.pagination import PaginationParams
@@ -1770,7 +1770,18 @@ class StatsRepository:
             )
 
             if search_term:
-                query = query.filter(CourseModel.name.ilike(f"%{search_term}%"))
+                like = f"%{search_term}%"
+                matching_names = (
+                    self.db.query(CourseModel.name)
+                    .filter(
+                        or_(
+                            CourseModel.name.ilike(like),
+                            CourseModel.code.ilike(like),
+                        )
+                    )
+                    .subquery()
+                )
+                query = query.filter(CourseModel.name.in_(matching_names))
 
             if teacher_name_term:
                 query = query.filter(UserModel.name.ilike(f"%{teacher_name_term}%"))
@@ -2049,6 +2060,176 @@ class StatsRepository:
             "teachers": teachers,
         }
 
+
+    def get_subject_teachers_comparison(
+        self,
+        department_id: int,
+        course_code: str,
+        period_code: str,
+    ) -> list[dict]:
+        """Return one entry per (teacher, group) for a course in a period,
+        including dimensions, risk counts and pedagogical category counts.
+        Only teachers belonging to the given department are returned."""
+
+        rows = (
+            self.db.query(
+                TeacherModel.id.label("teacher_id"),
+                UserModel.name.label("teacher_name"),
+                UserModel.avatar_url.label("teacher_avatar_url"),
+                AcademicGroupModel.id.label("group_id"),
+                AcademicGroupModel.group_name,
+                EvaluationScoreModel.overall_average,
+                EvaluationScoreModel.respondent_count,
+                EvaluationModel.ai_status,
+                EvaluationModel.id.label("evaluation_id"),
+            )
+            .join(AcademicGroupModel, AcademicGroupModel.teacher_id == TeacherModel.id)
+            .join(CourseModel, CourseModel.id == AcademicGroupModel.course_id)
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .join(
+                EvaluationModel,
+                EvaluationModel.id == EvaluationScoreModel.evaluation_id,
+            )
+            .join(
+                AcademicPeriodModel,
+                AcademicPeriodModel.id == EvaluationModel.academic_period_id,
+            )
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+            .filter(
+                CourseModel.code == course_code,
+                TeacherModel.department_id == department_id,
+                AcademicPeriodModel.code == period_code,
+                EvaluationModel.active.isnot(False),
+            )
+            .order_by(EvaluationScoreModel.overall_average.desc())
+            .all()
+        )
+
+        if not rows:
+            return []
+
+        group_ids = [row.group_id for row in rows]
+
+        # Question scores per group → dimensions
+        qs_rows = (
+            self.db.query(
+                AcademicGroupModel.id.label("group_id"),
+                EvaluationQuestionScoreModel.question_code,
+                func.avg(EvaluationQuestionScoreModel.score).label("avg_score"),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.id
+                == EvaluationQuestionScoreModel.evaluation_score_id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .filter(AcademicGroupModel.id.in_(group_ids))
+            .group_by(
+                AcademicGroupModel.id,
+                EvaluationQuestionScoreModel.question_code,
+            )
+            .all()
+        )
+
+        group_q_scores: dict[int, dict[str, float]] = {}
+        for qs in qs_rows:
+            group_q_scores.setdefault(qs.group_id, {})[qs.question_code] = float(
+                qs.avg_score
+            )
+
+        # Risk counts per group
+        risk_rows = (
+            self.db.query(
+                CommentModel.academic_groups_id,
+                RiskLevelModel.name,
+                func.count(CommentModel.id),
+            )
+            .join(RiskLevelModel, RiskLevelModel.id == CommentModel.risk_level)
+            .filter(CommentModel.academic_groups_id.in_(group_ids))
+            .group_by(CommentModel.academic_groups_id, RiskLevelModel.name)
+            .all()
+        )
+
+        group_risk: dict[int, dict[str, int]] = {}
+        for group_id, level_name, count in risk_rows:
+            group_risk.setdefault(group_id, {})[level_name] = count
+
+        # Pedagogical category counts per group
+        cat_rows = (
+            self.db.query(
+                CommentModel.academic_groups_id,
+                PedagogicalCategoryModel.name,
+                func.count(CommentModel.id),
+            )
+            .join(
+                CommentPedagogicalCategoryModel,
+                CommentPedagogicalCategoryModel.comment_id == CommentModel.id,
+            )
+            .join(
+                PedagogicalCategoryModel,
+                PedagogicalCategoryModel.id
+                == CommentPedagogicalCategoryModel.pedagogical_category_id,
+            )
+            .filter(CommentModel.academic_groups_id.in_(group_ids))
+            .group_by(CommentModel.academic_groups_id, PedagogicalCategoryModel.name)
+            .all()
+        )
+
+        group_cats: dict[int, dict[str, int]] = {}
+        for group_id, cat_name, count in cat_rows:
+            group_cats.setdefault(group_id, {})[cat_name] = count
+
+        result = []
+        for row in rows:
+            q_scores = group_q_scores.get(row.group_id, {})
+            dimensions = []
+            for dim_name, codes in DIMENSION_MAP.items():
+                dim_scores = [q_scores[c] for c in codes if c in q_scores]
+                avg = (
+                    round(sum(dim_scores) / len(dim_scores), 2) if dim_scores else None
+                )
+                questions = [
+                    {
+                        "code": c,
+                        "text": QUESTION_TEXT.get(c),
+                        "score": q_scores.get(c),
+                    }
+                    for c in codes
+                ]
+                dimensions.append(
+                    {"dimension": dim_name, "average": avg, "questions": questions}
+                )
+
+            risk_counts = {"BAJO": 0, "MEDIO": 0, "ALTO": 0}
+            risk_counts.update(group_risk.get(row.group_id, {}))
+
+            result.append(
+                {
+                    "teacher_id": row.teacher_id,
+                    "teacher_name": row.teacher_name,
+                    "teacher_avatar_url": row.teacher_avatar_url,
+                    "group_name": row.group_name,
+                    "overall_average": (
+                        float(row.overall_average) if row.overall_average else None
+                    ),
+                    "respondent_count": row.respondent_count,
+                    "dimensions": dimensions,
+                    "comments_risk_counts": risk_counts,
+                    "comments_pedagogical_category_counts": group_cats.get(
+                        row.group_id, {}
+                    ),
+                    "ai_status": row.ai_status,
+                    "evaluation_id": row.evaluation_id,
+                }
+            )
+
+        return result
 
     def get_course_history(
         self,
