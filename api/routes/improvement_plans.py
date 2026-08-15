@@ -1,11 +1,6 @@
-"""
-Routes for improvement plan operations (Plan de Seguimiento Docente).
-"""
+"""Routes for improvement plan operations (Plan de Seguimiento Docente)."""
 
-import os
-import uuid
-
-from fastapi import Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import Depends, File, Form, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 
 from api.config import config
@@ -13,38 +8,32 @@ from api.controllers.improvement_plans import (
     ImprovementPlansController,
     get_improvement_plans_controller,
 )
+from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
-from api.middlewares.auth import get_current_user, require_roles
+from api.middlewares.auth import require_roles
+from api.utils.file_validation import validate_file_size
+from api.utils.plan_files import save_plan_evidence
 from api.schemas.improvement_plan import (
+    ImprovementPlanCaseReportUpsert,
+    ImprovementPlanCheckpointUpdate,
     ImprovementPlanClose,
     ImprovementPlanCreate,
-    ImprovementPlanDetailResponse,
-    ImprovementPlanListResponse,
+    ImprovementPlanEvidenceCommentCreate,
+    ImprovementPlanEvidenceCommentOut,
+    ImprovementPlanEvidenceOut,
+    ImprovementPlanEvidenceRequestCreate,
+    ImprovementPlanEvidenceRequestOut,
+    ImprovementPlanEvidenceRequestUpdate,
+    ImprovementPlanEvidenceReview,
+    ImprovementPlanOut,
     ImprovementPlanUpdate,
 )
-from api.schemas.pagination import Pagination
-from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
-from api.utils.file_validation import validate_file_size
 
 router = EnvelopeRouter(prefix="/improvement-plans", tags=["Improvement Plans"])
 
-DIRECTOR_OR_ADMIN = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+MANAGER_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 ANY_ROLE = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO, RoleName.DOCENTE]
-
-
-def _effective_department_id(
-    current_user: dict, department_id: int | None
-) -> int | None:
-    """ADMIN may target any department via query; a director defaults to theirs."""
-
-    if department_id is not None:
-        return department_id
-    return current_user.get("department_id")
-
-
-def _is_closed(plan: dict) -> bool:
-    return str(plan.get("status", "")).startswith("CERRADO")
 
 
 async def _read_pdf(file: UploadFile) -> bytes:
@@ -63,313 +52,120 @@ async def _read_pdf(file: UploadFile) -> bytes:
     return pdf_bytes
 
 
-def _save_plan_pdf(plan_id: int, pdf_bytes: bytes, prefix: str) -> str:
-    """Persist a plan PDF under the uploads dir and return its relative path
-    (served by the StaticFiles mount)."""
-
-    plan_dir = os.path.join(config.UPLOAD_DIR, "improvement_plans", str(plan_id))
-    os.makedirs(plan_dir, exist_ok=True)
-
-    filepath = os.path.join(plan_dir, f"{prefix}_{uuid.uuid4().hex}.pdf")
-
-    with open(filepath, "wb") as f:
-        f.write(pdf_bytes)
-
-    return filepath
-
-
-def _delete_upload(filepath: str | None) -> None:
-    """Best-effort removal of a replaced/deleted file, only inside UPLOAD_DIR."""
-
-    if not filepath:
-        return
-
-    uploads_root = os.path.abspath(config.UPLOAD_DIR)
-    target = os.path.abspath(filepath)
-
-    if target.startswith(uploads_root + os.sep) and os.path.isfile(target):
-        try:
-            os.remove(target)
-        except OSError:
-            pass
-
-
-def _ensure_can_access(
-    controller: ImprovementPlansController, current_user: dict, plan: dict
-) -> None:
-    if not controller.can_access_plan(current_user, plan):
-        raise HTTPException(
-            status_code=403,
-            detail="No tiene permiso para acceder a este plan",
-        )
-
-
-@router.get(
-    "/",
-    response_model=ImprovementPlanListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/", response_model=list[ImprovementPlanOut])
 async def get_all_plans(
+    pagination: PaginationDep,
     department_id: int | None = Query(default=None),
     period_id: int | None = Query(default=None),
     status: str | None = Query(default=None),
-    search: str | None = Query(default=None, min_length=1),
+    search: str | None = Query(default=None),
     teacher_id: int | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=10, ge=1, le=100),
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """List improvement plans with pagination and filters."""
+    """List improvement plans of a department with pagination and filters."""
 
-    effective_department = _effective_department_id(current_user, department_id)
-
-    result = await controller.get_all(
-        department_id=effective_department,
+    return await controller.get_all(
+        current_user,
+        pagination,
+        department_id=department_id,
         period_id=period_id,
         status=status,
         search=search,
         teacher_id=teacher_id,
-        page=page,
-        limit=limit,
-    )
-
-    return ResponseSchema(
-        status=200,
-        message="Improvement plans found",
-        data=result["items"],
-        pagination=Pagination(
-            total=result["total"],
-            page=result["page"],
-            limit=result["limit"],
-            pages=result["pages"],
-        ),
-        path="/improvement-plans",
     )
 
 
-@router.get(
-    "/at-risk",
-    response_model=ResponseSchema,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.get("/at-risk")
 async def get_at_risk_teachers(
-    period_id: int = Query(..., description="Academic period to inspect"),
+    period_id: int = Query(...),
     department_id: int | None = Query(default=None),
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Teachers below the institutional threshold that have no plan yet for the
-    period, with weak dimensions and suggested improvement actions."""
+    """Teachers below the institutional threshold that have no plan yet."""
 
-    effective_department = _effective_department_id(current_user, department_id)
-
-    if effective_department is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Se requiere un department_id (el usuario no tiene departamento asignado)",
-        )
-
-    teachers = await controller.get_at_risk(period_id, effective_department)
-
-    return ResponseSchema(
-        status=200,
-        message="At-risk teachers found",
-        data=teachers,
-        path="/improvement-plans/at-risk",
-    )
+    return await controller.get_at_risk(current_user, period_id, department_id)
 
 
-@router.get(
-    "/candidates",
-    response_model=ResponseSchema,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.get("/candidates")
 async def get_plan_candidates(
-    period_id: int = Query(..., description="Academic period to inspect"),
+    period_id: int = Query(...),
     department_id: int | None = Query(default=None),
-    only_at_risk: bool = Query(
-        default=False,
-        description="Only teachers below the threshold without a plan yet",
-    ),
-    search: str | None = Query(default=None, min_length=1),
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Teachers that can receive a plan, with the average of every dimension and
-    of every question of the evaluation form.
+    """Every evaluated teacher of the department with their weak indicators."""
 
-    Returns the whole department by default: a teacher with a healthy overall
-    average may still be below the threshold in a single question."""
-
-    effective_department = _effective_department_id(current_user, department_id)
-
-    if effective_department is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Se requiere un department_id (el usuario no tiene departamento asignado)",
-        )
-
-    result = await controller.get_candidates(
-        period_id=period_id,
-        department_id=effective_department,
-        only_at_risk=only_at_risk,
-        search=search,
-    )
-
-    return ResponseSchema(
-        status=200,
-        message="Plan candidates found",
-        data=result,
-        path="/improvement-plans/candidates",
-    )
+    return await controller.get_candidates(current_user, period_id, department_id)
 
 
-@router.get(
-    "/periods",
-    response_model=ResponseSchema,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.get("/periods")
 async def get_evaluated_periods(
     department_id: int | None = Query(default=None),
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Periods the department already has grades for — the ones a plan can take
-    as origin period. The current academic period usually has none yet."""
+    """Academic periods with evaluations loaded, selectable as plan origin."""
 
-    effective_department = _effective_department_id(current_user, department_id)
-
-    if effective_department is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Se requiere un department_id (el usuario no tiene departamento asignado)",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Evaluated periods found",
-        data=await controller.get_evaluated_periods(effective_department),
-        path="/improvement-plans/periods",
-    )
+    return await controller.get_evaluated_periods(current_user, department_id)
 
 
-@router.get(
-    "/indicators",
-    response_model=ResponseSchema,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/indicators")
 async def get_plan_indicators(
-    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    _=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Indicators a plan item can commit to: the overall average, each dimension
-    as a whole, and each question of the evaluation form within it."""
+    """Catalogue of indicators and the five aspects of the official forms."""
 
-    return ResponseSchema(
-        status=200,
-        message="Plan indicators found",
-        data=await controller.get_indicators(),
-        path="/improvement-plans/indicators",
-    )
+    return await controller.get_indicators()
 
 
-@router.get(
-    "/my",
-    response_model=ImprovementPlanListResponse,
-    responses={403: {"description": "Forbidden"}},
-)
+@router.get("/my", response_model=list[ImprovementPlanOut])
 async def get_my_plans(
     current_user=Depends(require_roles([RoleName.DOCENTE])),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Plans of the authenticated teacher (vista del docente)."""
+    """Plans belonging to the calling teacher."""
 
-    plans = await controller.get_my_plans(current_user)
-
-    return ResponseSchema(
-        status=200,
-        message="Improvement plans found",
-        data=plans,
-        pagination=Pagination(
-            total=len(plans), page=1, limit=max(len(plans), 1), pages=1
-        ),
-        path="/improvement-plans/my",
-    )
+    return await controller.get_my_plans(current_user)
 
 
-@router.get(
-    "/teacher/{teacher_id}/history",
-    response_model=ResponseSchema,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.get("/teacher/{teacher_id}/courses")
+async def get_teacher_courses(
+    teacher_id: int,
+    period_id: int = Query(...),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Asignaturas of a teacher in a period, to prefill the official forms."""
+
+    return await controller.get_teacher_courses(teacher_id, period_id, current_user)
+
+
+@router.get("/teacher/{teacher_id}/history")
 async def get_teacher_history(
     teacher_id: int,
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Cross-period history of a teacher: overall and per-dimension averages
-    for every evaluated period, every improvement plan with its resolution,
-    and recurrence flags (same indicator planned in different periods)."""
+    """Cross-period history of a teacher, including plan recurrences."""
 
-    history = await controller.get_history(teacher_id)
-
-    if not history:
-        return ResponseSchema(
-            status=404,
-            message="Teacher not found",
-            path=f"/improvement-plans/teacher/{teacher_id}/history",
-        )
-
-    roles = set(current_user.get("roles", []))
-    if RoleName.ADMIN.value not in roles and history.get(
-        "department_id"
-    ) != current_user.get("department_id"):
-        raise HTTPException(
-            status_code=403,
-            detail="El docente no pertenece a su departamento",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Teacher history found",
-        data=history,
-        path=f"/improvement-plans/teacher/{teacher_id}/history",
-    )
+    return await controller.get_history(teacher_id, current_user)
 
 
-@router.post(
-    "/",
-    response_model=ImprovementPlanDetailResponse,
-    responses={400: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-    status_code=201,
-)
+@router.post("/", response_model=ImprovementPlanOut, status_code=201)
 async def create_plan(
     payload: ImprovementPlanCreate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Create a new improvement plan with its items."""
+    """Create an improvement plan for a teacher."""
 
-    try:
-        plan = await controller.create(payload, current_user)
-    except ValueError as e:
-        return ResponseSchema(status=400, message=str(e), path="/improvement-plans")
-
-    return ResponseSchema(
-        status=201,
-        message="Improvement plan created successfully",
-        data=plan,
-        path="/improvement-plans",
-    )
+    return await controller.create(payload, current_user)
 
 
-@router.get(
-    "/{plan_id}",
-    response_model=ImprovementPlanDetailResponse,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
+@router.get("/{plan_id}", response_model=ImprovementPlanOut)
 async def get_plan_by_id(
     plan_id: int,
     current_user=Depends(require_roles(ANY_ROLE)),
@@ -377,62 +173,272 @@ async def get_plan_by_id(
 ):
     """Get an improvement plan by id. A DOCENTE can only see their own plan."""
 
-    plan = await controller.get_by_id(plan_id)
+    return await controller.get_by_id(plan_id, current_user)
 
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}",
-        )
 
-    _ensure_can_access(controller, current_user, plan)
+@router.put("/{plan_id}", response_model=ImprovementPlanOut)
+async def update_plan(
+    plan_id: int,
+    payload: ImprovementPlanUpdate,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Update an improvement plan, its items and its asignaturas."""
 
-    return ResponseSchema(
-        status=200,
-        message="Improvement plan found",
-        data=plan,
-        path=f"/improvement-plans/{plan_id}",
+    return await controller.update(plan_id, payload, current_user)
+
+
+@router.put("/{plan_id}/case-report", response_model=ImprovementPlanOut)
+async def upsert_case_report(
+    plan_id: int,
+    payload: ImprovementPlanCaseReportUpsert,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Record the Formato 1 complaint that originated the plan."""
+
+    return await controller.upsert_case_report(plan_id, payload, current_user)
+
+
+@router.put("/{plan_id}/checkpoints/{checkpoint_id}", response_model=ImprovementPlanOut)
+async def update_checkpoint(
+    plan_id: int,
+    checkpoint_id: int,
+    payload: ImprovementPlanCheckpointUpdate,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Fill in one of the two formal seguimientos, aspect by aspect."""
+
+    return await controller.update_checkpoint(
+        plan_id, checkpoint_id, payload, current_user
+    )
+
+
+@router.post("/{plan_id}/acta/close", response_model=ImprovementPlanOut)
+async def close_acta(
+    plan_id: int,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Freeze the acta content so it can be printed and signed."""
+
+    return await controller.close_acta(plan_id, current_user)
+
+
+@router.post("/{plan_id}/acta/reopen", response_model=ImprovementPlanOut)
+async def reopen_acta(
+    plan_id: int,
+    current_user=Depends(require_roles([RoleName.ADMIN])),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Reopen a closed acta to correct it (ADMIN only)."""
+
+    return await controller.reopen_acta(plan_id, current_user)
+
+
+@router.post("/{plan_id}/close", response_model=ImprovementPlanOut)
+async def close_plan(
+    plan_id: int,
+    payload: ImprovementPlanClose,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Close an improvement plan with the confirmed result."""
+
+    return await controller.close(plan_id, payload, current_user)
+
+
+@router.post("/{plan_id}/evaluate", response_model=ImprovementPlanOut)
+async def evaluate_plan(
+    plan_id: int,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Verify compliance against the verification period's grades."""
+
+    return await controller.evaluate(plan_id, current_user)
+
+
+@router.post(
+    "/{plan_id}/documents/{format_type}/generate", response_model=ImprovementPlanOut
+)
+async def generate_document(
+    plan_id: int,
+    format_type: str,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Render an official form (formato-1|formato-2|formato-3) from the plan data."""
+
+    return await controller.generate_document(plan_id, format_type, current_user)
+
+
+@router.post(
+    "/{plan_id}/documents/{format_type}/signed", response_model=ImprovementPlanOut
+)
+async def upload_signed_document(
+    plan_id: int,
+    format_type: str,
+    file: UploadFile = File(...),
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Upload the physically signed copy of an official form.
+
+    For the acta (formato-2) this requires the acta to be closed and moves it to
+    FIRMADA.
+    """
+
+    pdf_bytes = await _read_pdf(file)
+
+    return await controller.upload_signed_document(
+        plan_id, format_type, pdf_bytes, current_user
     )
 
 
 @router.get(
-    "/{plan_id}/acta",
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    "/{plan_id}/evidence-requests",
+    response_model=list[ImprovementPlanEvidenceRequestOut],
 )
-async def download_acta(
+async def list_evidence_requests(
     plan_id: int,
     current_user=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Download the acta de compromiso PDF of a plan.
+    """Deliverables the director asked for on this plan."""
 
-    Not served as a public static asset — only ADMIN, the director of the
-    plan's department, or the plan's own DOCENTE may access it."""
+    return await controller.list_evidence_requests(plan_id, current_user)
 
-    plan = await controller.get_by_id(plan_id)
 
-    if not plan:
-        raise HTTPException(status_code=404, detail="Improvement plan not found")
+@router.post(
+    "/{plan_id}/evidence-requests",
+    response_model=ImprovementPlanEvidenceRequestOut,
+    status_code=201,
+)
+async def create_evidence_request(
+    plan_id: int,
+    payload: ImprovementPlanEvidenceRequestCreate,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Ask the teacher for a specific deliverable."""
 
-    _ensure_can_access(controller, current_user, plan)
+    return await controller.create_evidence_request(plan_id, payload, current_user)
 
-    file_path = plan.get("acta_pdf_url")
 
-    if not file_path or not os.path.isfile(file_path):
-        raise HTTPException(status_code=404, detail="El plan no tiene un acta adjunta")
+@router.get(
+    "/{plan_id}/evidence-requests/{request_id}",
+    response_model=ImprovementPlanEvidenceRequestOut,
+)
+async def get_evidence_request(
+    plan_id: int,
+    request_id: int,
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """One request with its submissions and message thread."""
 
-    return FileResponse(
-        file_path,
-        media_type="application/pdf",
-        filename=f"acta_plan_{plan_id}.pdf",
-        content_disposition_type="inline",
+    return await controller.get_evidence_request(plan_id, request_id, current_user)
+
+
+@router.put(
+    "/{plan_id}/evidence-requests/{request_id}",
+    response_model=ImprovementPlanEvidenceRequestOut,
+)
+async def update_evidence_request(
+    plan_id: int,
+    request_id: int,
+    payload: ImprovementPlanEvidenceRequestUpdate,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Edit a requested deliverable."""
+
+    return await controller.update_evidence_request(
+        plan_id, request_id, payload, current_user
     )
+
+
+@router.post(
+    "/{plan_id}/evidence-requests/{request_id}/comments",
+    response_model=ImprovementPlanEvidenceCommentOut,
+    status_code=201,
+)
+async def add_evidence_comment(
+    plan_id: int,
+    request_id: int,
+    payload: ImprovementPlanEvidenceCommentCreate,
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Post a message on the request thread — director or teacher."""
+
+    return await controller.add_evidence_comment(
+        plan_id, request_id, payload, current_user
+    )
+
+
+@router.post(
+    "/{plan_id}/evidences", response_model=ImprovementPlanEvidenceOut, status_code=201
+)
+async def upload_evidence(
+    plan_id: int,
+    file: UploadFile = File(...),
+    description: str | None = Form(default=None),
+    item_id: int | None = Form(default=None),
+    request_id: int | None = Form(default=None),
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Submit an evidence PDF, optionally answering a specific request."""
+
+    pdf_bytes = await _read_pdf(file)
+    file_url = save_plan_evidence(plan_id, pdf_bytes)
+
+    return await controller.add_evidence(
+        plan_id,
+        file_url,
+        current_user,
+        description=description,
+        item_id=item_id,
+        request_id=request_id,
+    )
+
+
+@router.put(
+    "/{plan_id}/evidences/{evidence_id}/review",
+    response_model=ImprovementPlanEvidenceOut,
+)
+async def review_evidence(
+    plan_id: int,
+    evidence_id: int,
+    payload: ImprovementPlanEvidenceReview,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Approve a submitted evidence or send it back for a new attempt."""
+
+    return await controller.review_evidence(
+        plan_id, evidence_id, payload, current_user
+    )
+
+
+@router.delete("/{plan_id}/evidences/{evidence_id}", status_code=204)
+async def delete_evidence(
+    plan_id: int,
+    evidence_id: int,
+    current_user=Depends(require_roles(ANY_ROLE)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Delete a submitted evidence — its uploader or a manager of the plan."""
+
+    await controller.delete_evidence(plan_id, evidence_id, current_user)
 
 
 @router.get(
     "/{plan_id}/evidences/{evidence_id}",
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
 )
 async def download_evidence(
     plan_id: int,
@@ -440,302 +446,70 @@ async def download_evidence(
     current_user=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Download an evidence PDF attached to a plan.
+    """Download a submitted evidence file."""
 
-    Not served as a public static asset — only ADMIN, the director of the
-    plan's department, or the plan's own DOCENTE may access it."""
-
-    plan = await controller.get_by_id(plan_id)
-
-    if not plan:
-        raise HTTPException(status_code=404, detail="Improvement plan not found")
-
-    _ensure_can_access(controller, current_user, plan)
-
-    evidence = controller.get_evidence(plan_id, evidence_id)
-
-    if not evidence or not os.path.isfile(evidence.file_url):
-        raise HTTPException(status_code=404, detail="Evidencia no encontrada")
+    filepath, filename = await controller.get_evidence_file(
+        plan_id, evidence_id, current_user
+    )
 
     return FileResponse(
-        evidence.file_url,
+        filepath,
         media_type="application/pdf",
-        filename=f"evidencia_{evidence_id}.pdf",
+        filename=filename,
         content_disposition_type="inline",
     )
 
 
-@router.put(
-    "/{plan_id}",
-    response_model=ImprovementPlanDetailResponse,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
+@router.get(
+    "/{plan_id}/documents/{format_type}/word",
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
 )
-async def update_plan(
+async def download_document_word(
     plan_id: int,
-    payload: ImprovementPlanUpdate,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
+    format_type: str,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Update a plan and its items (add/remove/update)."""
+    """Download an official form as an editable Word document.
 
-    plan = await controller.update(plan_id, payload, current_user)
+    The acta is signed by hand and often needs a last-minute correction, so the
+    director gets a working copy. It is rendered from the plan as it stands and
+    is not tracked — the PDF remains the document of record.
+    """
 
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}",
-        )
+    content, filename = await controller.render_document_word(
+        plan_id, format_type, current_user
+    )
 
-    return ResponseSchema(
-        status=200,
-        message="Improvement plan updated successfully",
-        data=plan,
-        path=f"/improvement-plans/{plan_id}",
+    return Response(
+        content=content,
+        media_type="application/msword",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
-@router.post(
-    "/{plan_id}/acta",
-    response_model=ImprovementPlanDetailResponse,
-    responses={
-        400: {"model": ResponseSchema},
-        403: {"description": "Forbidden"},
-        404: {"model": ResponseSchema},
-    },
+@router.get(
+    "/{plan_id}/documents/{format_type}",
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
 )
-async def upload_acta(
+async def download_document(
     plan_id: int,
-    file: UploadFile | None = File(default=None),
-    description: str | None = Form(default=None),
-    current_user=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
-):
-    """Attach or replace the acta de compromiso (PDF and/or description).
-
-    The acta is optional at plan creation and editable while the plan is open."""
-
-    plan = await controller.get_by_id(plan_id)
-
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}/acta",
-        )
-
-    _ensure_can_access(controller, current_user, plan)
-
-    if _is_closed(plan):
-        raise HTTPException(
-            status_code=400,
-            detail="No se puede modificar el acta de un plan cerrado",
-        )
-
-    if file is None and description is None:
-        raise HTTPException(
-            status_code=400,
-            detail="Debe enviar un PDF y/o una descripción del acta",
-        )
-
-    file_url: str | None = None
-    if file is not None:
-        pdf_bytes = await _read_pdf(file)
-        file_url = _save_plan_pdf(plan_id, pdf_bytes, "acta")
-
-    result = await controller.set_acta(
-        plan_id, current_user, file_url=file_url, description=description
-    )
-
-    _delete_upload(result.get("previous_file_url") if result else None)
-
-    return ResponseSchema(
-        status=200,
-        message="Acta de compromiso guardada exitosamente",
-        data=result["plan"] if result else None,
-        path=f"/improvement-plans/{plan_id}/acta",
-    )
-
-
-@router.post(
-    "/{plan_id}/evidences",
-    response_model=ImprovementPlanDetailResponse,
-    responses={
-        400: {"model": ResponseSchema},
-        403: {"description": "Forbidden"},
-        404: {"model": ResponseSchema},
-    },
-    status_code=201,
-)
-async def add_evidence(
-    plan_id: int,
-    file: UploadFile = File(...),
-    description: str | None = Form(default=None),
-    item_id: int | None = Form(default=None),
+    format_type: str,
+    generated: bool = Query(
+        default=False, description="Force the unsigned generated copy"
+    ),
     current_user=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Attach an evidence PDF to a plan, optionally tied to one of its items.
+    """Download an official form — the signed copy when there is one."""
 
-    The plan's teacher uploads proof of compliance; the director can also
-    attach evidence collected during follow-up meetings."""
-
-    plan = await controller.get_by_id(plan_id)
-
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}/evidences",
-        )
-
-    _ensure_can_access(controller, current_user, plan)
-
-    if _is_closed(plan):
-        raise HTTPException(
-            status_code=400,
-            detail="No se pueden agregar evidencias a un plan cerrado",
-        )
-
-    pdf_bytes = await _read_pdf(file)
-    file_url = _save_plan_pdf(plan_id, pdf_bytes, "evidence")
-
-    try:
-        updated = await controller.add_evidence(
-            plan_id,
-            current_user,
-            file_url=file_url,
-            description=description,
-            item_id=item_id,
-        )
-    except ValueError as e:
-        _delete_upload(file_url)
-        raise HTTPException(status_code=400, detail=str(e))
-
-    return ResponseSchema(
-        status=201,
-        message="Evidencia agregada exitosamente",
-        data=updated,
-        path=f"/improvement-plans/{plan_id}/evidences",
+    filepath, filename = await controller.get_document_file(
+        plan_id, format_type, current_user, prefer_generated=generated
     )
 
-
-@router.delete(
-    "/{plan_id}/evidences/{evidence_id}",
-    response_model=ImprovementPlanDetailResponse,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
-async def delete_evidence(
-    plan_id: int,
-    evidence_id: int,
-    current_user=Depends(require_roles(ANY_ROLE)),
-    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
-):
-    """Delete an evidence. Allowed to whoever uploaded it, or to the plan's
-    director/admin."""
-
-    plan = await controller.get_by_id(plan_id)
-
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}/evidences/{evidence_id}",
-        )
-
-    _ensure_can_access(controller, current_user, plan)
-
-    evidence = controller.get_evidence(plan_id, evidence_id)
-
-    if not evidence:
-        return ResponseSchema(
-            status=404,
-            message="Evidence not found",
-            path=f"/improvement-plans/{plan_id}/evidences/{evidence_id}",
-        )
-
-    roles = set(current_user.get("roles", []))
-    is_manager = RoleName.ADMIN.value in roles or (
-        RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
-        and plan.get("department_id") == current_user.get("department_id")
-    )
-
-    if not is_manager and evidence.uploaded_by != current_user.get("id"):
-        raise HTTPException(
-            status_code=403,
-            detail="Solo quien subió la evidencia (o el director) puede eliminarla",
-        )
-
-    result = await controller.delete_evidence(plan_id, evidence_id, current_user)
-
-    _delete_upload(result.get("file_url") if result else None)
-
-    return ResponseSchema(
-        status=200,
-        message="Evidencia eliminada exitosamente",
-        data=result["plan"] if result else None,
-        path=f"/improvement-plans/{plan_id}/evidences/{evidence_id}",
-    )
-
-
-@router.post(
-    "/{plan_id}/close",
-    response_model=ImprovementPlanDetailResponse,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
-async def close_plan(
-    plan_id: int,
-    payload: ImprovementPlanClose,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
-):
-    """Close a plan (manual anytime, or confirming the verification result)."""
-
-    plan = await controller.close(plan_id, payload, current_user)
-
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}/close",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Improvement plan closed successfully",
-        data=plan,
-        path=f"/improvement-plans/{plan_id}/close",
-    )
-
-
-@router.post(
-    "/{plan_id}/evaluate",
-    response_model=ImprovementPlanDetailResponse,
-    responses={404: {"model": ResponseSchema}, 403: {"description": "Forbidden"}},
-)
-async def evaluate_plan(
-    plan_id: int,
-    current_user=Depends(get_current_user),
-    _=Depends(require_roles(DIRECTOR_OR_ADMIN)),
-    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
-):
-    """Recompute item compliance against the verification period and suggest a
-    result (does not close the plan)."""
-
-    plan = await controller.evaluate(plan_id, current_user)
-
-    if not plan:
-        return ResponseSchema(
-            status=404,
-            message="Improvement plan not found",
-            path=f"/improvement-plans/{plan_id}/evaluate",
-        )
-
-    return ResponseSchema(
-        status=200,
-        message="Improvement plan evaluated successfully",
-        data=plan,
-        path=f"/improvement-plans/{plan_id}/evaluate",
+    return FileResponse(
+        filepath,
+        media_type="application/pdf",
+        filename=filename,
+        content_disposition_type="inline",
     )
