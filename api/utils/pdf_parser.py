@@ -394,7 +394,7 @@ def parse_pdf(file_bytes: bytes) -> dict:
                 if len(group["course_name"]) > len(best.get(code, "")):
                     best[code] = group["course_name"]
             for group in teacher["groups"]:
-                group["course_name"] = best[group["course_code"]]
+                group["course_name"] = best.get(group["course_code"], group["course_name"])
 
         return result
 

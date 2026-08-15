@@ -1774,6 +1774,7 @@ class StatsRepository:
                 matching_names = (
                     self.db.query(CourseModel.name)
                     .filter(
+                        CourseModel.department_id == department_id,
                         or_(
                             CourseModel.name.ilike(like),
                             CourseModel.code.ilike(like),
@@ -2216,7 +2217,7 @@ class StatsRepository:
                     "teacher_avatar_url": row.teacher_avatar_url,
                     "group_name": row.group_name,
                     "overall_average": (
-                        float(row.overall_average) if row.overall_average else None
+                        float(row.overall_average) if row.overall_average is not None else None
                     ),
                     "respondent_count": row.respondent_count,
                     "dimensions": dimensions,
