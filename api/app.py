@@ -33,9 +33,16 @@ from api.models import (
     evaluation_score,
     faculty,
     improvement_plan,
+    improvement_plan_case_report,
     improvement_plan_checkpoint,
+    improvement_plan_checkpoint_note,
+    improvement_plan_course,
+    improvement_plan_document,
     improvement_plan_evidence,
+    improvement_plan_evidence_comment,
+    improvement_plan_evidence_request,
     improvement_plan_item,
+    improvement_plan_item_comment,
     notification,
     role,
     setting,
@@ -57,6 +64,7 @@ from api.routes import (
     evaluations,
     faculties,
     health,
+    improvement_plans,
     notifications,
     settings,
     stats,
@@ -80,9 +88,16 @@ _ = (
     evaluation_score,
     faculty,
     improvement_plan,
+    improvement_plan_case_report,
     improvement_plan_checkpoint,
+    improvement_plan_checkpoint_note,
+    improvement_plan_course,
+    improvement_plan_document,
     improvement_plan_evidence,
+    improvement_plan_evidence_comment,
+    improvement_plan_evidence_request,
     improvement_plan_item,
+    improvement_plan_item_comment,
     role,
     teacher,
     user,
@@ -137,6 +152,7 @@ app.include_router(audits.router)
 app.include_router(faculties.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
+app.include_router(improvement_plans.router)
 app.include_router(notifications.router)
 app.include_router(ws_evaluations.router)
 app.include_router(ws_dev_logs.router)
