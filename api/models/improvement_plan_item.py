@@ -44,6 +44,13 @@ class ImprovementPlanItemModel(Base):
         index=True,
     )
     description: Mapped[str] = mapped_column(Text, nullable=False)
+    # "Compromiso" of the official forms — kept apart from ``description``
+    # ("Descripción del indicador de evaluación comprometido") because Formato 2
+    # prints them as two separate blocks.
+    commitment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Which of the five "aspectos en seguimiento" this item is printed under
+    # (1-5, see api/utils/dimensions.py ASPECTS). Null = not placed on the form.
+    aspect: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     target_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="QUALITATIVE"
     )
@@ -59,6 +66,15 @@ class ImprovementPlanItemModel(Base):
 
     plan: Mapped["ImprovementPlanModel"] = relationship(
         "ImprovementPlanModel", back_populates="items"
+    )
+    # Student comments cited as justification (mainly aspect 5, "Observaciones
+    # de los Estudiantes", but any item may quote comments).
+    comment_links: Mapped[list["ImprovementPlanItemCommentModel"]] = relationship(
+        "ImprovementPlanItemCommentModel",
+        back_populates="item",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
     )
 
     created_at: Mapped[datetime.datetime] = mapped_column(
