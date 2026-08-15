@@ -181,14 +181,17 @@ def _extract_comments(
     nlp,
     start_from_top: bool = False,
     default_key: str | None = None,
-) -> dict[str, list[str]]:
+) -> tuple[dict[str, list[str]], dict[str, str]]:
     """
     Extract comments from the 'Observaciones realizadas' section.
 
     Group header format in that section: '115 5304  B  01  ESTRUCTURAS DE DATOS'
     Comment lines start with '- '.
 
-    Returns dict keyed by '{course_code}_{group}_{section}', e.g. '1155304_B_01'.
+    Returns (comments, names):
+      comments: dict keyed by '{course_code}_{group}_{section}', e.g. '1155304_B_01'
+      names:    dict mapping the same keys to the full course name from the header,
+                which is more complete than the truncated name in the score table.
 
     start_from_top: skip the 'Observaciones realizadas' marker and scan from line 0.
                     Used for continuation pages that carry no section header.
@@ -206,7 +209,7 @@ def _extract_comments(
                 start_idx = i + 1
                 break
         if start_idx is None:
-            return {}
+            return {}, {}
 
     group_header = re.compile(
         r"^\s*(\d{3})\s+(\d{4})\s+([A-Z])\s+(\d{2})\s+", re.IGNORECASE
@@ -216,6 +219,7 @@ def _extract_comments(
     )
 
     result: dict[str, list[str]] = {}
+    names: dict[str, str] = {}
     current_key: str | None = default_key
     buffer = ""
 
@@ -244,6 +248,9 @@ def _extract_comments(
         if m:
             flush()
             current_key = f"{m.group(1)}{m.group(2)}_{m.group(3)}_{m.group(4)}"
+            full_name = line[m.end():].strip()
+            if full_name:
+                names[current_key] = full_name
             continue
 
         if re.match(r"^\s*-\s+\S", line):
@@ -259,7 +266,7 @@ def _extract_comments(
             flush()
 
     flush()
-    return result
+    return result, names
 
 
 def parse_pdf(file_bytes: bytes) -> dict:
@@ -356,20 +363,38 @@ def parse_pdf(file_bytes: bytes) -> dict:
                     if last_groups:
                         lg = last_groups[-1]
                         default_key = f"{lg['course_code']}_{lg['group']}_{lg['section']}"
-                    comments_by_group = _extract_comments(
+                    comments_by_group, names_by_group = _extract_comments(
                         text, nlp, start_from_top=True, default_key=default_key
                     )
                     for group in last_groups:
                         key = f"{group['course_code']}_{group['group']}_{group['section']}"
                         group["comments"].extend(comments_by_group.get(key, []))
+                        full_name = names_by_group.get(key)
+                        if full_name and len(full_name) > len(group["course_name"]):
+                            group["course_name"] = full_name
                 else:
-                    comments_by_group = _extract_comments(text, nlp)
+                    comments_by_group, names_by_group = _extract_comments(text, nlp)
                     teacher["overall_average"] = overall_average
                     for group in groups:
                         key = f"{group['course_code']}_{group['group']}_{group['section']}"
                         group["comments"] = comments_by_group.get(key, [])
+                        full_name = names_by_group.get(key)
+                        if full_name and len(full_name) > len(group["course_name"]):
+                            group["course_name"] = full_name
                     teacher["groups"] = groups
                     result["teachers"].append(teacher)
+
+        # Propagate the best-known name to every group sharing the same course code.
+        # Needed when one group has comments (and gets the full name from the header)
+        # but a sibling group does not.
+        for teacher in result["teachers"]:
+            best: dict[str, str] = {}
+            for group in teacher["groups"]:
+                code = group["course_code"]
+                if len(group["course_name"]) > len(best.get(code, "")):
+                    best[code] = group["course_name"]
+            for group in teacher["groups"]:
+                group["course_name"] = best.get(group["course_code"], group["course_name"])
 
         return result
 

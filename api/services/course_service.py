@@ -1,7 +1,7 @@
 """Service for course-related business operations."""
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ValidationError
 from api.repositories.courses import CoursesRepository
 from api.schemas.course import CourseCreate, CourseFilters, CourseUpdate
 from api.schemas.pagination import build_paginated_response
@@ -110,6 +110,38 @@ class CourseService:
             entity_id=course_id,
             actor_id=current_user.get("id"),
             description=desc,
+        )
+
+        return result
+
+    async def update_name(
+        self, course_id: int, name: str, department_id: int, current_user: dict
+    ) -> dict | None:
+        """Update a course's name. Restricted to courses in the director's department."""
+
+        course = self.courses_repository.get_by_id(course_id)
+
+        if not course:
+            return None
+
+        if course.department_id != department_id:
+            raise PermissionDeniedError(
+                "No tienes permiso para editar cursos de otro departamento"
+            )
+
+        old_name = course.name
+        updated = self.courses_repository.update_course(course, {"name": name})
+        result = self._enrich_course_to_dict(updated)
+
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="courses",
+            entity_id=course_id,
+            actor_id=current_user.get("id"),
+            description=(
+                f"Se actualizó el nombre del curso #{course_id} "
+                f"({old_name} → {name})"
+            ),
         )
 
         return result
