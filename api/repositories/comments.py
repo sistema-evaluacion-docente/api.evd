@@ -33,6 +33,7 @@ class CommentsRepository(BaseRepository[CommentModel]):
         self,
         filters: CommentFilters,
         pagination: PaginationParams,
+        department_id: int | None = None,
     ) -> tuple[list[dict], int]:
         """Search comments with filters and pagination."""
 
@@ -77,11 +78,24 @@ class CommentsRepository(BaseRepository[CommentModel]):
                 CommentModel.academic_groups_id == filters.academic_groups_id
             )
 
-        if filters.academic_period_id is not None:
+        evaluation_joined = False
+
+        if department_id is not None:
             base_query = base_query.join(
                 EvaluationModel,
                 CommentModel.evaluation_id == EvaluationModel.id,
-            ).filter(EvaluationModel.academic_period_id == filters.academic_period_id)
+            ).filter(EvaluationModel.department_id == department_id)
+            evaluation_joined = True
+
+        if filters.academic_period_id is not None:
+            if not evaluation_joined:
+                base_query = base_query.join(
+                    EvaluationModel,
+                    CommentModel.evaluation_id == EvaluationModel.id,
+                )
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == filters.academic_period_id
+            )
 
         if filters.risk_level is not None:
             base_query = base_query.filter(

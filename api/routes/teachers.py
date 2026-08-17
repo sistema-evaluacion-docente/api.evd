@@ -19,6 +19,7 @@ from api.schemas.teacher import (
     TeacherOut,
     TeacherUpdate,
 )
+from api.schemas.pagination import build_paginated_response
 from api.schemas.user import RoleName
 from api.utils.file_validation import validate_file_size
 
@@ -31,10 +32,20 @@ _ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 async def get_all_teachers(
     filters: TeacherFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """List all teachers with pagination and filters."""
+    """List all teachers with pagination and filters.
+
+    Directors are restricted to their own department — any client-supplied
+    department_id is ignored and replaced by the one from the token.
+    """
+
+    if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", []):
+        department_id = current_user.get("department_id")
+        if not department_id:
+            return build_paginated_response([], 0, pagination)
+        filters.department_id = department_id
 
     return await controller.get_all(filters, pagination)
 
@@ -106,10 +117,20 @@ async def get_teachers_with_averages(
     has_average: bool = Query(
         True, description="Filter teachers that have an overall average or not"
     ),
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """List teachers with overall_average for a given academic period."""
+    """List teachers with overall_average for a given academic period.
+
+    Directors are restricted to their own department — any client-supplied
+    department_id is ignored and replaced by the one from the token.
+    """
+
+    if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", []):
+        department_id = current_user.get("department_id")
+        if not department_id:
+            return build_paginated_response([], 0, pagination)
+        filters.department_id = department_id
 
     return await controller.get_all_with_averages(
         filters, pagination, academic_period_id, has_average
