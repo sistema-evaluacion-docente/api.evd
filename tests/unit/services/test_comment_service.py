@@ -90,7 +90,7 @@ class TestCommentService:
         assert result["total"] == 2
         assert result["page"] == 1
         assert result["limit"] == 10
-        mock_comments_repo.search.assert_called_once_with(filters, pagination)
+        mock_comments_repo.search.assert_called_once_with(filters, pagination, None)
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_comment(self, service, mock_comments_repo):

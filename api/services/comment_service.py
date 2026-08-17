@@ -32,10 +32,11 @@ class CommentService:
         self,
         filters: CommentFilters,
         pagination: PaginationParams,
+        department_id: int | None = None,
     ) -> dict:
         """Retrieve all comments based on filters and pagination."""
 
-        items, total = self.comments_repository.search(filters, pagination)
+        items, total = self.comments_repository.search(filters, pagination, department_id)
 
         return build_paginated_response(items, total, pagination)
 
