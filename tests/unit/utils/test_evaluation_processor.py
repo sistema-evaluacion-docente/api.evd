@@ -24,7 +24,9 @@ from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.utils.evaluation_processor import (
     HIGH_RISK_LEVEL_ID,
+    PLAN_SUGGESTION_TITLE,
     _create_high_risk_comment_notification,
+    _create_plan_suggestion_notification,
     analyze_evaluation_comments,
 )
 
@@ -549,4 +551,184 @@ class TestCreateHighRiskCommentNotification:
             comment=comment,
         )
 
+        mock_notification_manager.broadcast.assert_not_called()
+
+
+class TestCreatePlanSuggestionNotification:
+    """The aggregated alert raised once an evaluation has been analysed."""
+
+    def _make_db(self, director=None, existing_notification=None):
+        """A db whose queries answer the director lookup and the dedup check."""
+
+        db = MagicMock()
+        next_id = {"value": 0}
+
+        def fake_flush():
+            for call in db.add.call_args_list:
+                obj = call.args[0]
+                if isinstance(obj, NotificationModel) and obj.id is None:
+                    next_id["value"] += 1
+                    obj.id = next_id["value"]
+
+        db.flush.side_effect = fake_flush
+
+        queries = {
+            DirectorsModel: _FakeQuery(first_result=director),
+            NotificationModel: _FakeQuery(first_result=existing_notification),
+        }
+
+        db.query.side_effect = lambda model, *_: queries.get(model, _FakeQuery())
+
+        return db
+
+    def _make_evaluation(self, period_code="2025-1"):
+        evaluation = MagicMock(spec=EvaluationModel)
+        evaluation.id = 3
+        evaluation.department_id = 1
+        evaluation.academic_period_id = 2
+        evaluation.academic_period = MagicMock(code=period_code)
+
+        return evaluation
+
+    def _director(self, user_id=55):
+        director = MagicMock(spec=DirectorsModel)
+        director.user_id = user_id
+
+        return director
+
+    def _candidate(self, teacher_id=7, name="Ada Lovelace", **overrides):
+        candidate = {
+            "teacher_id": teacher_id,
+            "name": name,
+            "below_threshold": True,
+            "has_plan": False,
+            "high_risk_comment_count": 0,
+            "weak_dimensions": [],
+            "weak_questions": [],
+        }
+        candidate.update(overrides)
+
+        return candidate
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_notifies_the_director_once_for_the_whole_evaluation(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(
+            return_value=[
+                self._candidate(teacher_id=7, name="Ada Lovelace"),
+                self._candidate(teacher_id=9, name="Grace Hopper"),
+            ]
+        )
+        db = self._make_db(director=self._director())
+
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        db.add.assert_called_once()
+        notification = db.add.call_args.args[0]
+        assert isinstance(notification, NotificationModel)
+        assert notification.user_id == 55
+        assert notification.title == PLAN_SUGGESTION_TITLE
+        assert notification.type == "warning"
+        assert "2 docentes" in notification.message
+        assert "Ada Lovelace" in notification.message
+        assert "Grace Hopper" in notification.message
+        assert notification.link == "/planes/nuevo?period_code=2025-1"
+
+        mock_notification_manager.broadcast.assert_called_once()
+        channel, event = mock_notification_manager.broadcast.call_args.args
+        assert channel == "notifications:55"
+        assert event.link == "/planes/nuevo?period_code=2025-1"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_spells_out_the_reason_when_only_one_teacher_is_suggested(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(
+            return_value=[
+                self._candidate(
+                    below_threshold=False,
+                    high_risk_comment_count=2,
+                )
+            ]
+        )
+        db = self._make_db(director=self._director())
+
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        notification = db.add.call_args.args[0]
+        assert "Ada Lovelace" in notification.message
+        assert "2 comentarios de riesgo alto" in notification.message
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_stays_quiet_when_nobody_needs_a_plan(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(return_value=[])
+        db = self._make_db(director=self._director())
+
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        db.add.assert_not_called()
+        mock_notification_manager.broadcast.assert_not_called()
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_does_not_repeat_the_alert_when_the_analysis_is_re_run(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(
+            return_value=[self._candidate()]
+        )
+        db = self._make_db(
+            director=self._director(),
+            existing_notification=MagicMock(spec=NotificationModel),
+        )
+
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        db.add.assert_not_called()
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_skips_a_department_without_a_director(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(return_value=[])
+        db = self._make_db(director=None)
+
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        db.add.assert_not_called()
+        mock_repository.return_value.get_candidates.assert_not_awaited()
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
+    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    def test_a_failed_alert_never_undoes_a_finished_analysis(
+        self, _mock_threshold, mock_repository, mock_notification_manager
+    ):
+        mock_notification_manager.broadcast = AsyncMock()
+        mock_repository.return_value.get_candidates = AsyncMock(
+            side_effect=RuntimeError("db is down")
+        )
+        db = self._make_db(director=self._director())
+
+        # Should not raise despite the underlying failure.
+        _create_plan_suggestion_notification(db, self._make_evaluation())
+
+        db.add.assert_not_called()
         mock_notification_manager.broadcast.assert_not_called()
