@@ -157,6 +157,48 @@ class TestAccessControl:
             service.ensure_can_manage(TEACHER, _plan())
 
 
+class TestUnsigningTheActaIsTheDirectors:
+    """Taking the signature off reopens the agreement, so it is not an ADMIN's."""
+
+    def test_the_owning_director_can(self, service):
+        service.ensure_is_department_director(DIRECTOR, _plan())
+
+    def test_an_admin_cannot(self, service):
+        with pytest.raises(PermissionDeniedError):
+            service.ensure_is_department_director(ADMIN, _plan())
+
+    def test_a_director_of_another_department_cannot(self, service):
+        with pytest.raises(PermissionDeniedError):
+            service.ensure_is_department_director(OTHER_DIRECTOR, _plan())
+
+    def test_the_teacher_cannot(self, service):
+        with pytest.raises(PermissionDeniedError):
+            service.ensure_is_department_director(TEACHER, _plan())
+
+
+class TestActaCompleteness:
+    """An acta cannot be frozen — by closing or by signing — while it is blank."""
+
+    def test_requires_a_number_and_a_date(self, service):
+        with pytest.raises(ValidationError):
+            service.ensure_acta_complete(_plan(items=[{"commitment": "Llegar a tiempo"}]))
+
+    def test_requires_at_least_one_commitment(self, service):
+        with pytest.raises(ValidationError):
+            service.ensure_acta_complete(
+                _plan(acta_number="042", acta_date="2026-08-12", items=[{"commitment": None}])
+            )
+
+    def test_passes_when_the_acta_is_filled_in(self, service):
+        service.ensure_acta_complete(
+            _plan(
+                acta_number="042",
+                acta_date="2026-08-12",
+                items=[{"commitment": "Llegar a tiempo"}],
+            )
+        )
+
+
 class TestGetById:
     async def test_returns_the_plan(self, service):
         assert (await service.get_by_id(7, ADMIN))["id"] == 7
@@ -236,6 +278,18 @@ class TestActaLock:
 
         with pytest.raises(ValidationError):
             await service.update(7, ImprovementPlanUpdate(acta_number="999"), ADMIN)
+
+        mock_repository.update.assert_not_awaited()
+
+    async def test_signed_acta_rejects_content_edits_too(self, service, mock_repository):
+        mock_repository.get_by_id.return_value = _plan(acta_status="FIRMADA")
+
+        with pytest.raises(ValidationError):
+            await service.update(
+                7,
+                ImprovementPlanUpdate(items=[]),
+                ADMIN,
+            )
 
         mock_repository.update.assert_not_awaited()
 
