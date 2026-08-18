@@ -129,6 +129,8 @@ def improvement_plan_document_to_dict(
         "generated_by": document.generated_by,
         "signed_at": document.signed_at,
         "signed_by": document.signed_by,
+        # The name only, never the path: it is what the file chip shows back.
+        "signed_filename": document.signed_filename,
         "has_generated": document.generated_pdf_url is not None,
         "has_signed": document.signed_pdf_url is not None,
     }
