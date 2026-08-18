@@ -144,6 +144,10 @@ class ImprovementPlanCreate(BaseModel):
     department_name: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    # The acto administrativo backing the agreement. Asked for when the plan is
+    # drawn up, so the acta can be closed without a second trip to the detail.
+    acta_number: Optional[str] = None
+    acta_date: Optional[date] = None
     council_observations: Optional[str] = None
     department_director_observations: Optional[str] = None
     program_director_observations: Optional[str] = None
@@ -332,6 +336,7 @@ class ImprovementPlanDocumentOut(BaseModel):
     generated_by: Optional[int] = None
     signed_at: Optional[datetime] = None
     signed_by: Optional[int] = None
+    signed_filename: Optional[str] = None
     has_generated: bool = False
     has_signed: bool = False
 
