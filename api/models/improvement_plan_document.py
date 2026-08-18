@@ -48,6 +48,9 @@ class ImprovementPlanDocumentModel(Base):
     )
 
     signed_pdf_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Name the file had on the director's machine. Stored apart from the path
+    # because the path is a uuid: the UI shows this one back to him.
+    signed_filename: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     signed_at: Mapped[Optional[datetime.datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

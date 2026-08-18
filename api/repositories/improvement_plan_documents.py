@@ -81,7 +81,12 @@ class ImprovementPlanDocumentsRepository(
         return document, previous
 
     def set_signed(
-        self, plan_id: int, format_type: str, file_url: str, signed_by: int | None
+        self,
+        plan_id: int,
+        format_type: str,
+        file_url: str,
+        signed_by: int | None,
+        filename: str | None = None,
     ) -> tuple[ImprovementPlanDocumentModel, str | None]:
         """Record the scanned copy that carries the handwritten signatures."""
 
@@ -89,6 +94,7 @@ class ImprovementPlanDocumentsRepository(
         previous = document.signed_pdf_url
 
         document.signed_pdf_url = file_url
+        document.signed_filename = filename
         document.signed_at = datetime.now(timezone.utc)
         document.signed_by = signed_by
 
@@ -97,6 +103,31 @@ class ImprovementPlanDocumentsRepository(
         self._emit_db_event("INSERT", document.id)
 
         return document, previous
+
+    def clear_signed(self, plan_id: int, format_type: str) -> str | None:
+        """Drop the signed copy, leaving the generated one untouched.
+
+        Returns the path that was attached, so the caller can remove the file
+        from disk. ``None`` when there was nothing signed to begin with.
+        """
+
+        document = self.get_by_format(plan_id, format_type)
+
+        if document is None or document.signed_pdf_url is None:
+            return None
+
+        previous = document.signed_pdf_url
+
+        document.signed_pdf_url = None
+        document.signed_filename = None
+        document.signed_at = None
+        document.signed_by = None
+
+        self.db.commit()
+        self.db.refresh(document)
+        self._emit_db_event("UPDATE", document.id)
+
+        return previous
 
 
 def get_improvement_plan_documents_repository(
