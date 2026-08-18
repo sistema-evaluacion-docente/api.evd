@@ -52,7 +52,17 @@ routes/ → controllers/ → services/ → repositories/ → models/
 - **repositories/**: heredan de `BaseRepository[Model]` (`api/repositories/base.py`), que aporta `get/list/create/delete/paginate`. Cada repo expone `get_x_repository(db=Depends(get_db))`.
 - **serializers/**: funciones `x_to_dict(model)` puras; los services devuelven **dicts**, no modelos ORM.
 
-Excepción a la regla: `improvement_plans` y `comparison` no tienen service — el controller habla directo con los repositorios. Al tocarlos, sigue el estilo del archivo en vez de introducir una capa nueva.
+Excepción a la regla: `comparison` no tiene service — el controller habla directo con los repositorios. Al tocarlo, sigue el estilo del archivo en vez de introducir una capa nueva.
+
+### Planes de mejoramiento
+
+`improvement_plans` modela los **tres formatos oficiales de la UFPS** (ver `formatos-planes-mejoramiento.pdf`): Formato 1 (caso reportado por un programa académico → `improvement_plan_case_reports`), Formato 2 (ficha de acuerdo/acta) y Formato 3 (matriz de seguimiento). Los formatos se organizan en **cinco aspectos**: los 4 de `DIMENSION_MAP` más "Observaciones de los Estudiantes", que se justifica citando filas de `comments` (`improvement_plan_item_comments`). El catálogo `ASPECTS` en `api/utils/dimensions.py` es la fuente única de esa correspondencia.
+
+El **acta tiene su propio ciclo de vida** (`acta_status`: `BORRADOR → CERRADA → FIRMADA`), independiente del estado del plan: al cerrarla se congela solo su contenido (items, asignaturas, número y fecha del acta, observaciones del Consejo) para poder imprimirla y firmarla; el resto del plan sigue editable. Solo un ADMIN puede reabrirla.
+
+La **gestión de evidencias** es un ciclo entre director y docente: el director solicita un entregable concreto (`improvement_plan_evidence_requests`), el docente sube el archivo, ambos comentan en el hilo de la solicitud (`improvement_plan_evidence_comments`) y el director aprueba o rechaza. Una entrega pasa la solicitud a `EN_REVISION`; un rechazo la devuelve a `PENDIENTE` y deja un comentario de sistema para que el docente reenvíe. Cada transición notifica a la otra parte con `NotificationService` usando `link` para enlazar al plan.
+
+Los tres formatos se **generan en PDF** con WeasyPrint + Jinja2: plantillas en `api/templates/improvement_plans/` (el Formato 3 va en horizontal), renderer puro en `api/utils/improvement_plan_pdf.py`, y el armado del contexto (agrupar items por aspecto, cruzar las notas de seguimiento) en `api/services/improvement_plan_document_service.py`. Flujo: `POST /{id}/documents/{formato}/generate` → descargar → firmar a mano → `POST .../signed`; subir el Formato 2 firmado pasa el acta a `FIRMADA`. WeasyPrint necesita librerías de sistema (Pango/HarfBuzz) — ya están en ambos Dockerfiles.
 
 ### Response envelope
 
