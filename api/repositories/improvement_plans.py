@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.comment import CommentModel
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.models.director import DirectorsModel
@@ -29,6 +30,7 @@ from api.models.improvement_plan_course import ImprovementPlanCourseModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.repositories.stats import StatsRepository
@@ -48,6 +50,7 @@ from api.utils.dimensions import (
     aspect_for_target,
 )
 from api.utils.improvement_suggestions import suggest_actions
+from api.utils.plan_suggestion import HIGH_RISK_LEVEL_NAME, is_plan_suggested
 
 # The two formal follow-ups of the official form: week 8 and weeks 15/16.
 CHECKPOINT_STAGES = ["PRIMER_SEGUIMIENTO", "SEGUNDO_SEGUIMIENTO"]
@@ -286,6 +289,37 @@ class ImprovementPlansRepository:
         )
 
         return {row[0] for row in rows}
+
+    def _high_risk_comment_counts(
+        self, teacher_ids: list[int], period_id: int
+    ) -> dict[int, int]:
+        """High-risk comments each teacher got in the period.
+
+        A teacher can keep every score above the threshold and still be the
+        subject of a comment the AI classified as ALTO, which on its own is a
+        reason to suggest a plan. Comments the analysis has not reached yet
+        simply do not count."""
+
+        if not teacher_ids:
+            return {}
+
+        rows = (
+            self.db.query(
+                CommentModel.teacher_id,
+                func.count(CommentModel.id).label("total"),
+            )
+            .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+            .join(RiskLevelModel, RiskLevelModel.id == CommentModel.risk_level)
+            .filter(
+                CommentModel.teacher_id.in_(teacher_ids),
+                EvaluationModel.academic_period_id == period_id,
+                func.upper(RiskLevelModel.name) == HIGH_RISK_LEVEL_NAME,
+            )
+            .group_by(CommentModel.teacher_id)
+            .all()
+        )
+
+        return {row.teacher_id: row.total for row in rows}
 
     # ------------------------------------------------------------------ #
     # Indicator averages (question = one item of the evaluation form)
@@ -982,8 +1016,8 @@ class ImprovementPlansRepository:
         A teacher can be below the threshold in a single question while keeping
         a healthy overall average, so by default the whole department is
         returned and the caller decides. ``only_at_risk`` narrows the list to
-        teachers below the threshold that have no plan yet for the period
-        (auto-detection for the dashboard)."""
+        the teachers a plan is suggested for (``is_plan_suggested``) that have
+        no plan yet for the period — the auto-detection."""
 
         stats = StatsRepository(self.db)
 
@@ -1001,6 +1035,7 @@ class ImprovementPlansRepository:
 
         averages_by_teacher = self._question_averages(teacher_ids, period_id)
         planned = self._teachers_with_plan(teacher_ids, period_id)
+        risky_comments = self._high_risk_comment_counts(teacher_ids, period_id)
 
         result: list[dict] = []
 
@@ -1009,9 +1044,6 @@ class ImprovementPlansRepository:
             avg = teacher.get("overall_average")
             below_threshold = avg is not None and avg <= threshold
             has_plan = teacher_id in planned
-
-            if only_at_risk and (not below_threshold or has_plan):
-                continue
 
             dimensions = self._build_indicators(
                 averages_by_teacher.get(teacher_id, {}), threshold
@@ -1024,23 +1056,25 @@ class ImprovementPlansRepository:
                 if question["below_threshold"]
             ]
 
-            result.append(
-                {
-                    "teacher_id": teacher_id,
-                    "name": teacher.get("name"),
-                    "avatar_url": teacher.get("avatar_url"),
-                    "institutional_code": teacher.get("institutional_code"),
-                    "overall_average": avg,
-                    "below_threshold": below_threshold,
-                    "has_plan": has_plan,
-                    "dimensions": dimensions,
-                    "weak_dimensions": [
-                        d for d in dimensions if d["below_threshold"]
-                    ],
-                    "weak_questions": weak_questions,
-                    "overall_suggestions": suggest_actions("OVERALL_AVERAGE"),
-                }
-            )
+            candidate = {
+                "teacher_id": teacher_id,
+                "name": teacher.get("name"),
+                "avatar_url": teacher.get("avatar_url"),
+                "institutional_code": teacher.get("institutional_code"),
+                "overall_average": avg,
+                "below_threshold": below_threshold,
+                "has_plan": has_plan,
+                "high_risk_comment_count": risky_comments.get(teacher_id, 0),
+                "dimensions": dimensions,
+                "weak_dimensions": [d for d in dimensions if d["below_threshold"]],
+                "weak_questions": weak_questions,
+                "overall_suggestions": suggest_actions("OVERALL_AVERAGE"),
+            }
+
+            if only_at_risk and (has_plan or not is_plan_suggested(candidate)):
+                continue
+
+            result.append(candidate)
 
         return result
 
