@@ -29,6 +29,10 @@ FORMAT_SLUGS = {
 
 ACTA_FORMAT = "FORMATO_2"
 
+# The follow-up matrix printed by Formato 3 is the seguimientos section itself,
+# so the form is re-rendered every time one of them is recorded.
+FOLLOWUP_FORMAT = "FORMATO_3"
+
 
 def resolve_format_type(slug: str) -> str:
     """Translate the public slug into the stored format identifier."""
@@ -129,6 +133,20 @@ class ImprovementPlanDocumentService:
     # ------------------------------------------------------------------ #
     # Operations
     # ------------------------------------------------------------------ #
+    def _render_and_store(self, plan: dict, format_type: str, actor_id: int | None) -> str:
+        """Render one form from the plan as it stands and file it as the copy of
+        record, dropping the PDF it replaces. Returns the new path."""
+
+        pdf_bytes = render_formato(format_type, self.build_context(plan))
+        filepath = save_plan_document(plan["id"], pdf_bytes, format_type.lower())
+
+        _, previous = self.documents_repository.set_generated(
+            plan["id"], format_type, filepath, actor_id
+        )
+        delete_plan_file(previous)
+
+        return filepath
+
     async def generate(self, plan_id: int, slug: str, current_user) -> dict:
         """Render an official form filled with the plan data."""
 
@@ -136,13 +154,7 @@ class ImprovementPlanDocumentService:
         plan = await self.plan_service.get_by_id(plan_id, current_user)
         self.plan_service.ensure_can_manage(current_user, plan)
 
-        pdf_bytes = render_formato(format_type, self.build_context(plan))
-        filepath = save_plan_document(plan_id, pdf_bytes, format_type.lower())
-
-        _, previous = self.documents_repository.set_generated(
-            plan_id, format_type, filepath, (current_user or {}).get("id")
-        )
-        delete_plan_file(previous)
+        self._render_and_store(plan, format_type, (current_user or {}).get("id"))
 
         await self.audit_service.log(
             action="CREATE",
@@ -173,32 +185,43 @@ class ImprovementPlanDocumentService:
         return content, f"{slug}_plan_{plan_id}.doc"
 
     async def upload_signed(
-        self, plan_id: int, slug: str, pdf_bytes: bytes, current_user
+        self,
+        plan_id: int,
+        slug: str,
+        pdf_bytes: bytes,
+        current_user,
+        filename: str | None = None,
     ) -> dict:
         """Attach the scanned copy carrying the handwritten signatures.
 
-        For the acta (Formato 2) this is what completes the lifecycle: it may
-        only be uploaded once the acta is CERRADA, and it moves it to FIRMADA.
+        For the acta (Formato 2) this is what completes the agreement: the
+        signature — not a separate "close" step — is what freezes its content
+        and puts the plan into force, so it is accepted straight from BORRADOR
+        as long as the acta is actually filled in.
         """
 
         format_type = resolve_format_type(slug)
         plan = await self.plan_service.get_by_id(plan_id, current_user)
         self.plan_service.ensure_can_manage(current_user, plan)
 
-        if format_type == ACTA_FORMAT and plan.get("acta_status") == "BORRADOR":
-            raise ValidationError(
-                "Debe cerrar el acta antes de subir la versión firmada"
-            )
+        if format_type == ACTA_FORMAT:
+            self.plan_service.ensure_acta_complete(plan)
 
         filepath = save_plan_document(plan_id, pdf_bytes, f"{format_type.lower()}_firmado")
 
         _, previous = self.documents_repository.set_signed(
-            plan_id, format_type, filepath, (current_user or {}).get("id")
+            plan_id,
+            format_type,
+            filepath,
+            (current_user or {}).get("id"),
+            filename=filename,
         )
         delete_plan_file(previous)
 
-        if format_type == ACTA_FORMAT and plan.get("acta_status") == "CERRADA":
-            await self.improvement_plans_repository.set_acta_status(plan_id, "FIRMADA")
+        if format_type == ACTA_FORMAT and plan.get("acta_status") != "FIRMADA":
+            await self.improvement_plans_repository.set_acta_status(
+                plan_id, "FIRMADA", closed_by=(current_user or {}).get("id")
+            )
 
         await self.audit_service.log(
             action="UPDATE",
@@ -212,13 +235,75 @@ class ImprovementPlanDocumentService:
 
         return await self.plan_service.get_by_id(plan_id, current_user)
 
+    async def delete_signed(self, plan_id: int, slug: str, current_user) -> dict:
+        """Detach the signed copy of a form — the escape hatch for a wrong scan.
+
+        The generated PDF stays where it was, so the slot simply goes back to
+        asking for a signed copy. For the acta this walks it all the way back to
+        BORRADOR: undoing the signature is what makes the agreement editable
+        again, so it is reserved to the director who owns the plan — an ADMIN
+        must not be able to reopen an agreement signed by someone else.
+        """
+
+        format_type = resolve_format_type(slug)
+        plan = await self.plan_service.get_by_id(plan_id, current_user)
+
+        if format_type == ACTA_FORMAT:
+            self.plan_service.ensure_is_department_director(current_user, plan)
+        else:
+            self.plan_service.ensure_can_manage(current_user, plan)
+
+        previous = self.documents_repository.clear_signed(plan_id, format_type)
+
+        if not previous:
+            raise ResourceNotFoundError("Documento firmado del plan", slug)
+
+        delete_plan_file(previous)
+
+        if format_type == ACTA_FORMAT and plan.get("acta_status") != "BORRADOR":
+            await self.improvement_plans_repository.set_acta_status(plan_id, "BORRADOR")
+
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name=ENTITY,
+            entity_id=plan_id,
+            actor_id=(current_user or {}).get("id"),
+            description=(
+                f"Eliminó el {format_type.replace('_', ' ').lower()} firmado del plan"
+            ),
+        )
+
+        return await self.plan_service.get_by_id(plan_id, current_user)
+
+    async def refresh_followup_format(self, plan_id: int, current_user) -> None:
+        """Re-render Formato 3 after a seguimiento was recorded.
+
+        The follow-up matrix *is* Formato 3, so the form is kept in step with it
+        instead of asking the director to remember to regenerate it. Any signed
+        copy is dropped along the way: it carries signatures over a page that no
+        longer matches what the plan says.
+
+        The signature goes first on purpose. If the render then fails, the row
+        is merely left without a generated copy — which the next download draws
+        again — instead of keeping a signature over content that moved on.
+        """
+
+        plan = await self.plan_service.get_by_id(plan_id, current_user)
+
+        previous = self.documents_repository.clear_signed(plan_id, FOLLOWUP_FORMAT)
+        delete_plan_file(previous)
+
+        self._render_and_store(plan, FOLLOWUP_FORMAT, (current_user or {}).get("id"))
+
     async def get_file(
         self, plan_id: int, slug: str, current_user, prefer_generated: bool = False
     ) -> tuple[str, str]:
         """Path and download name of a form, authorizing the caller.
 
         Serves the signed copy when there is one, unless the caller explicitly
-        asked for the generated original.
+        asked for the generated original. A form that was never rendered is
+        rendered now: the interface has no "generar" step any more, downloading
+        is what asks for the document.
         """
 
         format_type = resolve_format_type(slug)
@@ -226,15 +311,16 @@ class ImprovementPlanDocumentService:
 
         document = self.documents_repository.get_by_format(plan_id, format_type)
 
-        if not document:
-            raise ResourceNotFoundError("Documento del plan", slug)
-
-        if prefer_generated:
+        if document is None:
+            filepath = None
+        elif prefer_generated:
             filepath = document.generated_pdf_url
         else:
             filepath = document.signed_pdf_url or document.generated_pdf_url
 
         if not filepath:
-            raise ResourceNotFoundError("Documento del plan", slug)
+            filepath = self._render_and_store(
+                plan, format_type, (current_user or {}).get("id")
+            )
 
         return filepath, f"{slug}_plan_{plan_id}.pdf"

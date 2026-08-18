@@ -312,6 +312,44 @@ class ImprovementPlanService:
 
         return plan
 
+    def ensure_acta_complete(self, plan: dict) -> None:
+        """Reject freezing an acta that is not filled in yet.
+
+        Signing the Formato 2 is what turns the agreement into the copy of
+        record, so the acto administrativo backing it and at least one agreed
+        commitment must already be there — otherwise the department would file a
+        signed blank.
+        """
+
+        if not plan.get("acta_number") or not plan.get("acta_date"):
+            raise ValidationError(
+                "Debe registrar el número y la fecha del acta antes de firmarla"
+            )
+
+        if not any(item.get("commitment") for item in plan.get("items", [])):
+            raise ValidationError(
+                "El acta debe tener al menos un compromiso registrado"
+            )
+
+    def ensure_is_department_director(self, current_user, plan: dict) -> None:
+        """Authorize an action reserved to the director who owns the plan.
+
+        Unlike :meth:`ensure_can_manage` an ADMIN is *not* waved through: undoing
+        the signature of an agreement reopens it for editing, and that call
+        belongs to the director who signed it with the teacher.
+        """
+
+        roles = self._roles(current_user)
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles and plan.get(
+            "department_id"
+        ) == (current_user or {}).get("department_id"):
+            return
+
+        raise PermissionDeniedError(
+            "Solo el director del departamento puede realizar esta acción"
+        )
+
     def _ensure_acta_editable(self, plan: dict, payload: dict) -> None:
         """Reject edits to acta content once the acta is closed.
 
@@ -411,15 +449,7 @@ class ImprovementPlanService:
         if plan.get("acta_status") in LOCKED_ACTA_STATUSES:
             raise ValidationError("El acta ya está cerrada")
 
-        if not plan.get("acta_number") or not plan.get("acta_date"):
-            raise ValidationError(
-                "Debe registrar el número y la fecha del acta antes de cerrarla"
-            )
-
-        if not any(item.get("commitment") for item in plan.get("items", [])):
-            raise ValidationError(
-                "El acta debe tener al menos un compromiso registrado"
-            )
+        self.ensure_acta_complete(plan)
 
         updated = await self.improvement_plans_repository.set_acta_status(
             plan_id, "CERRADA", closed_by=(current_user or {}).get("id")
