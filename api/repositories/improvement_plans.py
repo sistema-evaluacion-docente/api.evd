@@ -366,7 +366,7 @@ class ImprovementPlansRepository:
                         "text": QUESTION_TEXT.get(code, code),
                         "average": q_average,
                         "below_threshold": (
-                            q_average is not None and q_average < threshold
+                            q_average is not None and q_average <= threshold
                         ),
                         "suggestions": suggest_actions("QUESTION", code),
                     }
@@ -378,7 +378,7 @@ class ImprovementPlansRepository:
                     "target_type": "DIMENSION",
                     "target_ref": dimension,
                     "average": average,
-                    "below_threshold": average is not None and average < threshold,
+                    "below_threshold": average is not None and average <= threshold,
                     "suggestions": suggest_actions("DIMENSION", dimension),
                     "questions": questions,
                 }
@@ -423,6 +423,8 @@ class ImprovementPlansRepository:
             department_name=data.department_name,
             status="EN_SEGUIMIENTO",
             acta_status="BORRADOR",
+            acta_number=data.acta_number,
+            acta_date=data.acta_date,
             start_date=data.start_date,
             end_date=data.end_date,
             council_observations=data.council_observations,
@@ -746,7 +748,10 @@ class ImprovementPlansRepository:
 
         plan.acta_status = status
 
-        if status == "CERRADA":
+        # Both freezing states stamp the trace: an acta normally goes straight
+        # from BORRADOR to FIRMADA when the signed scan lands, and skipping the
+        # stamp there would lose who froze the agreement and when.
+        if status in ("CERRADA", "FIRMADA"):
             plan.acta_closed_at = datetime.now(timezone.utc)
             plan.acta_closed_by = closed_by
         elif status == "BORRADOR":
@@ -1002,7 +1007,7 @@ class ImprovementPlansRepository:
         for teacher in teachers:
             teacher_id = teacher["teacher_id"]
             avg = teacher.get("overall_average")
-            below_threshold = avg is not None and avg < threshold
+            below_threshold = avg is not None and avg <= threshold
             has_plan = teacher_id in planned
 
             if only_at_risk and (not below_threshold or has_plan):
