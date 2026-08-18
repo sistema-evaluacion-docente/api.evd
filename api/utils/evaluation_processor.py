@@ -29,6 +29,13 @@ from api.models.user_role import UserRoleModel
 from api.models.role import RoleModel
 from api.models.notification import NotificationModel
 from api.models.director import DirectorsModel
+from api.repositories.improvement_plans import ImprovementPlansRepository
+from api.repositories.settings import SettingsRepository
+from api.services.improvement_plan_service import (
+    DEFAULT_SCORE_THRESHOLD,
+    SCORE_THRESHOLD_SETTING,
+)
+from api.utils.plan_suggestion import suggestion_reasons
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 from api.core.websockets.events import NotificationEvent
 from api.core.websockets.connection_manager import (
@@ -40,6 +47,13 @@ logger = logging.getLogger(__name__)
 # id de RiskLevelModel para "ALTO" según el orden de inserción de
 # scripts/seed_risk_categories.py (BAJO=1, MEDIO=2, ALTO=3).
 HIGH_RISK_LEVEL_ID = 3
+
+# Título de la alerta agregada de planes sugeridos. Se compara contra él para
+# no repetir la alerta si el análisis se vuelve a correr.
+PLAN_SUGGESTION_TITLE = "Docentes con plan de mejoramiento sugerido"
+
+# Cuántos nombres caben en el mensaje antes de resumir con "y N más".
+MAX_LISTED_TEACHERS = 5
 
 
 def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
@@ -306,6 +320,169 @@ def _create_high_risk_comment_notification(
             "for user %d (comment %s): %s",
             director_user_id,
             comment.id,
+            exc,
+        )
+
+
+def _run_async(coro):
+    """Run a coroutine from this sync background task.
+
+    The processor runs in a worker thread with no event loop of its own, so a
+    private loop is opened just for the call and closed right after.
+    """
+
+    loop = asyncio.new_event_loop()
+
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
+
+
+def _score_threshold(db) -> float:
+    """Institutional threshold an indicator counts as weak under."""
+
+    setting = SettingsRepository(db).get_by_key(SCORE_THRESHOLD_SETTING)
+
+    if not setting or setting.value is None:
+        return DEFAULT_SCORE_THRESHOLD
+
+    try:
+        return float(setting.value)
+    except (TypeError, ValueError):
+        return DEFAULT_SCORE_THRESHOLD
+
+
+def _plan_suggestion_message(
+    suggested: list[dict], period_code: str | None, threshold: float
+) -> str:
+    """Body of the alert: who, and why, without opening the plan screen."""
+
+    where = f" en {period_code}" if period_code else ""
+
+    if len(suggested) == 1:
+        teacher = suggested[0]
+        reasons = ", ".join(suggestion_reasons(teacher))
+
+        return (
+            f"{teacher.get('name') or 'Un docente'} presenta resultados que "
+            f"sugieren un plan de mejoramiento{where}: {reasons}. "
+            f"El umbral institucional es {threshold}."
+        )
+
+    names = [teacher.get("name") or "Docente sin nombre" for teacher in suggested]
+    listed = ", ".join(names[:MAX_LISTED_TEACHERS])
+    rest = len(names) - MAX_LISTED_TEACHERS
+
+    if rest > 0:
+        listed += f" y {rest} más"
+
+    return (
+        f"{len(suggested)} docentes presentan resultados que sugieren un plan "
+        f"de mejoramiento{where}: {listed}. "
+        f"El umbral institucional es {threshold}."
+    )
+
+
+def _create_plan_suggestion_notification(db, evaluation) -> None:
+    """Alert the director about the teachers an improvement plan is suggested
+    for, once the evaluation has been analysed.
+
+    One aggregated notification per evaluation and not one per teacher: a
+    department has dozens of them and the bell would be unreadable. Teachers
+    that already have a plan for the period are left out — the suggestion is
+    already answered.
+
+    Best-effort, like every other notification here: an alert that fails must
+    never undo an analysis that succeeded.
+    """
+
+    department_id = evaluation.department_id
+    period_id = evaluation.academic_period_id
+
+    if not department_id or not period_id:
+        return
+
+    try:
+        director = (
+            db.query(DirectorsModel)
+            .filter(DirectorsModel.department_id == department_id)
+            .first()
+        )
+
+        if not director:
+            return
+
+        threshold = _score_threshold(db)
+
+        candidates = _run_async(
+            ImprovementPlansRepository(db).get_candidates(
+                department_id=department_id,
+                period_id=period_id,
+                threshold=threshold,
+                only_at_risk=True,
+            )
+        )
+
+        if not candidates:
+            return
+
+        period_code = (
+            evaluation.academic_period.code if evaluation.academic_period else None
+        )
+
+        link = "/planes/nuevo"
+        if period_code:
+            link += f"?period_code={quote(period_code)}"
+
+        # Re-running the analysis of a period must not raise the same alert
+        # twice; the director already has it in the bell.
+        already_sent = (
+            db.query(NotificationModel)
+            .filter(
+                NotificationModel.user_id == director.user_id,
+                NotificationModel.title == PLAN_SUGGESTION_TITLE,
+                NotificationModel.link == link,
+            )
+            .first()
+        )
+
+        if already_sent:
+            return
+
+        message = _plan_suggestion_message(candidates, period_code, threshold)
+
+        notification = NotificationModel(
+            user_id=director.user_id,
+            title=PLAN_SUGGESTION_TITLE,
+            message=message,
+            type="warning",
+            link=link,
+        )
+        db.add(notification)
+        db.flush()
+
+        event = NotificationEvent(
+            notification_id=notification.id,
+            user_id=director.user_id,
+            title=PLAN_SUGGESTION_TITLE,
+            message=message,
+            notification_type="warning",
+            link=link,
+        )
+
+        channel = f"notifications:{director.user_id}"
+
+        try:
+            asyncio.get_running_loop()
+            asyncio.ensure_future(notification_manager.broadcast(channel, event))
+        except RuntimeError:
+            asyncio.run(notification_manager.broadcast(channel, event))
+
+    except Exception as exc:
+        logger.warning(
+            "Failed to create plan suggestion notification for evaluation %s: %s",
+            evaluation.id,
             exc,
         )
 
@@ -763,6 +940,10 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             success=True,
             comments_count=analyzed_count,
         )
+
+        # Only once the comments are classified: the suggestion also reads the
+        # high-risk ones, which do not exist until the analysis has run.
+        _create_plan_suggestion_notification(db, evaluation)
 
         db.commit()
 

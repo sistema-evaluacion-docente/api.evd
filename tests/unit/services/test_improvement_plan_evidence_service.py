@@ -118,7 +118,9 @@ class TestCreateRequest:
         mock_evidences_repository.create_request.assert_awaited_once()
         notification = mock_notification_service.create.call_args[0][0]
         assert notification.user_id == TEACHER_USER_ID
-        assert notification.link == "/plans/7"
+        # The app routes are Spanish; a link the SPA cannot resolve is a
+        # notification that opens on a 404.
+        assert notification.link == "/planes/7"
 
     async def test_rejected_on_a_closed_plan(self, service, mock_plan_service):
         mock_plan_service.get_by_id.return_value = _plan(status="CERRADO_CUMPLIDO")

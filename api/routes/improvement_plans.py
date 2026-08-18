@@ -83,7 +83,7 @@ async def get_at_risk_teachers(
     current_user=Depends(require_roles(MANAGER_ROLES)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Teachers below the institutional threshold that have no plan yet."""
+    """Teachers an improvement plan is suggested for, without one yet."""
 
     return await controller.get_at_risk(current_user, period_id, department_id)
 
