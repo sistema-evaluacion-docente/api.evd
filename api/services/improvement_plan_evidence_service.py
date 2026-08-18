@@ -37,7 +37,7 @@ CLOSED_PLAN_STATUSES = (
 def _plan_link(plan_id: int) -> str:
     """Deep link the notification should take the user to."""
 
-    return f"/plans/{plan_id}"
+    return f"/planes/{plan_id}"
 
 
 class ImprovementPlanEvidenceService:
