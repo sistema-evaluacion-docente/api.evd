@@ -26,7 +26,8 @@ DEFAULT_SETTINGS: list[dict[str, str]] = [
         "value": "3.5",
         "value_type": "NUMBER",
         "description": (
-            "Promedio mínimo requerido. Menor a este valor activan un plan de mejoramiento."
+            "Promedio mínimo aceptable. Una valoración hasta este valor, inclusive, "
+            "activa un plan de mejoramiento."
         ),
     },
 ]

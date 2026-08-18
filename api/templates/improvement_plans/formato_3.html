@@ -1,0 +1,122 @@
+{# Formato 3 — Plan seguimiento y mejoramiento de la evaluación docente.
+   Landscape, unlike the other two: it is a matrix of the five aspects against
+   the two formal follow-ups (week 8 and weeks 15/16).
+
+   Geometry measured off the printed original: oficio/legal turned sideways,
+   a 32.50 cm text column, the shaded matrix header and the institutional
+   footer this form does carry. #}
+{% extends "_base.html" %}
+
+{% block page_size %}35.56cm 21.59cm{% endblock %}
+{% block page_margin %}4.05cm 1.07cm 2.05cm 2cm{% endblock %}
+{# The text column already sits at the page margins on this sheet. #}
+{% block body_padding %}0{% endblock %}
+{% block header_offset %}0.35cm{% endblock %}
+{% block footer_offset %}10.14cm{% endblock %}
+
+{% block page_footer %}
+<div class="doc-footer">
+  Avenida Gran Colombia No. 12E-96 Barrio Colsag<br>
+  Teléfono (057)(7) 5776655 - www.ufps.edu.co<br>
+  oficinadeprensa@ufps.edu.co &nbsp;San José de Cúcuta - Colombia
+  <div class="decree">Creada mediante decreto 323 de 1970</div>
+</div>
+{% endblock %}
+
+{% block content %}
+{# Five columns so both rows can break where the original breaks them: the
+   DOCENTE row splits at 27.79 cm, which is not a boundary of the row above. #}
+<table class="grid" style="margin-bottom: 0.5cm;" {{ word_table_attrs }}>
+  <tr>
+    <th class="label" style="width: 10.4%;">FACULTAD</th>
+    <td style="width: 33.8%;">{{ faculty_name or "" }}</td>
+    <th class="label" style="width: 15.2%;">DEPARTAMENTO ACADÉMICO</th>
+    <td colspan="2">{{ department_name or "" }}</td>
+  </tr>
+  <tr>
+    <th class="label">DOCENTE</th>
+    <td colspan="3">{{ teacher_name or "" }}</td>
+    <td style="width: 20.6%;"><strong>CÓDIGO:</strong> {{ teacher_code or "" }}</td>
+  </tr>
+</table>
+
+<table class="grid" style="margin-bottom: 0.75cm;" {{ word_table_attrs }}>
+  <tr>
+    <th style="width: 36.4%;">ASIGNATURA</th>
+    <th style="width: 16.8%;">CÓDIGO ASIGNATURA</th>
+    <th style="width: 6.3%;">GRUPO</th>
+    <th style="width: 40.5%;">PROGRAMA ACADÉMICO</th>
+  </tr>
+  {% for course in courses %}
+  <tr>
+    <td>{{ course.course_name }}</td>
+    <td>{{ course.course_code or "" }}</td>
+    <td>{{ course.group_name or "" }}</td>
+    <td>{{ course.program_name or program_name or "" }}</td>
+  </tr>
+  {% else %}
+  <tr><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
+  {% endfor %}
+</table>
+
+<table class="grid" {{ word_table_attrs }}>
+  <tr>
+    <th class="shaded" style="width: 15.6%;">ASPECTO EN SEGUIMIENTO</th>
+    <th class="shaded" style="width: 7.2%;">MARQUE X</th>
+    <th class="shaded" style="width: 22.6%;">DESCRIPCIÓN DEL ASPECTO EN SEGUIMIENTO</th>
+    <th class="shaded" style="width: 19.2%;">COMPROMISO ESTABLECIDO SEGÚN EL ASPECTO EN SEGUIMIENTO</th>
+    <th class="shaded" style="width: 18.5%;">*PRIMER SEGUIMIENTO</th>
+    <th class="shaded" style="width: 16.8%;">**SEGUNDO SEGUIMIENTO</th>
+  </tr>
+  <tr>
+    <td colspan="4"><strong>Fecha:</strong> {{ plan.start_date|date_es }}</td>
+    <td><strong>Fecha:</strong> {{ first_checkpoint.scheduled_date|date_es if first_checkpoint else "" }}</td>
+    <td><strong>Fecha:</strong> {{ second_checkpoint.scheduled_date|date_es if second_checkpoint else "" }}</td>
+  </tr>
+  {% for aspect in aspects %}
+  <tr>
+    <td><strong>{{ aspect.aspect }}. {{ aspect.label }}:</strong></td>
+    <td style="text-align: center; font-weight: bold;">{{ "X" if aspect.entries else "" }}</td>
+    <td>
+      {% for item in aspect.entries %}
+        <div>{{ item.description }}</div>
+        {% for comment in item.comments %}
+          <div class="muted" style="font-size: 8pt;">“{{ comment.original_text }}”</div>
+        {% endfor %}
+      {% endfor %}
+    </td>
+    <td>
+      {% for item in aspect.entries if item.commitment %}
+        <div>{{ item.commitment }}</div>
+      {% endfor %}
+    </td>
+    <td>{{ aspect.first_note or "" }}</td>
+    <td>{{ aspect.second_note or "" }}</td>
+  </tr>
+  {% endfor %}
+  <tr style="page-break-inside: avoid;">
+    <td colspan="6">
+      <strong>Observación del director o coordinador del Programa académico en casos específicos de quejas del plan de estudios:</strong>
+      <div style="min-height: 0.9cm; white-space: pre-wrap;">{{ plan.program_director_observations or "" }}</div>
+    </td>
+  </tr>
+  <tr style="page-break-inside: avoid;">
+    <td colspan="3" style="vertical-align: top;">
+      <strong>Observación del director del Departamento:</strong>
+      <div style="min-height: 1.6cm; white-space: pre-wrap;">{{ plan.department_director_observations or "" }}</div>
+    </td>
+    {% for _ in range(3) %}
+    <td style="vertical-align: top;">
+      <div style="text-align: center; font-weight: bold;">FIRMAS*<br>Evaluador/Evaluado</div>
+      <div style="margin-top: 14px;"><strong>Evaluador:</strong></div>
+      <div style="margin-top: 14px;"><strong>Evaluado:</strong></div>
+    </td>
+    {% endfor %}
+  </tr>
+</table>
+
+<p class="footnote">
+  * <strong>El primer seguimiento</strong> se realiza a la <strong><em>8 semana</em></strong> de inicio del plan de seguimiento y mejoramiento<br>
+  ** <strong>El segundo seguimiento</strong> se realiza a la <strong><em>15 y/o 16 semanas</em></strong> de inicio del plan de seguimiento y mejoramiento
+</p>
+{% endblock %}

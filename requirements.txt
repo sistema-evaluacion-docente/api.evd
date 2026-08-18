@@ -12,5 +12,6 @@ spacy
 openpyxl
 transformers
 torch
+weasyprint
 pytest
 pytest-asyncio

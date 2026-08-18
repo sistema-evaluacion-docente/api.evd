@@ -1,0 +1,257 @@
+{# Base layout shared by the three official UFPS improvement-plan forms.
+   Rendered by api/utils/improvement_plan_pdf.py with WeasyPrint, and reused
+   verbatim for the editable Word copy (``word`` flag in the context).
+
+   The geometry mirrors the printed originals, measured off the scanned form:
+   oficio/legal paper, a 14.97 cm text column, and an institutional letterhead
+   that spills into the margins and repeats on every page. #}
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    /* The letterhead sits in the page margins, so the @page box is the
+       letterhead's width and `body` insets itself to the real text column. */
+    @page {
+      size: {% block page_size %}21.59cm 35.56cm{% endblock %};
+      margin: {% block page_margin %}4.05cm 0.76cm 2.2cm 1.83cm{% endblock %};
+
+      /* Full width and flush left: the letterhead spans the whole sheet, wider
+         than the text column underneath it. */
+      @top-center {
+        content: element(pageheader);
+        vertical-align: top;
+        width: 100%;
+      }
+
+      @bottom-center {
+        content: element(pagefooter);
+        vertical-align: top;
+        width: 100%;
+      }
+    }
+
+    body {
+      font-family: "Liberation Serif", "Times New Roman", serif;
+      font-size: 11pt;
+      color: #000;
+      margin: 0;
+      padding: {% block body_padding %}0 2.05cm 0 1.98cm{% endblock %};
+    }
+
+    {% if word %}
+    /* Word drives the page from its own section rule and has no running
+       header, so the letterhead flows with the text at column width. */
+    @page { margin: 2.5cm 2.81cm 2.2cm 3.81cm; }
+    body { padding: 0; }
+    {% endif %}
+
+    /* Institutional header. Table-based on purpose: WeasyPrint's flexbox
+       support is partial, tables lay this out predictably. */
+    /* The letterhead is a fixed 19 cm band anchored to the left margin, not a
+       full-width strip: on the landscape sheet it stops well before the edge,
+       exactly as the printed original does. */
+    table.doc-header {
+      width: 19cm;
+      border-collapse: collapse;
+      border-bottom: 1pt solid #000;
+      padding-bottom: 4px;
+      margin: 1.07cm 0 0 {% block header_offset %}0{% endblock %};
+      {% if not word %}
+      position: running(pageheader);
+      {% else %}
+      margin-bottom: 16px;
+      {% endif %}
+    }
+    table.doc-header td { vertical-align: middle; padding: 0; }
+    table.doc-header td.ufps-cell { width: 3.5cm; }
+    table.doc-header td.divider-cell {
+      width: 1px;
+      border-left: 0.7pt solid #bbb;
+      padding: 6px 0;
+    }
+    /* Sizes taken off the printed original: the UFPS mark measures 2.93 x 2.13
+       cm and the accreditation seal 5.31 x 1.07 cm of visible ink. Both PNGs
+       carry transparent padding, hence the boxes are slightly taller. */
+    table.doc-header td.acreditacion-cell { padding-left: 0.05cm; }
+    table.doc-header img.ufps { height: 2.14cm; }
+    table.doc-header img.acreditacion { height: 2.12cm; }
+
+    h1.doc-title {
+      font-size: 12pt;
+      font-weight: bold;
+      text-align: center;
+      text-transform: uppercase;
+      margin: 0 0 18px 0;
+      line-height: 1.35;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    /* Fixed layout so the declared column widths are honoured instead of being
+       renegotiated from the content: the forms are traced from a printed grid. */
+    table.grid { table-layout: fixed; }
+    /* The printed forms are black on white: no fills anywhere. */
+    table.grid th,
+    table.grid td {
+      /* The declared widths are column widths off a printed grid, so padding
+         and border have to count inside them, not stretch the table. */
+      box-sizing: border-box;
+      border: 0.8pt solid #000;
+      padding: 3pt 5pt;
+      vertical-align: top;
+      font-size: 10.5pt;
+      background: transparent;
+    }
+    table.grid th {
+      font-weight: bold;
+      text-align: center;
+    }
+    /* Opt-in fill: only the follow-up matrix of Formato 3 is shaded in print. */
+    table.grid th.shaded { background: #d9d9d9; }
+    table.grid th.label {
+      text-align: left;
+      width: 24%;
+    }
+
+    /* A filled-in value that stands in for a hand-written line. */
+    .value { min-height: 11pt; }
+    .value.empty::after { content: "\00a0"; }
+
+    /* Free-text block with a visible frame. Only Formato 1 uses it; the ficha
+       writes on ruled lines instead, like the printed original. */
+    .textbox {
+      border: 0.8pt solid #000;
+      padding: 5pt;
+      min-height: 2.2cm;
+      font-size: 10.5pt;
+      white-space: pre-wrap;
+      margin-bottom: 12px;
+    }
+
+    .field-line {
+      border-bottom: 0.7pt solid #000;
+      min-height: 13pt;
+      padding: 1pt 2pt;
+      white-space: pre-wrap;
+    }
+
+    /* Word copy: the rules are underscore characters, so the paragraph only
+       needs tight leading to look like a ruled form. */
+    .ruled-word { margin: 0 0 2pt 0; }
+    .quoted { color: #555; font-size: 9.5pt; }
+
+    /* "Compromiso:" and its ruled line share one line in the printed form. */
+    table.inline-field { margin-top: 14px; }
+    table.inline-field td { padding: 0; vertical-align: bottom; }
+    /* 1% keeps the label shrink-to-fit, so the rule starts right after the
+       colon instead of after a gap. */
+    table.inline-field td.lbl { width: 1%; white-space: nowrap; }
+    table.inline-field td.rule {
+      border-bottom: 0.7pt solid #000;
+      min-height: 13pt;
+      padding: 1pt 2pt;
+    }
+
+    /* The numbered aspect headings print the number apart from the label, the
+       way the original's numbered list does. */
+    .section-title {
+      font-weight: bold;
+      font-size: 11pt;
+      margin: 18px 0 6px 0;
+    }
+    .section-title.upper { text-transform: uppercase; }
+    .section-title .num {
+      display: inline-block;
+      width: 1.25cm;
+      font-weight: bold;
+    }
+    .field-label { font-size: 11pt; margin: 0 0 4px 0; }
+
+    table.signatures {
+      margin-top: 46px;
+      page-break-inside: avoid;
+      border-collapse: separate;
+      border-spacing: 14px 0;
+    }
+    table.signatures td { text-align: center; vertical-align: bottom; }
+    .signature .line {
+      border-top: 0.8pt solid #000;
+      margin-bottom: 3px;
+      padding-top: 2px;
+    }
+    /* Both captions stay on one line so the two rules sit at the same height,
+       the way they are printed on the original. */
+    .signature .caption {
+      font-weight: bold;
+      font-size: 10pt;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    /* Centred parenthetical remark under the observations, as in the original:
+       same serif, no italics, no grey. */
+    .note-center { text-align: center; font-size: 10.5pt; margin: 6px 0 0 0; }
+
+    /* Institutional footer. Only the forms whose original carries one turn it
+       on, through the `page_footer` block; it is a narrow block aligned to the
+       right end of the letterhead band, not a full-width strip. */
+    .doc-footer {
+      {% if not word %}
+      position: running(pagefooter);
+      {% endif %}
+      width: 9.2cm;
+      margin-left: {% block footer_offset %}9.8cm{% endblock %};
+      border-top: 1.5pt solid #e41420;
+      padding-top: 3pt;
+      text-align: center;
+      font-family: "Liberation Sans", Arial, sans-serif;
+      font-size: 7pt;
+      line-height: 1.35;
+      color: #303030;
+    }
+    .doc-footer .decree { font-size: 6pt; color: #a8a8a8; }
+    .blank {
+      display: inline-block;
+      border-bottom: 0.7pt solid #000;
+      min-width: 2.6cm;
+      text-align: center;
+    }
+    /* Legend under a form, in the same body type as the original prints it. */
+    .footnote { font-size: 10.5pt; margin: 6px 0 0 0; line-height: 1.4; }
+    .muted { color: #555; }
+  </style>
+</head>
+<body>
+  <table class="doc-header">
+    <tr>
+      <td class="ufps-cell">
+        {# Sizes repeated as HTML attributes: word processors ignore CSS
+           dimensions on images and would print them at full resolution. #}
+        <img class="ufps" src="{{ ufps_logo_src }}" width="111" height="81"
+             alt="Universidad Francisco de Paula Santander">
+      </td>
+      <td class="divider-cell"></td>
+      <td class="acreditacion-cell">
+        <img class="acreditacion" src="{{ acreditacion_logo_src }}" width="222" height="80"
+             alt="Acreditación Institucional en Alta Calidad">
+      </td>
+    </tr>
+  </table>
+
+  {# A running element only reaches the pages that follow it in document
+     order, so for the PDF the footer has to be declared up here. The Word copy
+     has no running elements: there it is emitted at the end instead, which is
+     where a footer belongs when it simply flows with the text. #}
+  {% if not word %}{% block page_footer %}{% endblock %}{% endif %}
+
+  <h1 class="doc-title">{{ title }}</h1>
+
+  {% block content %}{% endblock %}
+
+  {% if word %}{{ self.page_footer() }}{% endif %}
+</body>
+</html>

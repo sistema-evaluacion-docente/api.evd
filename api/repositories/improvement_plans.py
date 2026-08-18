@@ -12,25 +12,45 @@ from sqlalchemy.orm import Session
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
 from api.models.academic_period import AcademicPeriodModel
+from api.models.course import CourseModel
+from api.models.department import DepartmentModel
+from api.models.director import DirectorsModel
 from api.models.evaluation import EvaluationModel
+from api.models.faculty import FacultyModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.improvement_plan import ImprovementPlanModel
+from api.models.improvement_plan_case_report import ImprovementPlanCaseReportModel
 from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointModel
+from api.models.improvement_plan_checkpoint_note import (
+    ImprovementPlanCheckpointNoteModel,
+)
+from api.models.improvement_plan_course import ImprovementPlanCourseModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
+from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.repositories.stats import StatsRepository
 from api.schemas.improvement_plan import (
+    ImprovementPlanCaseReportUpsert,
+    ImprovementPlanCheckpointUpdate,
+    ImprovementPlanCourseCreate,
     ImprovementPlanCreate,
+    ImprovementPlanItemCreate,
     ImprovementPlanUpdate,
 )
 from api.serializers.improvement_plans import improvement_plan_to_dict
-from api.utils.dimensions import DIMENSION_MAP, QUESTION_TEXT
+from api.utils.dimensions import (
+    ASPECT_NUMBERS,
+    DIMENSION_MAP,
+    QUESTION_TEXT,
+    aspect_for_target,
+)
 from api.utils.improvement_suggestions import suggest_actions
 
-CHECKPOINT_STAGES = ["INICIO", "MITAD", "SEMANA_16"]
+# The two formal follow-ups of the official form: week 8 and weeks 15/16.
+CHECKPOINT_STAGES = ["PRIMER_SEGUIMIENTO", "SEGUNDO_SEGUIMIENTO"]
 
 MEASURABLE_TARGET_TYPES = ("OVERALL_AVERAGE", "DIMENSION", "QUESTION")
 
@@ -146,6 +166,95 @@ class ImprovementPlansRepository:
             .first()
         )
 
+    def get_department_director_user_id(self, department_id: int | None) -> int | None:
+        """User id of the active director of a department, to notify them."""
+
+        if department_id is None:
+            return None
+
+        row = (
+            self.db.query(DirectorsModel.user_id)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active.is_(True),
+            )
+            .first()
+        )
+
+        return row[0] if row else None
+
+    def get_teacher_department_id(self, teacher_id: int) -> int | None:
+        """Department a teacher belongs to."""
+
+        row = (
+            self.db.query(TeacherModel.department_id)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+
+        return row[0] if row else None
+
+    def get_teacher_context(self, teacher_id: int) -> dict:
+        """Header data the official forms print: código, departamento, facultad."""
+
+        row = (
+            self.db.query(
+                UserModel.institutional_code,
+                DepartmentModel.name.label("department_name"),
+                FacultyModel.name.label("faculty_name"),
+            )
+            .select_from(TeacherModel)
+            .outerjoin(UserModel, UserModel.id == TeacherModel.user_id)
+            .outerjoin(
+                DepartmentModel, DepartmentModel.id == TeacherModel.department_id
+            )
+            .outerjoin(FacultyModel, FacultyModel.id == DepartmentModel.faculty_id)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+
+        if not row:
+            return {"code": None, "department_name": None, "faculty_name": None}
+
+        return {
+            "code": row.institutional_code,
+            "department_name": row.department_name,
+            "faculty_name": row.faculty_name,
+        }
+
+    async def get_teacher_courses(self, teacher_id: int, period_id: int) -> list[dict]:
+        """Asignaturas the teacher taught in a period.
+
+        Used to prefill the courses table of the official forms; the plan keeps
+        its own snapshot of the rows the director actually chooses.
+        """
+
+        rows = (
+            self.db.query(
+                AcademicGroupModel.id,
+                CourseModel.name.label("course_name"),
+                CourseModel.code.label("course_code"),
+                AcademicGroupModel.group_name,
+            )
+            .outerjoin(CourseModel, CourseModel.id == AcademicGroupModel.course_id)
+            .filter(
+                AcademicGroupModel.teacher_id == teacher_id,
+                AcademicGroupModel.academic_period_id == period_id,
+            )
+            .order_by(CourseModel.name)
+            .all()
+        )
+
+        return [
+            {
+                "academic_group_id": row.id,
+                "course_name": row.course_name,
+                "course_code": row.course_code,
+                "group_name": row.group_name,
+            }
+            for row in rows
+        ]
+
     async def has_plan_for(self, teacher_id: int, origin_period_id: int) -> bool:
         """Whether a plan already exists for this teacher and origin period."""
 
@@ -257,7 +366,7 @@ class ImprovementPlansRepository:
                         "text": QUESTION_TEXT.get(code, code),
                         "average": q_average,
                         "below_threshold": (
-                            q_average is not None and q_average < threshold
+                            q_average is not None and q_average <= threshold
                         ),
                         "suggestions": suggest_actions("QUESTION", code),
                     }
@@ -269,7 +378,7 @@ class ImprovementPlansRepository:
                     "target_type": "DIMENSION",
                     "target_ref": dimension,
                     "average": average,
-                    "below_threshold": average is not None and average < threshold,
+                    "below_threshold": average is not None and average <= threshold,
                     "suggestions": suggest_actions("DIMENSION", dimension),
                     "questions": questions,
                 }
@@ -309,35 +418,84 @@ class ImprovementPlansRepository:
             verification_period_id=verification_period_id,
             title=data.title,
             description=data.description,
+            program_name=data.program_name,
+            faculty_name=data.faculty_name,
+            department_name=data.department_name,
             status="EN_SEGUIMIENTO",
+            acta_status="BORRADOR",
+            acta_number=data.acta_number,
+            acta_date=data.acta_date,
             start_date=data.start_date,
             end_date=data.end_date,
+            council_observations=data.council_observations,
+            department_director_observations=data.department_director_observations,
+            program_director_observations=data.program_director_observations,
             created_by=created_by,
         )
 
         for index, item in enumerate(data.items):
-            plan.items.append(
-                ImprovementPlanItemModel(
-                    description=item.description,
-                    target_type=item.target_type.value,
-                    target_ref=item.target_ref,
-                    baseline_value=item.baseline_value,
-                    target_value=item.target_value,
-                    status=item.status.value if item.status else "PENDIENTE",
-                    order=item.order if item.order is not None else index,
-                )
-            )
+            plan.items.append(self._build_item(item, index))
 
+        for index, course in enumerate(data.courses):
+            plan.courses.append(self._build_course(course, index))
+
+        # Both seguimientos are created upfront, each with its five aspect rows,
+        # so the follow-up matrix of Formato 3 always renders complete.
         for stage in CHECKPOINT_STAGES:
-            plan.checkpoints.append(
-                ImprovementPlanCheckpointModel(stage=stage, status="PENDIENTE")
-            )
+            checkpoint = ImprovementPlanCheckpointModel(stage=stage, status="PENDIENTE")
+            for aspect in ASPECT_NUMBERS:
+                checkpoint.aspect_notes.append(
+                    ImprovementPlanCheckpointNoteModel(aspect=aspect)
+                )
+            plan.checkpoints.append(checkpoint)
 
         self.db.add(plan)
         self.db.commit()
         self.db.refresh(plan)
 
         return self._enrich(plan)
+
+    def _build_item(
+        self, item: ImprovementPlanItemCreate, index: int
+    ) -> ImprovementPlanItemModel:
+        """Build an item, defaulting its form aspect from the targeted indicator."""
+
+        target_type = item.target_type.value
+        aspect = item.aspect or aspect_for_target(target_type, item.target_ref)
+
+        model = ImprovementPlanItemModel(
+            description=item.description,
+            commitment=item.commitment,
+            aspect=aspect,
+            target_type=target_type,
+            target_ref=item.target_ref,
+            baseline_value=item.baseline_value,
+            target_value=item.target_value,
+            status=item.status.value if item.status else "PENDIENTE",
+            order=item.order if item.order is not None else index,
+        )
+
+        for comment_id in item.comment_ids or []:
+            model.comment_links.append(
+                ImprovementPlanItemCommentModel(comment_id=comment_id)
+            )
+
+        return model
+
+    @staticmethod
+    def _build_course(
+        course: ImprovementPlanCourseCreate, index: int
+    ) -> ImprovementPlanCourseModel:
+        """Build one asignatura row of the official form header table."""
+
+        return ImprovementPlanCourseModel(
+            academic_group_id=course.academic_group_id,
+            course_name=course.course_name,
+            course_code=course.course_code,
+            group_name=course.group_name,
+            program_name=course.program_name,
+            order=course.order if course.order is not None else index,
+        )
 
     async def get_all(
         self,
@@ -415,6 +573,7 @@ class ImprovementPlansRepository:
 
         payload = data.model_dump(exclude_unset=True)
         payload.pop("items", None)
+        payload.pop("courses", None)
 
         for field, value in payload.items():
             setattr(plan, field, value)
@@ -427,8 +586,12 @@ class ImprovementPlansRepository:
                 if incoming.id and incoming.id in existing:
                     item = existing[incoming.id]
                     item.description = incoming.description
+                    item.commitment = incoming.commitment
                     item.target_type = incoming.target_type.value
                     item.target_ref = incoming.target_ref
+                    item.aspect = incoming.aspect or aspect_for_target(
+                        item.target_type, item.target_ref
+                    )
                     item.baseline_value = incoming.baseline_value
                     item.target_value = incoming.target_value
                     if incoming.status:
@@ -436,36 +599,126 @@ class ImprovementPlansRepository:
                     item.order = (
                         incoming.order if incoming.order is not None else index
                     )
+                    if incoming.comment_ids is not None:
+                        self._replace_item_comments(item, incoming.comment_ids)
                     incoming_ids.add(incoming.id)
                 else:
-                    plan.items.append(
-                        ImprovementPlanItemModel(
-                            description=incoming.description,
-                            target_type=incoming.target_type.value,
-                            target_ref=incoming.target_ref,
-                            baseline_value=incoming.baseline_value,
-                            target_value=incoming.target_value,
-                            status=(
-                                incoming.status.value
-                                if incoming.status
-                                else "PENDIENTE"
-                            ),
-                            order=(
-                                incoming.order
-                                if incoming.order is not None
-                                else index
-                            ),
-                        )
-                    )
+                    plan.items.append(self._build_item(incoming, index))
 
             for item_id, item in existing.items():
                 if item_id not in incoming_ids:
                     self.db.delete(item)
 
+        if data.courses is not None:
+            for course in list(plan.courses):
+                self.db.delete(course)
+            plan.courses = [
+                self._build_course(course, index)
+                for index, course in enumerate(data.courses)
+            ]
+
         self.db.commit()
         self.db.refresh(plan)
 
         return self._enrich(plan)
+
+    def _replace_item_comments(
+        self, item: ImprovementPlanItemModel, comment_ids: list[int]
+    ) -> None:
+        """Replace the student comments cited by an item."""
+
+        wanted = set(comment_ids)
+        current = {link.comment_id for link in item.comment_links}
+
+        for link in list(item.comment_links):
+            if link.comment_id not in wanted:
+                item.comment_links.remove(link)
+
+        for comment_id in wanted - current:
+            item.comment_links.append(
+                ImprovementPlanItemCommentModel(comment_id=comment_id)
+            )
+
+    # ------------------------------------------------------------------ #
+    # Formato 1 — caso reportado por el programa académico
+    # ------------------------------------------------------------------ #
+    async def upsert_case_report(
+        self,
+        plan_id: int,
+        data: ImprovementPlanCaseReportUpsert,
+        reported_by: int | None = None,
+    ) -> dict | None:
+        """Create or update the Formato 1 case report attached to a plan."""
+
+        plan = self._load(plan_id)
+        if not plan:
+            return None
+
+        case_report = plan.case_report
+        if case_report is None:
+            case_report = ImprovementPlanCaseReportModel(reported_by=reported_by)
+            plan.case_report = case_report
+
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(case_report, field, value)
+
+        self.db.commit()
+        self.db.refresh(plan)
+
+        return self._enrich(plan)
+
+    # ------------------------------------------------------------------ #
+    # Seguimientos (Formato 3)
+    # ------------------------------------------------------------------ #
+    def get_checkpoint(
+        self, plan_id: int, checkpoint_id: int
+    ) -> ImprovementPlanCheckpointModel | None:
+        """A checkpoint of the given plan, or None if it belongs elsewhere."""
+
+        return (
+            self.db.query(ImprovementPlanCheckpointModel)
+            .filter(
+                ImprovementPlanCheckpointModel.id == checkpoint_id,
+                ImprovementPlanCheckpointModel.plan_id == plan_id,
+            )
+            .first()
+        )
+
+    async def update_checkpoint(
+        self,
+        plan_id: int,
+        checkpoint_id: int,
+        data: ImprovementPlanCheckpointUpdate,
+    ) -> dict | None:
+        """Fill in one of the two formal seguimientos, per aspect."""
+
+        checkpoint = self.get_checkpoint(plan_id, checkpoint_id)
+        if not checkpoint:
+            return None
+
+        payload = data.model_dump(exclude_unset=True)
+        payload.pop("aspect_notes", None)
+
+        for field, value in payload.items():
+            setattr(checkpoint, field, value)
+
+        if checkpoint.status == "COMPLETADO" and checkpoint.completed_at is None:
+            checkpoint.completed_at = datetime.now(timezone.utc)
+
+        if data.aspect_notes is not None:
+            by_aspect = {note.aspect: note for note in checkpoint.aspect_notes}
+            for incoming in data.aspect_notes:
+                note = by_aspect.get(incoming.aspect)
+                if note is None:
+                    note = ImprovementPlanCheckpointNoteModel(aspect=incoming.aspect)
+                    checkpoint.aspect_notes.append(note)
+                note.note = incoming.note
+
+        self.db.commit()
+
+        plan = self._load(plan_id)
+
+        return self._enrich(plan) if plan else None
 
     async def get_by_teacher(self, teacher_id: int) -> list[dict]:
         """All plans of a teacher, newest first (for the teacher-facing view)."""
@@ -481,38 +734,34 @@ class ImprovementPlansRepository:
     # ------------------------------------------------------------------ #
     # Acta de compromiso & evidences
     # ------------------------------------------------------------------ #
-    async def set_acta(
+    async def set_acta_status(
         self,
         plan_id: int,
-        file_url: str | None = None,
-        description: str | None = None,
+        status: str,
+        closed_by: int | None = None,
     ) -> dict | None:
-        """Attach/replace the acta PDF and/or update its description.
-
-        Returns the enriched plan plus the previous file url (so the caller
-        can remove the replaced file from disk)."""
+        """Move the acta through BORRADOR / CERRADA / FIRMADA."""
 
         plan = self._load(plan_id)
         if not plan:
             return None
 
-        previous_file_url = None
+        plan.acta_status = status
 
-        if file_url:
-            previous_file_url = plan.acta_pdf_url
-            plan.acta_pdf_url = file_url
-            plan.acta_uploaded_at = datetime.now(timezone.utc)
-
-        if description is not None:
-            plan.acta_description = description.strip() or None
+        # Both freezing states stamp the trace: an acta normally goes straight
+        # from BORRADOR to FIRMADA when the signed scan lands, and skipping the
+        # stamp there would lose who froze the agreement and when.
+        if status in ("CERRADA", "FIRMADA"):
+            plan.acta_closed_at = datetime.now(timezone.utc)
+            plan.acta_closed_by = closed_by
+        elif status == "BORRADOR":
+            plan.acta_closed_at = None
+            plan.acta_closed_by = None
 
         self.db.commit()
         self.db.refresh(plan)
 
-        return {
-            "plan": self._enrich(plan),
-            "previous_file_url": previous_file_url,
-        }
+        return self._enrich(plan)
 
     async def add_evidence(
         self,
@@ -758,7 +1007,7 @@ class ImprovementPlansRepository:
         for teacher in teachers:
             teacher_id = teacher["teacher_id"]
             avg = teacher.get("overall_average")
-            below_threshold = avg is not None and avg < threshold
+            below_threshold = avg is not None and avg <= threshold
             has_plan = teacher_id in planned
 
             if only_at_risk and (not below_threshold or has_plan):
