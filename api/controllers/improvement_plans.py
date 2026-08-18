@@ -134,11 +134,20 @@ class ImprovementPlansController:
         data: ImprovementPlanCheckpointUpdate,
         current_user,
     ):
-        """Record one of the two formal seguimientos."""
+        """Record one of the two formal seguimientos.
 
-        return await self.service.update_checkpoint(
+        Formato 3 *is* that matrix, so it is re-rendered right here and the plan
+        comes back already reflecting it: the director never has to remember to
+        regenerate the form he just changed.
+        """
+
+        await self.service.update_checkpoint(
             plan_id, checkpoint_id, data, current_user
         )
+
+        await self.document_service.refresh_followup_format(plan_id, current_user)
+
+        return await self.service.get_by_id(plan_id, current_user)
 
     async def close_acta(self, plan_id: int, current_user):
         """Freeze the acta content ahead of signing."""
@@ -180,12 +189,26 @@ class ImprovementPlansController:
         )
 
     async def upload_signed_document(
-        self, plan_id: int, format_type: str, pdf_bytes: bytes, current_user
+        self,
+        plan_id: int,
+        format_type: str,
+        pdf_bytes: bytes,
+        current_user,
+        filename: str | None = None,
     ):
         """Attach the physically signed copy of an official form."""
 
         return await self.document_service.upload_signed(
-            plan_id, format_type, pdf_bytes, current_user
+            plan_id, format_type, pdf_bytes, current_user, filename=filename
+        )
+
+    async def delete_signed_document(
+        self, plan_id: int, format_type: str, current_user
+    ):
+        """Detach a signed copy that was attached by mistake."""
+
+        return await self.document_service.delete_signed(
+            plan_id, format_type, current_user
         )
 
     async def get_document_file(
