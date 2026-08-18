@@ -293,8 +293,26 @@ async def upload_signed_document(
     pdf_bytes = await _read_pdf(file)
 
     return await controller.upload_signed_document(
-        plan_id, format_type, pdf_bytes, current_user
+        plan_id, format_type, pdf_bytes, current_user, filename=file.filename
     )
+
+
+@router.delete(
+    "/{plan_id}/documents/{format_type}/signed", response_model=ImprovementPlanOut
+)
+async def delete_signed_document(
+    plan_id: int,
+    format_type: str,
+    current_user=Depends(require_roles(MANAGER_ROLES)),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Detach the signed copy of an official form — a wrong or outdated scan.
+
+    The generated PDF stays in place, so the form simply goes back to asking for
+    a signature. For the acta (formato-2) this walks FIRMADA back to CERRADA.
+    """
+
+    return await controller.delete_signed_document(plan_id, format_type, current_user)
 
 
 @router.get(
