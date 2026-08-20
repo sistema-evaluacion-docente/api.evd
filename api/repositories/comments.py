@@ -218,7 +218,9 @@ class CommentsRepository(BaseRepository[CommentModel]):
         A field is only flagged as director-modified (and its confidence score
         set to 1, i.e. 100%, since it now reflects a human decision instead of
         the AI model's estimate) when the provided value actually differs from
-        the current one. Categories are replaced wholesale as a set.
+        the current one. The AI model attribution is cleared for the same
+        reason: no model produced the new value. Categories are replaced
+        wholesale as a set.
         """
 
         comment = self.get(comment_id)
@@ -230,6 +232,7 @@ class CommentsRepository(BaseRepository[CommentModel]):
             comment.risk_level = risk_level
             comment.risk_level_modified_by_director = True
             comment.risk_score = 1
+            comment.risk_level_ai_model = None
 
         if pedagogical_category_ids is not None:
             current_ids = {
@@ -244,6 +247,7 @@ class CommentsRepository(BaseRepository[CommentModel]):
                     for category_id in pedagogical_category_ids
                 ]
                 comment.pedagogical_category_modified_by_director = True
+                comment.pedagogical_category_ai_model = None
 
         self.db.commit()
         self.db.refresh(comment)

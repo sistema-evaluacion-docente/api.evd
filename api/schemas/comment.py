@@ -50,6 +50,8 @@ class CommentOut(BaseModel):
     pedagogical_categories: list[PedagogicalCategoryScoreOut] = []
     risk_level_modified_by_director: bool = False
     pedagogical_category_modified_by_director: bool = False
+    risk_level_ai_model: Optional[str] = None
+    pedagogical_category_ai_model: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

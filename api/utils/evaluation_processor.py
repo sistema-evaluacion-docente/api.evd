@@ -860,6 +860,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
 
                 comment.risk_level = risk_cache[risk_label]
                 comment.risk_score = result.get("risk_score")
+                comment.risk_level_ai_model = result.get("risk_model")
 
                 if comment.risk_level == HIGH_RISK_LEVEL_ID and director_user_id:
                     if comment.teacher_id not in teacher_name_cache:
@@ -887,7 +888,12 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                         ),
                     )
 
-            for category in result.get("category_labels", []):
+            category_labels = result.get("category_labels", [])
+
+            if category_labels:
+                comment.pedagogical_category_ai_model = result.get("category_model")
+
+            for category in category_labels:
                 category_label = category["label"]
 
                 if category_label not in category_cache:
