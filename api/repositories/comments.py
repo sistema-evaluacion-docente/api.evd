@@ -195,6 +195,18 @@ class CommentsRepository(BaseRepository[CommentModel]):
 
         return result[0] if result else None
 
+    def get_teacher_user_id(self, comment_id: int) -> int | None:
+        """Get the user_id of the teacher a comment is about, to notify them."""
+
+        result = (
+            self.db.query(TeacherModel.user_id)
+            .join(CommentModel, CommentModel.teacher_id == TeacherModel.id)
+            .filter(CommentModel.id == comment_id)
+            .first()
+        )
+
+        return result[0] if result else None
+
     def update_classification(
         self,
         comment_id: int,

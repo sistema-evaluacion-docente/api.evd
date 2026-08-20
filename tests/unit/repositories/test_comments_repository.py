@@ -57,6 +57,28 @@ class TestCommentsRepository:
 
         assert result is None
 
+    def test_get_teacher_user_id_returns_id_when_found(self, repo, mock_db):
+        """Test get_teacher_user_id returns the user_id of the comment's teacher."""
+
+        mock_db.query.return_value.join.return_value.filter.return_value.first.return_value = (
+            42,
+        )
+
+        result = repo.get_teacher_user_id(1)
+
+        assert result == 42
+
+    def test_get_teacher_user_id_returns_none_when_not_found(self, repo, mock_db):
+        """Test get_teacher_user_id returns None when there is no linked teacher."""
+
+        mock_db.query.return_value.join.return_value.filter.return_value.first.return_value = (
+            None
+        )
+
+        result = repo.get_teacher_user_id(999)
+
+        assert result is None
+
     def test_update_classification_returns_none_when_comment_not_found(
         self, repo, mock_db
     ):

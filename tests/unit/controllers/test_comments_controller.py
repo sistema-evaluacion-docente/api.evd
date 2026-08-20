@@ -47,8 +47,28 @@ class TestCommentsController:
         pagination = PaginationParams(page=1, limit=10)
         result = await controller.get_all(filters, pagination)
 
-        mock_service.get_all.assert_called_once_with(filters, pagination)
+        mock_service.get_all.assert_called_once_with(filters, pagination, None)
         assert result["total"] == 0
+
+    @pytest.mark.asyncio
+    async def test_get_all_forwards_department_id_when_given(
+        self, controller, mock_service
+    ):
+        """Test get_all forwards a given department_id to the service."""
+
+        mock_service.get_all.return_value = {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "limit": 10,
+            "pages": 0,
+        }
+
+        filters = CommentFilters()
+        pagination = PaginationParams(page=1, limit=10)
+        await controller.get_all(filters, pagination, department_id=3)
+
+        mock_service.get_all.assert_called_once_with(filters, pagination, 3)
 
     @pytest.mark.asyncio
     async def test_get_by_id_delegates_to_service(self, controller, mock_service):

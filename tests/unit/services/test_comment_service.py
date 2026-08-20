@@ -54,6 +54,14 @@ class TestCommentService:
         return service
 
     @pytest.fixture
+    def mock_notification_service(self):
+        """Mock NotificationService."""
+
+        service = MagicMock()
+        service.create = AsyncMock()
+        return service
+
+    @pytest.fixture
     def service(
         self,
         mock_comments_repo,
@@ -61,6 +69,7 @@ class TestCommentService:
         mock_risk_levels_repo,
         mock_pedagogical_categories_repo,
         mock_audit_service,
+        mock_notification_service,
     ):
         """Create service instance with mocked dependencies."""
 
@@ -70,6 +79,7 @@ class TestCommentService:
             mock_risk_levels_repo,
             mock_pedagogical_categories_repo,
             mock_audit_service,
+            mock_notification_service,
         )
 
     @pytest.mark.asyncio
@@ -294,3 +304,239 @@ class TestCommentService:
 
         assert result is None
         mock_audit_service.log.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_classification_notifies_teacher_of_risk_level_change(
+        self,
+        service,
+        mock_comments_repo,
+        mock_risk_levels_repo,
+        mock_notification_service,
+    ):
+        """Test the evaluated teacher is notified, with a detailed diff, when the
+        director actually changes the risk level."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_teacher_user_id.return_value = 42
+        mock_comments_repo.get_by_id_enriched.side_effect = [
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "Comentario del estudiante",
+                "course_name": "Cálculo I",
+                "group_name": "A",
+                "risk_level": {"id": 1, "name": "Bajo"},
+                "pedagogical_categories": [],
+            },
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "Comentario del estudiante",
+                "course_name": "Cálculo I",
+                "group_name": "A",
+                "risk_level": {"id": 2, "name": "Alto"},
+                "pedagogical_categories": [],
+            },
+        ]
+
+        await service.update_classification(
+            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
+        )
+
+        mock_notification_service.create.assert_called_once()
+        payload = mock_notification_service.create.call_args.args[0]
+        assert payload.user_id == 42
+        assert 'de "Bajo" a "Alto"' in payload.message
+        assert "Cálculo I" in payload.message
+        assert payload.link == "/docentes/9"
+        assert mock_notification_service.create.call_args.kwargs["actor_id"] == 7
+
+    @pytest.mark.asyncio
+    async def test_update_classification_notifies_teacher_of_category_change(
+        self,
+        service,
+        mock_comments_repo,
+        mock_pedagogical_categories_repo,
+        mock_notification_service,
+    ):
+        """Test the notification describes pedagogical category changes too."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_pedagogical_categories_repo.get_by_id.return_value = {
+            "id": 3,
+            "name": "Metodología",
+        }
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_teacher_user_id.return_value = 42
+        mock_comments_repo.get_by_id_enriched.side_effect = [
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": None,
+                "pedagogical_categories": [{"id": 1, "name": "Claridad"}],
+            },
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": None,
+                "pedagogical_categories": [{"id": 3, "name": "Metodología"}],
+            },
+        ]
+
+        await service.update_classification(
+            1,
+            CommentUpdate(pedagogical_category_ids=[3]),
+            {"id": 7, "department_id": 1},
+        )
+
+        mock_notification_service.create.assert_called_once()
+        payload = mock_notification_service.create.call_args.args[0]
+        assert 'de "Claridad" a "Metodología"' in payload.message
+
+    @pytest.mark.asyncio
+    async def test_update_classification_skips_notification_when_nothing_changed(
+        self,
+        service,
+        mock_comments_repo,
+        mock_risk_levels_repo,
+        mock_notification_service,
+    ):
+        """Test no notification is sent when the resulting classification is
+        identical to what it was before (e.g. re-submitting the same value)."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        same_state = {
+            "id": 1,
+            "teacher_id": 9,
+            "original_text": "x",
+            "risk_level": {"id": 2, "name": "Alto"},
+            "pedagogical_categories": [],
+        }
+        mock_comments_repo.get_by_id_enriched.side_effect = [same_state, same_state]
+
+        await service.update_classification(
+            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
+        )
+
+        mock_notification_service.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_classification_skips_notification_when_actor_is_the_teacher(
+        self,
+        service,
+        mock_comments_repo,
+        mock_risk_levels_repo,
+        mock_notification_service,
+    ):
+        """Test a director does not get self-notified when they are also the
+        teacher linked to the comment (edge case, but should never spam)."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_teacher_user_id.return_value = 7
+        mock_comments_repo.get_by_id_enriched.side_effect = [
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": {"id": 1, "name": "Bajo"},
+                "pedagogical_categories": [],
+            },
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": {"id": 2, "name": "Alto"},
+                "pedagogical_categories": [],
+            },
+        ]
+
+        await service.update_classification(
+            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
+        )
+
+        mock_notification_service.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_classification_notification_link_is_none_without_teacher_id(
+        self,
+        service,
+        mock_comments_repo,
+        mock_risk_levels_repo,
+        mock_notification_service,
+    ):
+        """Test the notification link is omitted when the comment has no teacher_id."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_teacher_user_id.return_value = 42
+        mock_comments_repo.get_by_id_enriched.side_effect = [
+            {
+                "id": 1,
+                "teacher_id": None,
+                "original_text": "x",
+                "risk_level": {"id": 1, "name": "Bajo"},
+                "pedagogical_categories": [],
+            },
+            {
+                "id": 1,
+                "teacher_id": None,
+                "original_text": "x",
+                "risk_level": {"id": 2, "name": "Alto"},
+                "pedagogical_categories": [],
+            },
+        ]
+
+        await service.update_classification(
+            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
+        )
+
+        mock_notification_service.create.assert_called_once()
+        payload = mock_notification_service.create.call_args.args[0]
+        assert payload.link is None
+
+    @pytest.mark.asyncio
+    async def test_update_classification_skips_notification_when_teacher_has_no_user(
+        self,
+        service,
+        mock_comments_repo,
+        mock_risk_levels_repo,
+        mock_notification_service,
+    ):
+        """Test the notification is skipped (not an error) when the teacher has
+        no linked user account."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_teacher_user_id.return_value = None
+        mock_comments_repo.get_by_id_enriched.side_effect = [
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": {"id": 1, "name": "Bajo"},
+                "pedagogical_categories": [],
+            },
+            {
+                "id": 1,
+                "teacher_id": 9,
+                "original_text": "x",
+                "risk_level": {"id": 2, "name": "Alto"},
+                "pedagogical_categories": [],
+            },
+        ]
+
+        await service.update_classification(
+            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
+        )
+
+        mock_notification_service.create.assert_not_called()
