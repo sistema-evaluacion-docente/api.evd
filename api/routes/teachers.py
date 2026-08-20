@@ -1,6 +1,9 @@
 """Routes for teacher operations."""
 
+import io
+
 from fastapi import Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 
 from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.core.pagination import PaginationDep
@@ -224,6 +227,41 @@ async def get_teacher_dashboard(
         )
 
     return result
+
+
+@router.get(
+    "/{teacher_id}/evaluations/{evaluation_id}/report",
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def download_teacher_evaluation_report(
+    teacher_id: int,
+    evaluation_id: int,
+    current_user=Depends(get_current_user),
+    _=Depends(require_roles([RoleName.DOCENTE, RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: TeachersController = Depends(get_teachers_controller),
+):
+    """Download the teacher's pages from an evaluation PDF.
+
+    DOCENTE may only download their own report; DIRECTOR may download any
+    teacher's report within their department."""
+
+    pdf_bytes = await controller.get_evaluation_report(
+        teacher_id, evaluation_id, current_user
+    )
+
+    if pdf_bytes is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Reporte no encontrado o el docente no aparece en esta evaluación",
+        )
+
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'inline; filename="evaluacion_docente_{teacher_id}.pdf"'
+        },
+    )
 
 
 @router.get("/{teacher_id}", response_model=TeacherOut)

@@ -6,8 +6,9 @@ import io
 import openpyxl
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ValidationError
 from api.repositories.academic_periods import AcademicPeriodsRepository
+from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.stats import StatsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
@@ -36,6 +37,7 @@ class TeacherService:
         academic_periods_repository: AcademicPeriodsRepository,
         user_service: UserService,
         stats_repository: StatsRepository | None = None,
+        evaluations_repository: EvaluationsRepository | None = None,
     ):
         self.teachers_repository = teachers_repository
         self.users_repository = users_repository
@@ -43,6 +45,7 @@ class TeacherService:
         self.stats_repository = stats_repository
         self.academic_periods_repository = academic_periods_repository
         self.user_service = user_service
+        self.evaluations_repository = evaluations_repository
 
     async def get_all(
         self,
@@ -401,6 +404,51 @@ class TeacherService:
         return self.stats_repository.get_course_history(
             teacher_id, course_code, teacher.department_id, limit
         )
+
+    async def get_evaluation_report(
+        self, teacher_id: int, evaluation_id: int, current_user: TokenUser
+    ) -> bytes | None:
+        """Return a PDF with only the pages belonging to the teacher in the evaluation.
+
+        DOCENTE may only access their own report; DIRECTOR may access any
+        teacher in their department. Returns None when teacher or evaluation
+        is not found.
+        """
+        from api.utils.pdf_extractor import extract_teacher_pages
+
+        user = self.users_repository.get_by_uid(current_user.uid)
+        teacher = self.teachers_repository.get_by_id(teacher_id)
+
+        if not user or not teacher:
+            return None
+
+        roles = self.users_repository.get_user_role_names(user.id)
+
+        is_own_teacher = RoleName.DOCENTE in roles and teacher.user_id == user.id
+        is_department_director = False
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in roles:
+            director = self.users_repository.get_director_by_user_id(user.id)
+            is_department_director = bool(
+                director and director.department_id == teacher.department_id
+            )
+
+        if not (is_own_teacher or is_department_director):
+            raise PermissionDeniedError(
+                "No tiene permiso para acceder al reporte de este docente"
+            )
+
+        if not self.evaluations_repository:
+            raise ValidationError("Repositorio de evaluaciones no disponible")
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+        if not evaluation or not evaluation.pdf_url:
+            return None
+
+        if not teacher.user or not teacher.user.institutional_code:
+            return None
+
+        return extract_teacher_pages(evaluation.pdf_url, teacher.user.institutional_code)
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict

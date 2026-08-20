@@ -22,7 +22,7 @@ import pikepdf
 QUESTION_CODES = [f"{i:03d}" for i in range(1, 23)]
 
 _PERIOD_MAP = {"primer": "1", "segundo": "2"}
-_CONTRACT_TYPES = {"TC", "CT", "HC"}
+_CONTRACT_TYPES = {"TC", "CT", "OTC", "MTC"}
 
 
 def _load_nlp():
