@@ -25,6 +25,7 @@ from api.models.teacher import TeacherModel
 from api.utils.evaluation_processor import (
     HIGH_RISK_LEVEL_ID,
     PLAN_SUGGESTION_TITLE,
+    _contract_type_name,
     _create_high_risk_comment_notification,
     _create_plan_suggestion_notification,
     analyze_evaluation_comments,
@@ -849,3 +850,29 @@ class TestCreatePlanSuggestionNotification:
 
         db.add.assert_not_called()
         mock_notification_manager.broadcast.assert_not_called()
+
+
+class TestContractTypeName:
+    """Test suite for the contract type stored when a teacher is saved."""
+
+    def test_maps_tc_to_planta(self):
+        """Test 'TC' is stored as 'Planta'."""
+
+        assert _contract_type_name("TC") == "Planta"
+
+    def test_maps_ct_to_catedra(self):
+        """Test 'CT' is stored as 'Catedra'."""
+
+        assert _contract_type_name("CT") == "Catedra"
+
+    def test_keeps_codes_without_a_known_name(self):
+        """Test a code the university has no name for is stored as it comes."""
+
+        assert _contract_type_name("OTC") == "OTC"
+        assert _contract_type_name("MTC") == "MTC"
+
+    def test_keeps_none_when_the_pdf_omits_the_contract_type(self):
+        """Test an evaluation that omits the contract type stores nothing."""
+
+        assert _contract_type_name(None) is None
+        assert _contract_type_name("") is None

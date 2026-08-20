@@ -55,6 +55,20 @@ PLAN_SUGGESTION_TITLE = "Docentes con plan de mejoramiento sugerido"
 # Cuántos nombres caben en el mensaje antes de resumir con "y N más".
 MAX_LISTED_TEACHERS = 5
 
+# The PDF prints the contract type as a short code next to the teacher name;
+# these are stored under the name the university uses for them. Codes without
+# a known name (OTC, MTC) are stored as they come.
+CONTRACT_TYPE_NAMES = {"TC": "Planta", "CT": "Catedra"}
+
+
+def _contract_type_name(raw: str | None) -> str | None:
+    """Translate the contract code parsed from the PDF into its stored name."""
+
+    if not raw:
+        return None
+
+    return CONTRACT_TYPE_NAMES.get(raw.upper(), raw)
+
 
 def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
     try:
@@ -532,6 +546,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         for teacher_data in parsed["teachers"]:
             teacher_name = teacher_data["name"]
             teacher_code = teacher_data["code"]
+            contract_type = _contract_type_name(teacher_data.get("contract_type"))
 
             user = (
                 db.query(UserModel)
@@ -581,7 +596,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 teacher = TeacherModel(
                     user_id=user.id,
                     department_id=department.id,
-                    contract_type=teacher_data.get("contract_type"),
+                    contract_type=contract_type,
                     active=True,
                 )
                 db.add(teacher)
@@ -594,9 +609,8 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     teacher_code=teacher_code,
                 )
             else:
-                parsed_contract = teacher_data.get("contract_type")
-                if parsed_contract and teacher.contract_type != parsed_contract:
-                    teacher.contract_type = parsed_contract
+                if contract_type and teacher.contract_type != contract_type:
+                    teacher.contract_type = contract_type
 
             groups_count = 0
             comments_count = 0
