@@ -566,6 +566,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     teacher_name=teacher_name,
                     teacher_code=teacher_code,
                 )
+            else:
+                # Sync the canonical name from the PDF; the parser already
+                # strips any contract-type token, so this also heals stale
+                # records where the token was incorrectly stored in the name.
+                if user.name != teacher_name:
+                    user.name = teacher_name
 
             teacher = (
                 db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
@@ -587,6 +593,10 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     teacher_name=teacher_name,
                     teacher_code=teacher_code,
                 )
+            else:
+                parsed_contract = teacher_data.get("contract_type")
+                if parsed_contract and teacher.contract_type != parsed_contract:
+                    teacher.contract_type = parsed_contract
 
             groups_count = 0
             comments_count = 0

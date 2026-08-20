@@ -8,6 +8,7 @@ from api.repositories.academic_periods import (
     AcademicPeriodsRepository,
     get_academic_periods_repository,
 )
+from api.repositories.evaluations import EvaluationsRepository, get_evaluations_repository
 from api.repositories.stats import StatsRepository, get_stats_repository
 from api.repositories.teachers import TeachersRepository, get_teachers_repository
 from api.repositories.users import UsersRepository, get_users_repository
@@ -25,6 +26,7 @@ def get_teacher_service(
     ),
     user_service: UserService = Depends(get_user_service),
     stats_repository: StatsRepository = Depends(get_stats_repository),
+    evaluations_repository: EvaluationsRepository = Depends(get_evaluations_repository),
 ) -> TeacherService:
     """Dependency injection for TeacherService."""
 
@@ -35,4 +37,5 @@ def get_teacher_service(
         academic_periods_repository,
         user_service,
         stats_repository,
+        evaluations_repository,
     )
