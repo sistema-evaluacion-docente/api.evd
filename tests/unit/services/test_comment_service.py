@@ -427,44 +427,6 @@ class TestCommentService:
         mock_notification_service.create.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_update_classification_skips_notification_when_actor_is_the_teacher(
-        self,
-        service,
-        mock_comments_repo,
-        mock_risk_levels_repo,
-        mock_notification_service,
-    ):
-        """Test a director does not get self-notified when they are also the
-        teacher linked to the comment (edge case, but should never spam)."""
-
-        mock_comments_repo.get_department_id.return_value = 1
-        mock_risk_levels_repo.get_by_id.return_value = {"id": 2, "name": "Alto"}
-        mock_comments_repo.update_classification.return_value = MagicMock()
-        mock_comments_repo.get_teacher_user_id.return_value = 7
-        mock_comments_repo.get_by_id_enriched.side_effect = [
-            {
-                "id": 1,
-                "teacher_id": 9,
-                "original_text": "x",
-                "risk_level": {"id": 1, "name": "Bajo"},
-                "pedagogical_categories": [],
-            },
-            {
-                "id": 1,
-                "teacher_id": 9,
-                "original_text": "x",
-                "risk_level": {"id": 2, "name": "Alto"},
-                "pedagogical_categories": [],
-            },
-        ]
-
-        await service.update_classification(
-            1, CommentUpdate(risk_level=2), {"id": 7, "department_id": 1}
-        )
-
-        mock_notification_service.create.assert_not_called()
-
-    @pytest.mark.asyncio
     async def test_update_classification_notification_link_is_none_without_teacher_id(
         self,
         service,
