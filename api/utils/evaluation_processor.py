@@ -626,6 +626,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                         AcademicGroupModel.course_id == course.id,
                         AcademicGroupModel.teacher_id == teacher.id,
                         AcademicGroupModel.academic_period_id == period.id,
+                        AcademicGroupModel.group_name == group_name,
                     )
                     .first()
                 )
