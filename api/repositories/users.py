@@ -182,10 +182,12 @@ class UsersRepository(BaseRepository[UserModel]):
         self.db.commit()
         self.db.refresh(user)
 
-    def set_uid(self, user: UserModel, uid: str) -> None:
+    def set_uid(self, user: UserModel, uid: str, picture: str | None = None) -> None:
         """Set the unique identifier (UID) for a user model."""
 
         user.uid = uid
+        user.avatar_url = picture
+
         self.db.commit()
 
     def get_teacher_by_user_id(self, user_id: int) -> TeacherModel | None:
