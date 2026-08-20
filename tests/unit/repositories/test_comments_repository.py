@@ -29,6 +29,8 @@ class TestCommentsRepository:
         comment.risk_score = 0.42
         comment.risk_level_modified_by_director = False
         comment.pedagogical_category_modified_by_director = False
+        comment.risk_level_ai_model = "org/risk-model-v1"
+        comment.pedagogical_category_ai_model = "org/category-model-v1"
 
         existing_link = MagicMock()
         existing_link.pedagogical_category_id = 1
@@ -106,6 +108,7 @@ class TestCommentsRepository:
         assert result.risk_level_modified_by_director is True
         assert result.pedagogical_category_modified_by_director is False
         assert result.risk_score == 1
+        assert result.risk_level_ai_model is None
         mock_db.commit.assert_called_once()
         mock_db.refresh.assert_called_once_with(mock_comment_model)
 
@@ -126,6 +129,7 @@ class TestCommentsRepository:
         assert [link.score for link in result.pedagogical_categories] == [1]
         assert result.pedagogical_category_modified_by_director is True
         assert result.risk_level_modified_by_director is False
+        assert result.pedagogical_category_ai_model is None
         mock_db.commit.assert_called_once()
 
     def test_update_classification_supports_multiple_categories(
@@ -179,6 +183,20 @@ class TestCommentsRepository:
         assert result.pedagogical_category_modified_by_director is True
         assert result.risk_score == 1
 
+    def test_update_classification_clears_only_the_overridden_half_of_the_attribution(
+        self, repo, mock_db, mock_comment_model
+    ):
+        """Test overriding the risk level leaves the category model attribution intact."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_comment_model
+        )
+
+        result = repo.update_classification(1, risk_level=3)
+
+        assert result.risk_level_ai_model is None
+        assert result.pedagogical_category_ai_model == "org/category-model-v1"
+
     def test_update_classification_does_not_flag_unchanged_risk_level(
         self, repo, mock_db, mock_comment_model
     ):
@@ -192,6 +210,7 @@ class TestCommentsRepository:
 
         assert result.risk_level_modified_by_director is False
         assert result.risk_score == 0.42
+        assert result.risk_level_ai_model == "org/risk-model-v1"
         mock_db.commit.assert_called_once()
 
     def test_update_classification_does_not_flag_unchanged_category(
@@ -210,4 +229,5 @@ class TestCommentsRepository:
         result = repo.update_classification(1, pedagogical_category_ids=existing_ids)
 
         assert result.pedagogical_category_modified_by_director is False
+        assert result.pedagogical_category_ai_model == "org/category-model-v1"
         mock_db.commit.assert_called_once()

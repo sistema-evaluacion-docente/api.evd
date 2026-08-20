@@ -407,6 +407,123 @@ class TestAnalyzeEvaluationCommentsPedagogicalCategories:
         assert added_links == []
 
 
+class TestAnalyzeEvaluationCommentsModelAttribution:
+    """Tests for persisting which AI model produced each classification."""
+
+    def _make_evaluation(self, department_id=1):
+        evaluation = MagicMock(spec=EvaluationModel)
+        evaluation.id = 1
+        evaluation.department_id = department_id
+        evaluation.user_id = 99
+        return evaluation
+
+    def _make_comment(self, comment_id, teacher_id=7, text="Comentario de prueba"):
+        comment = MagicMock(spec=CommentModel)
+        comment.id = comment_id
+        comment.teacher_id = teacher_id
+        comment.original_text = text
+        comment.risk_level = None
+        comment.risk_score = None
+        comment.risk_level_ai_model = None
+        comment.pedagogical_category_ai_model = None
+        return comment
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_stores_both_model_ids_when_both_models_classified(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=40)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "risk_model": "org/risk-model-v1",
+            "category_labels": [{"label": "CLARIDAD", "score": 0.9}],
+            "category_model": "org/category-model-v1",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        assert comment.risk_level_ai_model == "org/risk-model-v1"
+        assert comment.pedagogical_category_ai_model == "org/category-model-v1"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_leaves_risk_model_unset_when_risk_model_produced_no_label(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=41)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": None,
+            "risk_score": None,
+            "risk_model": None,
+            "category_labels": [{"label": "CLARIDAD", "score": 0.9}],
+            "category_model": "org/category-model-v1",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        assert comment.risk_level_ai_model is None
+        assert comment.pedagogical_category_ai_model == "org/category-model-v1"
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_leaves_category_model_unset_when_no_category_cleared_threshold(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        """A comment with no assigned category has no category model to credit."""
+
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=42)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "risk_model": "org/risk-model-v1",
+            "category_labels": [],
+            "category_model": "org/category-model-v1",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        assert comment.risk_level_ai_model == "org/risk-model-v1"
+        assert comment.pedagogical_category_ai_model is None
+
+
 class TestCreateHighRiskCommentNotification:
     """Direct tests for the _create_high_risk_comment_notification helper."""
 
