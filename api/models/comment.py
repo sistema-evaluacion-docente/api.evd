@@ -4,7 +4,17 @@ Comment model
 
 import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, Text, func
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -34,6 +44,11 @@ class CommentModel(Base):
     pedagogical_category_modified_by_director = Column(
         Boolean, nullable=False, default=False
     )
+    # HuggingFace model ids behind each AI classification, so a stored result
+    # can be traced back to the model that produced it. None when the model
+    # failed, was not configured, or a director overrode the classification.
+    risk_level_ai_model = Column(String(255), nullable=True)
+    pedagogical_category_ai_model = Column(String(255), nullable=True)
 
     risk_level_rel = relationship(
         "RiskLevelModel", lazy="joined", foreign_keys=[risk_level]
