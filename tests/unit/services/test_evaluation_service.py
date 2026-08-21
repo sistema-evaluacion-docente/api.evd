@@ -2,6 +2,7 @@
 Tests for EvaluationService layer.
 """
 
+import os
 import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -11,7 +12,7 @@ from fastapi import HTTPException
 from api.core.pagination import PaginationParams
 from api.exceptions import PermissionDeniedError, ResourceNotFoundError, ValidationError
 from api.models.evaluation import EvaluationModel
-from api.schemas.evaluation import EvaluationFilters
+from api.schemas.evaluation import EvaluationFilters, UploadedPdf
 from api.services.evaluation_service import EvaluationService
 
 
@@ -618,24 +619,87 @@ class TestEvaluationService:
 
         assert result is None
 
+    @staticmethod
+    def _pdf(name="presencial.pdf"):
+        """An upload that passes the file-level checks."""
+
+        return UploadedPdf(name, b"%PDF-1.4 fake content")
+
+    @staticmethod
+    def _parsed(
+        period_code="2024-1",
+        department_code="CS",
+        modality="PRESENCIAL",
+        teachers=None,
+    ):
+        """The parsed content of a well formed evaluation PDF."""
+
+        return {
+            "period_code": period_code,
+            "department_code": department_code,
+            "department_name": "SISTEMAS",
+            "modality": modality,
+            "teachers": teachers if teachers is not None else [{"code": "001"}],
+        }
+
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_non_pdf(self, service):
-        """Test prepare_upload rejects non-PDF files."""
+        """Test prepare_upload rejects files that are not named as PDFs."""
 
         with pytest.raises(HTTPException) as exc_info:
-            await service.prepare_upload("test.txt", b"content", {"uid": "admin-uid"})
+            await service.prepare_upload(
+                [UploadedPdf("test.txt", b"content")], {"uid": "admin-uid"}
+            )
 
         assert exc_info.value.status_code == 400
         assert "PDF" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_a_file_that_only_looks_like_a_pdf(
+        self, service
+    ):
+        """Test prepare_upload rejects content that is not really a PDF."""
+
+        with pytest.raises(HTTPException) as exc_info:
+            await service.prepare_upload(
+                [UploadedPdf("test.pdf", b"not a pdf at all")], {"uid": "admin-uid"}
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "PDF válido" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_empty_file(self, service):
         """Test prepare_upload rejects empty files."""
 
         with pytest.raises(HTTPException) as exc_info:
-            await service.prepare_upload("test.pdf", b"", {"uid": "admin-uid"})
+            await service.prepare_upload(
+                [UploadedPdf("test.pdf", b"")], {"uid": "admin-uid"}
+            )
 
         assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_a_request_without_files(self, service):
+        """Test prepare_upload rejects an upload with nothing attached."""
+
+        with pytest.raises(HTTPException) as exc_info:
+            await service.prepare_upload([], {"uid": "admin-uid"})
+
+        assert exc_info.value.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_more_than_two_pdfs(self, service):
+        """Test prepare_upload accepts at most one PDF per modality."""
+
+        with pytest.raises(HTTPException) as exc_info:
+            await service.prepare_upload(
+                [self._pdf(), self._pdf("distancia.pdf"), self._pdf("otro.pdf")],
+                {"uid": "admin-uid"},
+            )
+
+        assert exc_info.value.status_code == 400
+        assert "hasta 2" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_unparseable_pdf(self, service):
@@ -646,9 +710,7 @@ class TestEvaluationService:
             side_effect=Exception("parse error"),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
-                )
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
 
         assert exc_info.value.status_code == 400
         assert "parse error" in exc_info.value.detail
@@ -659,19 +721,13 @@ class TestEvaluationService:
 
         with patch(
             "api.services.evaluation_service.parse_pdf",
-            return_value={
-                "period_code": None,
-                "department_code": "CS",
-                "teachers": [{}],
-            },
+            return_value=self._parsed(period_code=None),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
-                )
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
 
         assert exc_info.value.status_code == 422
-        assert "period" in exc_info.value.detail.lower()
+        assert "periodo" in exc_info.value.detail.lower()
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_missing_department_code(self, service):
@@ -679,19 +735,30 @@ class TestEvaluationService:
 
         with patch(
             "api.services.evaluation_service.parse_pdf",
-            return_value={
-                "period_code": "2024-1",
-                "department_code": None,
-                "teachers": [{}],
-            },
+            return_value=self._parsed(department_code=None),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
-                )
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
 
         assert exc_info.value.status_code == 422
         assert "departamento" in exc_info.value.detail.lower()
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_a_pdf_without_modality(self, service):
+        """Test prepare_upload rejects a document whose title names no modality.
+
+        That title is the only place the kind of program appears, so a document
+        without it is not the report the university publishes."""
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            return_value=self._parsed(modality=None),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
+
+        assert exc_info.value.status_code == 422
+        assert "presenciales o a distancia" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_no_teachers(self, service):
@@ -699,18 +766,69 @@ class TestEvaluationService:
 
         with patch(
             "api.services.evaluation_service.parse_pdf",
-            return_value={
-                "period_code": "2024-1",
-                "department_code": "CS",
-                "teachers": [],
-            },
+            return_value=self._parsed(teachers=[]),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
+
+        assert exc_info.value.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_pdfs_of_different_periods(self, service):
+        """Test both PDFs of an evaluation must describe the same period."""
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            side_effect=[
+                self._parsed(period_code="2024-1"),
+                self._parsed(period_code="2024-2", modality="DISTANCIA"),
+            ],
         ):
             with pytest.raises(HTTPException) as exc_info:
                 await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
+                    [self._pdf(), self._pdf("distancia.pdf")], {"uid": "admin-uid"}
                 )
 
         assert exc_info.value.status_code == 422
+        assert "periodos académicos distintos" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_pdfs_of_different_departments(self, service):
+        """Test both PDFs of an evaluation must describe the same department."""
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            side_effect=[
+                self._parsed(department_code="52"),
+                self._parsed(department_code="60", modality="DISTANCIA"),
+            ],
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await service.prepare_upload(
+                    [self._pdf(), self._pdf("distancia.pdf")], {"uid": "admin-uid"}
+                )
+
+        assert exc_info.value.status_code == 422
+        assert "departamentos distintos" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_two_pdfs_of_the_same_modality(self, service):
+        """Test the same document cannot be uploaded twice as both modalities."""
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            side_effect=[
+                self._parsed(modality="PRESENCIAL"),
+                self._parsed(modality="PRESENCIAL"),
+            ],
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                await service.prepare_upload(
+                    [self._pdf(), self._pdf("otro.pdf")], {"uid": "admin-uid"}
+                )
+
+        assert exc_info.value.status_code == 422
+        assert "misma modalidad" in exc_info.value.detail
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_unknown_department(
@@ -721,22 +839,14 @@ class TestEvaluationService:
         mock_period = MagicMock()
         mock_period.id = 1
         mock_academic_periods_repo.get_by_code.return_value = mock_period
-        mock_evaluations_repo.db.query.return_value.filter.return_value.first.return_value = (
-            None
-        )
+        mock_evaluations_repo.get_department_by_code.return_value = None
 
         with patch(
             "api.services.evaluation_service.parse_pdf",
-            return_value={
-                "period_code": "2024-1",
-                "department_code": "UNKNOWN",
-                "teachers": [{}],
-            },
+            return_value=self._parsed(department_code="UNKNOWN"),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
-                )
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
 
         assert exc_info.value.status_code == 422
         assert "UNKNOWN" in exc_info.value.detail
@@ -753,9 +863,7 @@ class TestEvaluationService:
 
         mock_department = MagicMock()
         mock_department.id = 1
-        mock_evaluations_repo.db.query.return_value.filter.return_value.first.return_value = (
-            mock_department
-        )
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
 
         mock_evaluations_repo.get_by_period_and_department.return_value = {
             "id": 1,
@@ -765,16 +873,10 @@ class TestEvaluationService:
 
         with patch(
             "api.services.evaluation_service.parse_pdf",
-            return_value={
-                "period_code": "2024-1",
-                "department_code": "CS",
-                "teachers": [{}],
-            },
+            return_value=self._parsed(),
         ):
             with pytest.raises(HTTPException) as exc_info:
-                await service.prepare_upload(
-                    "test.pdf", b"fake pdf", {"uid": "admin-uid"}
-                )
+                await service.prepare_upload([self._pdf()], {"uid": "admin-uid"})
 
         assert exc_info.value.status_code == 409
 
@@ -794,9 +896,7 @@ class TestEvaluationService:
 
         mock_department = MagicMock()
         mock_department.id = 1
-        mock_evaluations_repo.db.query.return_value.filter.return_value.first.return_value = (
-            mock_department
-        )
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
 
         mock_evaluations_repo.get_by_period_and_department.return_value = {
             "id": 99,
@@ -816,18 +916,14 @@ class TestEvaluationService:
                 mock_config.UPLOAD_DIR = tmpdir
                 with patch(
                     "api.services.evaluation_service.parse_pdf",
-                    return_value={
-                        "period_code": "2024-1",
-                        "department_code": "CS",
-                        "teachers": [{}],
-                    },
+                    return_value=self._parsed(),
                 ):
                     with patch(
                         "api.services.evaluation_service.evaluation_to_dict",
                         return_value={"id": 2},
                     ):
                         result, parsed = await service.prepare_upload(
-                            "test.pdf", b"fake pdf", {"uid": "admin-uid"}
+                            [self._pdf()], {"uid": "admin-uid"}
                         )
 
         mock_evaluations_repo.delete_evaluation.assert_called_once_with(99)
@@ -851,9 +947,7 @@ class TestEvaluationService:
 
         mock_department = MagicMock()
         mock_department.id = 1
-        mock_evaluations_repo.db.query.return_value.filter.return_value.first.return_value = (
-            mock_department
-        )
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
 
         mock_evaluations_repo.get_by_period_and_department.return_value = None
 
@@ -869,21 +963,85 @@ class TestEvaluationService:
                 mock_config.UPLOAD_DIR = tmpdir
                 with patch(
                     "api.services.evaluation_service.parse_pdf",
-                    return_value={
-                        "period_code": "2024-1",
-                        "department_code": "CS",
-                        "teachers": [{}],
-                    },
+                    return_value=self._parsed(),
                 ):
                     with patch(
                         "api.services.evaluation_service.evaluation_to_dict",
                         return_value={"id": 1},
                     ):
                         result, parsed = await service.prepare_upload(
-                            "test.pdf", b"fake pdf", {"uid": "admin-uid"}
+                            [self._pdf()], {"uid": "admin-uid"}
                         )
 
         mock_academic_periods_repo.create.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_stores_both_pdfs_under_one_evaluation(
+        self,
+        service,
+        mock_academic_periods_repo,
+        mock_evaluations_repo,
+        mock_users_repo,
+    ):
+        """Test the presencial and distancia documents end up in a single evaluation.
+
+        Both files are written to disk under names that keep their modality,
+        the two paths are stored comma-separated, and the teachers of both are
+        merged into the parsed data handed to the background task."""
+
+        mock_period = MagicMock()
+        mock_period.id = 1
+        mock_academic_periods_repo.get_by_code.return_value = mock_period
+
+        mock_department = MagicMock()
+        mock_department.id = 1
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
+        mock_evaluations_repo.get_by_period_and_department.return_value = None
+
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_evaluations_repo.create_evaluation.return_value = MagicMock(
+            spec=EvaluationModel
+        )
+
+        presencial = self._parsed(teachers=[{"code": "001", "groups": [{"g": 1}]}])
+        distancia = self._parsed(
+            modality="DISTANCIA",
+            teachers=[
+                {"code": "001", "groups": [{"g": 2}]},
+                {"code": "002", "groups": [{"g": 3}]},
+            ],
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("api.services.evaluation_service.config") as mock_config:
+                mock_config.UPLOAD_DIR = tmpdir
+                with patch(
+                    "api.services.evaluation_service.parse_pdf",
+                    side_effect=[presencial, distancia],
+                ):
+                    with patch(
+                        "api.services.evaluation_service.evaluation_to_dict",
+                        return_value={"id": 3},
+                    ):
+                        _, parsed = await service.prepare_upload(
+                            [self._pdf(), self._pdf("distancia.pdf")],
+                            {"uid": "admin-uid"},
+                        )
+
+            stored = mock_evaluations_repo.create_evaluation.call_args.kwargs["pdf_url"]
+            paths = stored.split(",")
+
+            assert len(paths) == 2
+            assert [os.path.basename(p).split("_")[0] for p in paths] == [
+                "presencial",
+                "distancia",
+            ]
+            assert all(os.path.isfile(path) for path in paths)
+
+        assert [teacher["code"] for teacher in parsed["teachers"]] == ["001", "002"]
+        assert parsed["teachers"][0]["groups"] == [{"g": 1}, {"g": 2}]
 
     @pytest.mark.asyncio
     async def test_get_pdf_path_raises_not_found_when_evaluation_missing(
@@ -959,6 +1117,74 @@ class TestEvaluationService:
 
         with pytest.raises(PermissionDeniedError):
             await service.get_pdf_path(1, {"roles": ["DOCENTE"], "department_id": 1})
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_serves_the_first_pdf_by_default(
+        self, service, mock_evaluations_repo
+    ):
+        """Test an evaluation with both documents serves one without asking."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": (
+                "uploads/evaluations/2024-1/CS/presencial_a.pdf,"
+                "uploads/evaluations/2024-1/CS/distancia_b.pdf"
+            ),
+        }
+
+        result = await service.get_pdf_path(1, {"roles": ["ADMIN"]})
+
+        assert result == "uploads/evaluations/2024-1/CS/presencial_a.pdf"
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_serves_the_requested_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test each kind of program can be downloaded on its own."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": (
+                "uploads/evaluations/2024-1/CS/presencial_a.pdf,"
+                "uploads/evaluations/2024-1/CS/distancia_b.pdf"
+            ),
+        }
+
+        result = await service.get_pdf_path(1, {"roles": ["ADMIN"]}, "DISTANCIA")
+
+        assert result == "uploads/evaluations/2024-1/CS/distancia_b.pdf"
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_raises_not_found_for_a_missing_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test asking for a document the evaluation does not have is a 404."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/presencial_a.pdf",
+        }
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_pdf_path(1, {"roles": ["ADMIN"]}, "DISTANCIA")
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_rejects_an_unknown_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test a modality outside the catalog is rejected."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {
+            "id": 1,
+            "department_id": 1,
+            "pdf_url": "uploads/evaluations/2024-1/CS/presencial_a.pdf",
+        }
+
+        with pytest.raises(ValidationError):
+            await service.get_pdf_path(1, {"roles": ["ADMIN"]}, "VIRTUAL")
 
     @pytest.mark.asyncio
     async def test_get_pdf_path_raises_not_found_when_no_pdf(

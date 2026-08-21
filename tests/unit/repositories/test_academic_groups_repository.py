@@ -30,6 +30,7 @@ class TestAcademicGroupsRepository:
         group.teacher_id = 20
         group.academic_period_id = 1
         group.group_name = "A"
+        group.modality = "PRESENCIAL"
         return group
 
     @pytest.fixture
@@ -152,6 +153,25 @@ class TestAcademicGroupsRepository:
 
         assert total == 1
         assert mock_query.filter.call_count == 3
+        mock_query.join.assert_not_called()
+
+    def test_search_with_modality_filter(
+        self, repo, mock_db, mock_query, mock_group_model
+    ):
+        """Test search narrows the groups down to one kind of program."""
+
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_group_model
+        ]
+
+        filters = AcademicGroupFilters(modality="DISTANCIA")
+        pagination = PaginationParams(page=1, limit=10)
+
+        items, total = repo.search(filters, pagination)
+
+        assert total == 1
+        assert mock_query.filter.call_count == 1
         mock_query.join.assert_not_called()
 
     def test_search_with_department_filter_joins_course(

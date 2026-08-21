@@ -8,7 +8,7 @@ import pytest
 
 from api.controllers.evaluations import EvaluationsController
 from api.core.pagination import PaginationParams
-from api.schemas.evaluation import EvaluationFilters
+from api.schemas.evaluation import EvaluationFilters, UploadedPdf
 
 
 class TestEvaluationsController:
@@ -211,11 +211,10 @@ class TestEvaluationsController:
         )
 
         current_user = {"uid": "admin-uid"}
-        result = await controller.prepare_upload("test.pdf", b"pdf bytes", current_user)
+        uploads = [UploadedPdf("presencial.pdf", b"%PDF-1.4 bytes")]
+        result = await controller.prepare_upload(uploads, current_user)
 
-        mock_service.prepare_upload.assert_called_once_with(
-            "test.pdf", b"pdf bytes", current_user
-        )
+        mock_service.prepare_upload.assert_called_once_with(uploads, current_user)
         assert result[0]["status"] == "PROCESSING"
 
     @pytest.mark.asyncio
@@ -270,5 +269,20 @@ class TestEvaluationsController:
 
         result = await controller.get_pdf_path(1, current_user)
 
-        mock_service.get_pdf_path.assert_called_once_with(1, current_user)
+        mock_service.get_pdf_path.assert_called_once_with(1, current_user, None)
         assert result == "uploads/evaluations/2024-1/CS/file.pdf"
+
+    @pytest.mark.asyncio
+    async def test_get_pdf_path_passes_the_requested_modality(
+        self, controller, mock_service
+    ):
+        """Test get_pdf_path forwards the modality of the wanted document."""
+
+        current_user = {"roles": ["ADMIN"]}
+        mock_service.get_pdf_path.return_value = (
+            "uploads/evaluations/2024-1/CS/distancia_file.pdf"
+        )
+
+        await controller.get_pdf_path(1, current_user, "DISTANCIA")
+
+        mock_service.get_pdf_path.assert_called_once_with(1, current_user, "DISTANCIA")
