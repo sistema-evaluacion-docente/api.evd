@@ -323,13 +323,17 @@ class TestAnalyzeEvaluationCommentsPedagogicalCategories:
         evaluation.user_id = 99
         return evaluation
 
-    def _make_comment(self, comment_id, teacher_id=7, text="Comentario de prueba"):
+    def _make_comment(
+        self, comment_id, teacher_id=7, text="Comentario de prueba", categories=None
+    ):
         comment = MagicMock(spec=CommentModel)
         comment.id = comment_id
         comment.teacher_id = teacher_id
         comment.original_text = text
         comment.risk_level = None
         comment.risk_score = None
+        comment.pedagogical_category_ai_model = None
+        comment.pedagogical_categories = categories if categories is not None else []
         return comment
 
     @patch("api.utils.evaluation_processor.notification_manager")
@@ -359,20 +363,17 @@ class TestAnalyzeEvaluationCommentsPedagogicalCategories:
                 {"label": "CLARIDAD", "score": 0.9},
                 {"label": "PUNTUALIDAD", "score": 0.6},
             ],
+            "category_model": "org/category-model-v1",
         }
         mock_notification_manager.broadcast = AsyncMock()
 
         analyze_evaluation_comments(evaluation.id)
 
-        added_links = [
-            call.args[0]
-            for call in db.add.call_args_list
-            if isinstance(call.args[0], CommentPedagogicalCategoryModel)
-        ]
-        assert len(added_links) == 2
-        assert {link.pedagogical_category_id for link in added_links} == {1, 2}
-        assert {link.score for link in added_links} == {0.9, 0.6}
-        assert all(link.comment_id == comment.id for link in added_links)
+        links = comment.pedagogical_categories
+        assert len(links) == 2
+        assert {link.pedagogical_category_id for link in links} == {1, 2}
+        assert {link.score for link in links} == {0.9, 0.6}
+        assert all(isinstance(link, CommentPedagogicalCategoryModel) for link in links)
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.analyze_comment")
@@ -395,17 +396,90 @@ class TestAnalyzeEvaluationCommentsPedagogicalCategories:
             "risk_label": "BAJO",
             "risk_score": 0.1,
             "category_labels": [],
+            "category_model": "org/category-model-v1",
         }
         mock_notification_manager.broadcast = AsyncMock()
 
         analyze_evaluation_comments(evaluation.id)
 
-        added_links = [
-            call.args[0]
-            for call in db.add.call_args_list
-            if isinstance(call.args[0], CommentPedagogicalCategoryModel)
-        ]
-        assert added_links == []
+        assert comment.pedagogical_categories == []
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_re_analysis_replaces_the_categories_of_the_previous_run(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        """Analysing twice must not leave the comment with duplicated categories."""
+
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(
+            comment_id=32,
+            categories=[
+                CommentPedagogicalCategoryModel(
+                    comment_id=32, pedagogical_category_id=1, score=0.8
+                )
+            ],
+        )
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD"), _category(2, "PUNTUALIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [
+                {"label": "CLARIDAD", "score": 0.9},
+                {"label": "PUNTUALIDAD", "score": 0.6},
+            ],
+            "category_model": "org/category-model-v1",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        links = comment.pedagogical_categories
+        assert [link.pedagogical_category_id for link in links] == [1, 2]
+        assert [link.score for link in links] == [0.9, 0.6]
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_keeps_the_previous_categories_when_the_model_did_not_run(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        """A model that is unconfigured or fails must not wipe a classification."""
+
+        evaluation = self._make_evaluation()
+        existing = CommentPedagogicalCategoryModel(
+            comment_id=33, pedagogical_category_id=1, score=0.8
+        )
+        comment = self._make_comment(comment_id=33, categories=[existing])
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [],
+            "category_model": None,
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        assert comment.pedagogical_categories == [existing]
 
 
 class TestAnalyzeEvaluationCommentsModelAttribution:

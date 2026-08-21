@@ -808,13 +808,13 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
     """
     db = SessionLocal()
 
-    CATEGORIES_LABEL = {
-        "DESARROLLO DEL CONOCIMIENTO": "LABEL_0",
-        "DESEMPEÑO DOCENTE": "LABEL_1",
-        "PROCESOS DE EVALUACIÓN": "LABEL_2",
-        "INTEGRACIÓN INTERPERSONAL": "LABEL_3",
-        "SIN CATEGORIA": "LABEL_4",
-    }
+    # CATEGORIES_LABEL = {
+    #     "DESARROLLO DEL CONOCIMIENTO": "LABEL_0",
+    #     "DESEMPEÑO DOCENTE": "LABEL_1",
+    #     "PROCESOS DE EVALUACIÓN": "LABEL_2",
+    #     "INTEGRACIÓN INTERPERSONAL": "LABEL_3",
+    #     "SIN CATEGORIA": "LABEL_4",
+    # }
 
     _broadcast_log(
         evaluation_id,
@@ -927,28 +927,44 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                     )
 
             category_labels = result.get("category_labels", [])
+            category_model = result.get("category_model")
 
-            if category_labels:
-                comment.pedagogical_category_ai_model = result.get("category_model")
+            print(
+                f"Comment {comment.original_text} risk: {risk_label}, categories: {category_labels}"
+            )
 
-            for category in category_labels:
-                category_label = CATEGORIES_LABEL[category["label"]]
+            # Nothing to replace the current classification with when the model
+            # did not run (not configured, or inference failed): the categories
+            # of the previous analysis are left as they are.
+            if category_model:
+                assigned = []
 
-                if category_label not in category_cache:
-                    category_cache[category_label] = category_name_to_id.get(
-                        category_label.lower()
-                    )
+                for category in category_labels:
+                    category_label = category["label"]
 
-                category_id = category_cache[category_label]
-
-                if category_id is not None:
-                    db.add(
-                        CommentPedagogicalCategoryModel(
-                            comment_id=comment.id,
-                            pedagogical_category_id=category_id,
-                            score=category["score"],
+                    if category_label not in category_cache:
+                        category_cache[category_label] = category_name_to_id.get(
+                            category_label.lower()
                         )
-                    )
+
+                    category_id = category_cache[category_label]
+
+                    if category_id is not None:
+                        assigned.append(
+                            CommentPedagogicalCategoryModel(
+                                pedagogical_category_id=category_id,
+                                score=category["score"],
+                            )
+                        )
+
+                # Replaces the whole set instead of adding to it: re-analysing
+                # an evaluation used to keep the rows of the previous run, so a
+                # comment ended up with the same category repeated once per run.
+                # delete-orphan on the relationship removes the old rows.
+                comment.pedagogical_categories = assigned
+                comment.pedagogical_category_ai_model = (
+                    category_model if assigned else None
+                )
 
             analyzed_count += 1
 
