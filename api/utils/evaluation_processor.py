@@ -35,6 +35,7 @@ from api.services.improvement_plan_service import (
     DEFAULT_SCORE_THRESHOLD,
     SCORE_THRESHOLD_SETTING,
 )
+from api.utils.modalities import normalize_modality
 from api.utils.plan_suggestion import suggestion_reasons
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 from api.core.websockets.events import NotificationEvent
@@ -644,6 +645,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     )
 
                 group_name = f"{group_data['group']}{group_data['section']}"
+                modality = normalize_modality(group_data.get("modality"))
                 academic_group = (
                     db.query(AcademicGroupModel)
                     .filter(
@@ -661,9 +663,13 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                         teacher_id=teacher.id,
                         academic_period_id=period.id,
                         group_name=group_name,
+                        modality=modality,
                     )
                     db.add(academic_group)
                     db.flush()
+                elif modality and academic_group.modality != modality:
+                    # Heals groups created before the modality was recorded.
+                    academic_group.modality = modality
 
                 eval_score = EvaluationScoreModel(
                     evaluation_id=evaluation_id,
