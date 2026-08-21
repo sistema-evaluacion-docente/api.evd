@@ -61,12 +61,14 @@ class EvaluationsController:
         current_user: dict,
         teacher_id: int | None = None,
         course_id: int | None = None,
+        modality: str | None = None,
     ):
         """Get an evaluation's pedagogical dimensions with per-question averages,
-        optionally restricted to a single teacher and/or course (materia)."""
+        optionally restricted to a single teacher and/or course (materia) and
+        scoped to one modality."""
 
         return await self.service.get_dimension_detail(
-            evaluation_id, current_user, teacher_id, course_id
+            evaluation_id, current_user, teacher_id, course_id, modality
         )
 
     async def get_teacher_detail(

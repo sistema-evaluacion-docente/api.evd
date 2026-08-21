@@ -271,6 +271,13 @@ async def get_evaluation_dimension_detail(
     evaluation_id: int,
     teacher_id: int | None = None,
     course_id: int | None = None,
+    modality: Modality | None = Query(
+        default=None,
+        description=(
+            "Calcular el detalle solo con los grupos de esta modalidad. "
+            "Sin el filtro se toma la evaluación completa."
+        ),
+    ),
     current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
@@ -279,10 +286,14 @@ async def get_evaluation_dimension_detail(
 
     Pass `teacher_id` and/or `course_id` to restrict the breakdown to a single
     docente or materia; the response then also includes an `overall` field
-    with the unfiltered evaluation-wide breakdown for comparison."""
+    with the unfiltered evaluation-wide breakdown for comparison.
+
+    `modality` scopes the whole response — breakdown, `department_average` and
+    `overall` — to one kind of program, so a distancia docente is never
+    compared against a presencial average."""
 
     detail = await controller.get_dimension_detail(
-        evaluation_id, current_user, teacher_id, course_id
+        evaluation_id, current_user, teacher_id, course_id, modality
     )
 
     if not detail:

@@ -240,12 +240,14 @@ class EvaluationDimensionDetailOut(BaseModel):
 
     When filtered by `teacher_id` and/or `course_id`, `overall` carries the
     same breakdown for the whole evaluation so the filtered result can be
-    compared against it."""
+    compared against it. `modality` echoes the kind of program the whole
+    response is scoped to, or null when it covers the entire evaluation."""
 
     evaluation_id: int
     period_code: Optional[str]
     period_name: Optional[str]
     department_average: Optional[float]
+    modality: Optional[str] = None
     dimensions: list[DimensionDetailItem]
     overall: Optional["EvaluationDimensionDetailOut"] = None
 

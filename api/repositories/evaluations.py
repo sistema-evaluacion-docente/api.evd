@@ -828,12 +828,18 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         evaluation_id: int,
         teacher_id: int | None = None,
         course_id: int | None = None,
+        modality: str | None = None,
     ) -> dict | None:
         """Return an evaluation's pedagogical dimensions with per-question averages,
         optionally restricted to a single `teacher_id` and/or `course_id` (materia).
 
-        When a filter is given, the result also carries an `overall` key with
-        the unfiltered breakdown so the caller can compare against it."""
+        `modality` is a scope rather than one more filter: everything the
+        result carries — the breakdown, the department average and the
+        `overall` comparison — is computed within that kind of program.
+
+        When a teacher or course is given, the result also carries an `overall`
+        key with the unfiltered breakdown so the caller can compare against
+        it (within the same modality when one is scoped)."""
 
         evaluation = self.get_by_id(evaluation_id)
 
@@ -854,6 +860,9 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         if course_id is not None:
             query = query.filter(AcademicGroupModel.course_id == course_id)
+
+        if modality is not None:
+            query = query.filter(AcademicGroupModel.modality == modality)
 
         score_rows = query.all()
 
@@ -896,11 +905,9 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
                 }
             )
 
-        dept_avg = (
-            self.db.query(func.avg(EvaluationScoreModel.overall_average))
-            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
-            .scalar()
-        )
+        # The baseline the breakdown is compared against: the whole evaluation,
+        # or the whole of one kind of program when the request is scoped to one.
+        dept_avg = self._get_overall_average(evaluation_id, modality)
 
         period = evaluation.academic_period
 
@@ -908,12 +915,15 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             "evaluation_id": evaluation_id,
             "period_code": period.code if period else None,
             "period_name": period.name if period else None,
-            "department_average": float(dept_avg) if dept_avg else None,
+            "department_average": dept_avg,
+            "modality": modality,
             "dimensions": dimensions,
         }
 
         if teacher_id is not None or course_id is not None:
-            result["overall"] = self.get_dimension_detail(evaluation_id)
+            result["overall"] = self.get_dimension_detail(
+                evaluation_id, modality=modality
+            )
 
         return result
 

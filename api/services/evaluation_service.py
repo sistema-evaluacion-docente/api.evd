@@ -27,7 +27,6 @@ from api.utils.file_validation import validate_file_size
 from api.utils.modalities import modality_label, validated_modality
 from api.utils.pdf_parser import merge_parsed_evaluations, parse_pdf
 
-
 # Un PDF por modalidad: presencial y a distancia.
 MAX_EVALUATION_PDFS = 2
 
@@ -285,9 +284,11 @@ class EvaluationService:
         current_user: dict,
         teacher_id: int | None = None,
         course_id: int | None = None,
+        modality: str | None = None,
     ) -> dict | None:
         """Get an evaluation's pedagogical dimensions with per-question averages,
-        optionally restricted to a single teacher and/or course (materia).
+        optionally restricted to a single teacher and/or course (materia), and
+        scoped to one modality.
 
         Only the director of the evaluation's department may access it."""
 
@@ -310,7 +311,7 @@ class EvaluationService:
             )
 
         return self.evaluations_repository.get_dimension_detail(
-            evaluation_id, teacher_id, course_id
+            evaluation_id, teacher_id, course_id, validated_modality(modality)
         )
 
     async def get_teacher_detail(
@@ -660,9 +661,7 @@ class EvaluationService:
         filepaths = []
 
         for upload, parsed in documents:
-            filepath = os.path.join(
-                eval_dir, stored_pdf_filename(parsed["modality"])
-            )
+            filepath = os.path.join(eval_dir, stored_pdf_filename(parsed["modality"]))
 
             with open(filepath, "wb") as f:
                 f.write(upload.content)
