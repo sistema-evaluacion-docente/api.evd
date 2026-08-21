@@ -70,8 +70,20 @@ class TestEvaluationsController:
 
         result = await controller.get_by_id(1)
 
-        mock_service.get_by_id.assert_called_once_with(1)
+        mock_service.get_by_id.assert_called_once_with(1, None)
         assert result["id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_passes_the_requested_modality(
+        self, controller, mock_service
+    ):
+        """Test get_by_id forwards the modality the figures are restricted to."""
+
+        mock_service.get_by_id.return_value = {"id": 1, "modality": "DISTANCIA"}
+
+        await controller.get_by_id(1, "DISTANCIA")
+
+        mock_service.get_by_id.assert_called_once_with(1, "DISTANCIA")
 
     @pytest.mark.asyncio
     async def test_get_by_period_delegates_to_service(self, controller, mock_service):

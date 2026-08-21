@@ -148,8 +148,85 @@ class TestEvaluationService:
 
         assert result["id"] == 1
         assert result["dimension_averages"] == dimension_averages
-        mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1)
-        mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)
+        mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1, None)
+        mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1, None)
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_restricts_every_figure_to_the_requested_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test the average, dimensions and counts come from one kind of program.
+
+        The repository does the narrowing, so what the service must get right
+        is handing the same modality to every figure it asks for."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {"id": 1}
+        mock_evaluations_repo.get_dimension_averages.return_value = []
+
+        result = await service.get_by_id(1, "DISTANCIA")
+
+        assert result["modality"] == "DISTANCIA"
+        mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1, "DISTANCIA")
+        mock_evaluations_repo.get_dimension_averages.assert_called_once_with(
+            1, "DISTANCIA"
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_normalizes_the_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test a lowercase modality reaches the repository in canonical form."""
+
+        mock_evaluations_repo.get_by_id_as_dict.return_value = {"id": 1}
+        mock_evaluations_repo.get_dimension_averages.return_value = []
+
+        await service.get_by_id(1, "presencial")
+
+        mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1, "PRESENCIAL")
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_rejects_an_unknown_modality(
+        self, service, mock_evaluations_repo
+    ):
+        """Test a modality outside the catalog never reaches the repository."""
+
+        with pytest.raises(ValidationError):
+            await service.get_by_id(1, "VIRTUAL")
+
+        mock_evaluations_repo.get_by_id_as_dict.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_compares_the_previous_period_within_the_modality(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Test presencial is never compared against a distancia average."""
+
+        mock_evaluations_repo.get_by_id_as_dict.side_effect = [
+            {
+                "id": 1,
+                "academic_period_code": "2025-2",
+                "department_id": 3,
+                "overall_average": 4.0,
+            },
+            {"id": 7, "overall_average": 3.5},
+        ]
+        mock_evaluations_repo.get_dimension_averages.side_effect = [[], []]
+
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2025-1"
+        prev_period = MagicMock(id=9, code="2025-1", name="2025-1")
+        mock_academic_periods_repo.get_by_code.return_value = prev_period
+        mock_evaluations_repo.get_by_period_and_department.return_value = {"id": 7}
+
+        await service.get_by_id(1, "PRESENCIAL")
+
+        assert (
+            mock_evaluations_repo.get_by_id_as_dict.call_args_list[-1][0]
+            == (7, "PRESENCIAL")
+        )
+        assert (
+            mock_evaluations_repo.get_dimension_averages.call_args_list[-1][0]
+            == (7, "PRESENCIAL")
+        )
 
     @pytest.mark.asyncio
     async def test_get_by_id_includes_previous_period_comparison(
