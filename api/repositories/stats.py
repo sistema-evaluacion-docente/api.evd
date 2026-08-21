@@ -1709,10 +1709,10 @@ class StatsRepository:
         Get a department's subject (course) averages aggregated across a
         range of academic periods (e.g. from "2020-1" to "2022-1"), one
         entry per subject with its academic groups from every period
-        nested inside. Subjects can be filtered by subject name and/or
-        teacher name, sorted, and are paginated. When filtered by teacher
-        name, averages/counts are recomputed over that teacher's groups
-        only (not the whole subject).
+        nested inside. Subjects can be filtered by subject name, teacher
+        name and/or modality, sorted, and are paginated. When filtered by
+        teacher name or modality, averages/counts are recomputed over the
+        matching groups only (not the whole subject).
 
         Returns None when the department doesn't exist.
         """
@@ -1786,6 +1786,9 @@ class StatsRepository:
 
             if teacher_name_term:
                 query = query.filter(UserModel.name.ilike(f"%{teacher_name_term}%"))
+
+            if filters.modality:
+                query = query.filter(AcademicGroupModel.modality == filters.modality)
 
             return query
 
@@ -1866,6 +1869,7 @@ class StatsRepository:
                 CourseModel.code.label("course_code"),
                 AcademicGroupModel.id.label("academic_group_id"),
                 AcademicGroupModel.group_name,
+                AcademicGroupModel.modality,
                 TeacherModel.id.label("teacher_id"),
                 UserModel.name.label("teacher_name"),
                 UserModel.avatar_url.label("teacher_avatar_url"),
@@ -1889,6 +1893,7 @@ class StatsRepository:
                 {
                     "academic_group_id": row.academic_group_id,
                     "group_name": row.group_name,
+                    "modality": row.modality,
                     "course_id": row.course_id,
                     "course_code": row.course_code,
                     "teacher_id": row.teacher_id,

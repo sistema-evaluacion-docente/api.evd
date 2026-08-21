@@ -146,8 +146,9 @@ async def get_department_period_range_subjects(
     """
     Get subject (course) averages for the director's own department
     across a range of academic periods (e.g. from "2020-1" to "2022-1"),
-    with pagination and an optional search filter by subject name. Only
-    the department's director can access this report.
+    with pagination and optional filters by subject name, teacher name and
+    modality (PRESENCIAL/DISTANCIA). Only the department's director can
+    access this report.
     """
 
     department_id = current_user.get("department_id")
