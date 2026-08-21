@@ -4,7 +4,7 @@ from fastapi.param_functions import Depends
 
 from api.core.pagination import PaginationParams
 from api.dependencies.evaluations import get_evaluation_service
-from api.schemas.evaluation import EvaluationFilters
+from api.schemas.evaluation import EvaluationFilters, UploadedPdf
 from api.services.evaluation_service import EvaluationService
 
 
@@ -34,11 +34,16 @@ class EvaluationsController:
 
         return await self.service.get_by_period(period_id)
 
-    async def get_pdf_path(self, evaluation_id: int, current_user: dict) -> str:
-        """Retrieve the absolute path to an evaluation's PDF, enforcing that
-        only ADMIN or the director of its department may access it."""
+    async def get_pdf_path(
+        self,
+        evaluation_id: int,
+        current_user: dict,
+        modality: str | None = None,
+    ) -> str:
+        """Retrieve the absolute path to one of an evaluation's PDFs, enforcing
+        that only ADMIN or the director of its department may access it."""
 
-        return await self.service.get_pdf_path(evaluation_id, current_user)
+        return await self.service.get_pdf_path(evaluation_id, current_user, modality)
 
     async def get_summary(self, evaluation_id: int):
         """Get aggregated statistics for an evaluation."""
@@ -96,13 +101,12 @@ class EvaluationsController:
 
     async def prepare_upload(
         self,
-        filename: str | None,
-        file_bytes: bytes,
+        uploads: list[UploadedPdf],
         current_user: dict,
     ):
-        """Validate, parse, and persist an evaluation PDF upload."""
+        """Validate, parse, and persist the PDFs of an evaluation upload."""
 
-        return await self.service.prepare_upload(filename, file_bytes, current_user)
+        return await self.service.prepare_upload(uploads, current_user)
 
     async def trigger_analysis(self, evaluation_id: int):
         """Validate preconditions for triggering AI analysis."""

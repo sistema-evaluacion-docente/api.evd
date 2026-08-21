@@ -36,6 +36,15 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
     def __init__(self, db: Session):
         super().__init__(EvaluationModel, db)
 
+    def get_department_by_code(self, code: str) -> DepartmentModel | None:
+        """Get the department a PDF was issued for by its two-digit code."""
+
+        return (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.code == code)
+            .first()
+        )
+
     def create_evaluation(
         self,
         user_id: int | None,

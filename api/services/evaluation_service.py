@@ -1,7 +1,6 @@
 """Service for evaluation-related business operations."""
 
 import os
-import uuid
 from math import ceil
 
 from fastapi import HTTPException
@@ -9,19 +8,30 @@ from fastapi import HTTPException
 from api.config import config
 from api.core.pagination import PaginationParams
 from api.exceptions import PermissionDeniedError, ResourceNotFoundError, ValidationError
-from api.models.department import DepartmentModel
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.directors import DirectorsRepository
 from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.users import UsersRepository
 from api.schemas.academic_period import AcademicPeriodCreate
-from api.schemas.evaluation import EvaluationFilters
+from api.schemas.evaluation import EvaluationFilters, UploadedPdf
 from api.schemas.pagination import build_paginated_response
 from api.schemas.user import RoleName
 from api.serializers.evaluations import evaluation_to_dict
 from api.services.audit_service import AuditService
+from api.utils.evaluation_pdfs import (
+    join_pdf_urls,
+    select_pdf_url,
+    stored_pdf_filename,
+)
 from api.utils.file_validation import validate_file_size
-from api.utils.pdf_parser import parse_pdf
+from api.utils.modalities import modality_label, normalize_modality
+from api.utils.pdf_parser import merge_parsed_evaluations, parse_pdf
+
+
+# Un PDF por modalidad: presencial y a distancia.
+MAX_EVALUATION_PDFS = 2
+
+PDF_MAGIC_BYTES = b"%PDF-"
 
 
 class EvaluationService:
@@ -197,11 +207,18 @@ class EvaluationService:
 
         return self.evaluations_repository.get_by_period_id(period_id)
 
-    async def get_pdf_path(self, evaluation_id: int, current_user: dict) -> str:
+    async def get_pdf_path(
+        self,
+        evaluation_id: int,
+        current_user: dict,
+        modality: str | None = None,
+    ) -> str:
         """Return the absolute path to an evaluation's PDF on disk.
 
-        Only ADMIN or the DIRECTOR of the department the evaluation belongs
-        to may access the file."""
+        An evaluation can be backed by the presencial and the distancia
+        documents; `modality` picks one of them, and without it the first one
+        is served. Only ADMIN or the DIRECTOR of the department the evaluation
+        belongs to may access the file."""
 
         evaluation = self.evaluations_repository.get_by_id_as_dict(evaluation_id)
 
@@ -226,7 +243,17 @@ class EvaluationService:
         if not pdf_url:
             raise ResourceNotFoundError("evaluation pdf", evaluation_id)
 
-        return pdf_url
+        if modality is not None and normalize_modality(modality) is None:
+            raise ValidationError(
+                f"Modalidad '{modality}' no válida. Use PRESENCIAL o DISTANCIA"
+            )
+
+        pdf_path = select_pdf_url(pdf_url, modality)
+
+        if not pdf_path:
+            raise ResourceNotFoundError("evaluation pdf", evaluation_id)
+
+        return pdf_path
 
     async def get_summary(self, evaluation_id: int) -> dict | None:
         """Get aggregated statistics for an evaluation."""
@@ -383,53 +410,23 @@ class EvaluationService:
 
     async def prepare_upload(
         self,
-        filename: str | None,
-        file_bytes: bytes,
+        uploads: list[UploadedPdf],
         current_user: dict,
     ) -> tuple[dict, dict]:
-        """Validate, parse, and persist an evaluation PDF upload.
+        """Validate, parse, and persist the PDFs of an evaluation.
+
+        The university publishes one document per kind of program, so a
+        director uploads either a single PDF or the presencial and the
+        distancia ones together. Both describe the same period and department
+        and are stored side by side under a single evaluation.
 
         Returns (evaluation_dict, parsed_data) so the route can dispatch
-        the background task with the parsed data.
+        the background task with the merged parsed data.
         """
 
-        if not filename or not filename.lower().endswith(".pdf"):
-            raise HTTPException(status_code=400, detail="El archivo debe ser un PDF")
-
-        validate_file_size(file_bytes)
-
-        if not file_bytes:
-            raise HTTPException(
-                status_code=400,
-                detail="El archivo está vacío",
-            )
-
-        try:
-            parsed = parse_pdf(file_bytes)
-        except Exception as exc:
-            print(f"Error parsing PDF: {exc}")
-            raise HTTPException(
-                status_code=400, detail=f"Error al procesar el PDF: {exc}"
-            )
-
-        if not parsed.get("period_code"):
-            raise HTTPException(
-                status_code=422,
-                detail="No se pudo extraer el periodo académico del PDF",
-            )
-
-        if not parsed.get("department_code"):
-            raise HTTPException(
-                status_code=422,
-                detail="No se pudo extraer el departamento del PDF",
-            )
-
-        if not parsed.get("teachers"):
-            raise HTTPException(
-                status_code=422,
-                detail="""No se encontraron datos del docente en el PDF. Asegúrese
-                de que se trate de un documento de evaluación docente de la UFPS.""",
-            )
+        documents = self._parse_uploads(uploads)
+        parsed_documents = [parsed for _, parsed in documents]
+        parsed = merge_parsed_evaluations(parsed_documents)
 
         period = self.academic_periods_repository.get_by_code(parsed["period_code"])
 
@@ -441,10 +438,8 @@ class EvaluationService:
                 )
             )
 
-        department = (
-            self.evaluations_repository.db.query(DepartmentModel)
-            .filter(DepartmentModel.code == parsed["department_code"])
-            .first()
+        department = self.evaluations_repository.get_department_by_code(
+            parsed["department_code"]
         )
 
         if not department:
@@ -471,20 +466,9 @@ class EvaluationService:
         if existing and existing["status"] in ("PROCESSING", "FAILED"):
             self.evaluations_repository.delete_evaluation(existing["id"])
 
-        eval_dir = os.path.join(
-            config.UPLOAD_DIR,
-            "evaluations",
-            parsed["period_code"],
-            parsed["department_code"],
+        filepaths = self._store_uploads(
+            documents, parsed["period_code"], parsed["department_code"]
         )
-        os.makedirs(eval_dir, exist_ok=True)
-
-        ext = os.path.splitext(filename or "evaluation.pdf")[1] or ".pdf"
-        stored_filename = f"{uuid.uuid4().hex}{ext}"
-        filepath = os.path.join(eval_dir, stored_filename)
-
-        with open(filepath, "wb") as f:
-            f.write(file_bytes)
 
         user_record = self.users_repository.get_by_uid(current_user["uid"])
         resolved_user_id = user_record.id if user_record else None
@@ -493,11 +477,15 @@ class EvaluationService:
             user_id=resolved_user_id,
             academic_period_id=period.id,
             department_id=department.id,
-            pdf_url=filepath,
+            pdf_url=join_pdf_urls(filepaths),
             status="PROCESSING",
         )
 
         self.evaluations_repository.db.commit()
+
+        modalities = ", ".join(
+            modality_label(document["modality"]) for _, document in documents
+        )
 
         await self.audit_service.log(
             action="CREATE",
@@ -506,10 +494,168 @@ class EvaluationService:
             actor_id=resolved_user_id,
             description=f"""Se creó la evaluación {evaluation_model.id}
             del período {period.name} para el departamento {department.name} ({department.code})
-            con un total de {len(parsed['teachers'])} docentes""",
+            con un total de {len(parsed['teachers'])} docentes
+            a partir de {len(documents)} PDF(s) ({modalities})""",
         )
 
         return evaluation_to_dict(evaluation_model), parsed
+
+    def _parse_uploads(
+        self, uploads: list[UploadedPdf]
+    ) -> list[tuple[UploadedPdf, dict]]:
+        """Validate every uploaded file and return it next to its parsed content.
+
+        Rejects anything that is not a UFPS evaluation report, and the
+        combinations that cannot belong to a single evaluation: documents of
+        different periods or departments, and two documents of the same
+        modality."""
+
+        if not uploads:
+            raise HTTPException(
+                status_code=400,
+                detail="Debe adjuntar el PDF de la evaluación",
+            )
+
+        if len(uploads) > MAX_EVALUATION_PDFS:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Solo puede subir hasta {MAX_EVALUATION_PDFS} PDFs por "
+                    "evaluación: el de programas presenciales y el de programas "
+                    "a distancia"
+                ),
+            )
+
+        documents = [(upload, self._parse_upload(upload)) for upload in uploads]
+
+        periods = {parsed["period_code"] for _, parsed in documents}
+
+        if len(periods) > 1:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Los PDFs pertenecen a periodos académicos distintos "
+                    f"({', '.join(sorted(periods))}); deben ser del mismo periodo"
+                ),
+            )
+
+        departments = {parsed["department_code"] for _, parsed in documents}
+
+        if len(departments) > 1:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Los PDFs pertenecen a departamentos distintos "
+                    f"({', '.join(sorted(departments))}); deben ser del mismo "
+                    "departamento"
+                ),
+            )
+
+        modalities = [parsed["modality"] for _, parsed in documents]
+
+        if len(modalities) > len(set(modalities)):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Los dos PDFs corresponden a la misma modalidad "
+                    f"({modality_label(modalities[0])}); suba uno de programas "
+                    "presenciales y uno de programas a distancia"
+                ),
+            )
+
+        return documents
+
+    def _parse_upload(self, upload: UploadedPdf) -> dict:
+        """Validate a single uploaded file and return its parsed content."""
+
+        name = upload.filename or "el archivo"
+
+        if not upload.filename or not upload.filename.lower().endswith(".pdf"):
+            raise HTTPException(
+                status_code=400, detail=f"'{name}' no es un archivo PDF"
+            )
+
+        if not upload.content:
+            raise HTTPException(status_code=400, detail=f"'{name}' está vacío")
+
+        validate_file_size(upload.content)
+
+        if not upload.content.startswith(PDF_MAGIC_BYTES):
+            raise HTTPException(
+                status_code=400,
+                detail=f"'{name}' no es un PDF válido o está dañado",
+            )
+
+        try:
+            parsed = parse_pdf(upload.content)
+        except Exception as exc:
+            print(f"Error parsing PDF: {exc}")
+            raise HTTPException(
+                status_code=400, detail=f"Error al procesar '{name}': {exc}"
+            )
+
+        if not parsed.get("period_code"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"No se pudo extraer el periodo académico de '{name}'",
+            )
+
+        if not parsed.get("department_code"):
+            raise HTTPException(
+                status_code=422,
+                detail=f"No se pudo extraer el departamento de '{name}'",
+            )
+
+        if not parsed.get("modality"):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"No se pudo determinar si '{name}' corresponde a programas "
+                    "presenciales o a distancia. Asegúrese de subir el reporte "
+                    "completo, tal como lo genera la universidad"
+                ),
+            )
+
+        if not parsed.get("teachers"):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"No se encontraron datos de docentes en '{name}'. Asegúrese "
+                    "de que se trate de un documento de evaluación docente de la UFPS"
+                ),
+            )
+
+        return parsed
+
+    def _store_uploads(
+        self,
+        documents: list[tuple[UploadedPdf, dict]],
+        period_code: str,
+        department_code: str,
+    ) -> list[str]:
+        """Write the uploaded PDFs to disk and return their paths."""
+
+        eval_dir = os.path.join(
+            config.UPLOAD_DIR,
+            "evaluations",
+            period_code,
+            department_code,
+        )
+        os.makedirs(eval_dir, exist_ok=True)
+
+        filepaths = []
+
+        for upload, parsed in documents:
+            filepath = os.path.join(
+                eval_dir, stored_pdf_filename(parsed["modality"])
+            )
+
+            with open(filepath, "wb") as f:
+                f.write(upload.content)
+
+            filepaths.append(filepath)
+
+        return filepaths
 
     async def trigger_analysis(self, evaluation_id: int) -> dict:
         """Validate preconditions for triggering AI analysis.

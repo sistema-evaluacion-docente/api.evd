@@ -4,7 +4,7 @@ Routes for evaluation operations.
 
 import os
 
-from fastapi import BackgroundTasks, Depends, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from api.schemas.evaluation import (
     EvaluationFiltersDep,
     EvaluationOut,
     EvaluationStatusUpdate,
+    UploadedPdf,
 )
 from api.schemas.evaluation_summary import (
     DimensionAverageItem,
@@ -32,6 +33,7 @@ from api.schemas.evaluation_summary import (
     TeacherEvaluationDetail,
     TeacherPeriodEvaluation,
 )
+from api.schemas.academic_group import Modality
 from api.schemas.user import RoleName
 from api.utils.dimensions import QUESTIONS
 from api.utils.evaluation_excel_export import (
@@ -59,17 +61,20 @@ _EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 )
 async def upload_evaluation(
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+    file: list[UploadFile] = File(...),
     current_user: dict = Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Upload a teacher evaluation PDF for a department."""
+    """Upload the teacher evaluation PDFs of a department for one period.
 
-    pdf_bytes = await file.read()
+    Send the `file` part once for a department that only has presencial
+    programs, or twice — presencial and a distancia — to register both in the
+    same evaluation."""
+
+    uploads = [UploadedPdf(item.filename, await item.read()) for item in file]
 
     evaluation, parsed = await controller.prepare_upload(
-        filename=file.filename,
-        file_bytes=pdf_bytes,
+        uploads=uploads,
         current_user=current_user,
     )
 
@@ -153,23 +158,31 @@ async def get_evaluation_by_id(
 )
 async def download_evaluation_pdf(
     evaluation_id: int,
+    modality: Modality | None = Query(
+        default=None,
+        description="PDF a descargar cuando la evaluación tiene los dos documentos",
+    ),
     current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Download the PDF of an evaluation.
+    """Download one of the PDFs of an evaluation.
 
-    Only ADMIN or the DIRECTOR of the department the evaluation belongs to
-    may access the file — it is no longer served as a public static asset."""
+    An evaluation may hold the presencial and the distancia documents; without
+    `modality` the first one is served. Only ADMIN or the DIRECTOR of the
+    department the evaluation belongs to may access the file — it is no longer
+    served as a public static asset."""
 
-    pdf_path = await controller.get_pdf_path(evaluation_id, current_user)
+    pdf_path = await controller.get_pdf_path(evaluation_id, current_user, modality)
 
     if not os.path.isfile(pdf_path):
         raise HTTPException(status_code=404, detail="El archivo PDF no existe")
 
+    suffix = f"_{modality.lower()}" if modality else ""
+
     return FileResponse(
         pdf_path,
         media_type="application/pdf",
-        filename=f"evaluacion_{evaluation_id}.pdf",
+        filename=f"evaluacion_{evaluation_id}{suffix}.pdf",
         content_disposition_type="inline",
     )
 
