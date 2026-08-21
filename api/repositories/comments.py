@@ -35,7 +35,10 @@ class CommentsRepository(BaseRepository[CommentModel]):
         pagination: PaginationParams,
         department_id: int | None = None,
     ) -> tuple[list[dict], int]:
-        """Search comments with filters and pagination."""
+        """Search comments with filters and pagination.
+
+        `filters.modality` narrows the result down to the comments written for
+        the groups of one kind of program."""
 
         base_query = (
             self.db.query(
@@ -107,6 +110,14 @@ class CommentsRepository(BaseRepository[CommentModel]):
                 CommentModel.pedagogical_categories.any(
                     pedagogical_category_id=filters.pedagogical_category_id
                 )
+            )
+
+        if filters.modality is not None:
+            # The group is outer-joined above; filtering on it also drops the
+            # comments that hang from no academic group at all, which is what
+            # asking for a modality means.
+            base_query = base_query.filter(
+                AcademicGroupModel.modality == filters.modality
             )
 
         if filters.search:
