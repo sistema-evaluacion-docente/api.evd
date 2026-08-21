@@ -12,6 +12,7 @@ def academic_group_to_dict(group: AcademicGroupModel) -> dict:
         "teacher_id": group.teacher_id,
         "academic_period_id": group.academic_period_id,
         "group_name": group.group_name,
+        "modality": group.modality,
         "created_at": group.created_at,
         "updated_at": group.updated_at,
     }
