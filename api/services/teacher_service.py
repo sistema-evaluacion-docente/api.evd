@@ -414,6 +414,7 @@ class TeacherService:
         teacher in their department. Returns None when teacher or evaluation
         is not found.
         """
+        from api.utils.evaluation_pdfs import split_pdf_urls
         from api.utils.pdf_extractor import extract_teacher_pages
 
         user = self.users_repository.get_by_uid(current_user.uid)
@@ -448,7 +449,9 @@ class TeacherService:
         if not teacher.user or not teacher.user.institutional_code:
             return None
 
-        return extract_teacher_pages(evaluation.pdf_url, teacher.user.institutional_code)
+        return extract_teacher_pages(
+            split_pdf_urls(evaluation.pdf_url), teacher.user.institutional_code
+        )
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
