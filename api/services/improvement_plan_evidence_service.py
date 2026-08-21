@@ -23,6 +23,7 @@ from api.services.audit_service import AuditService
 from api.services.improvement_plan_service import ImprovementPlanService
 from api.services.notification_service import NotificationService
 from api.utils.plan_files import delete_plan_file
+from api.utils.plan_links import manager_plan_path, teacher_plan_path
 
 ENTITY = "improvement_plan_evidences"
 REQUEST_ENTITY = "improvement_plan_evidence_requests"
@@ -32,12 +33,6 @@ CLOSED_PLAN_STATUSES = (
     "CERRADO_NO_CUMPLIDO",
     "CERRADO_MANUAL",
 )
-
-
-def _plan_link(plan_id: int) -> str:
-    """Deep link the notification should take the user to."""
-
-    return f"/planes/{plan_id}"
 
 
 class ImprovementPlanEvidenceService:
@@ -84,11 +79,16 @@ class ImprovementPlanEvidenceService:
         user_id: int | None,
         title: str,
         message: str,
-        plan_id: int,
+        link: str,
         actor_id: int | None,
         notification_type: NotificationType = NotificationType.INFO,
     ) -> None:
-        """Best-effort notification; never blocks the main operation."""
+        """Best-effort notification; never blocks the main operation.
+
+        The link is asked for rather than derived: the two sides of this loop
+        read the plan on different screens, and the caller is the one that knows
+        which side it is writing to.
+        """
 
         if not user_id or user_id == actor_id:
             return
@@ -99,19 +99,46 @@ class ImprovementPlanEvidenceService:
                 title=title,
                 message=message,
                 type=notification_type,
-                link=_plan_link(plan_id),
+                link=link,
             ),
             actor_id=actor_id,
+        )
+
+    async def _notify_teacher(
+        self,
+        plan: dict,
+        title: str,
+        message: str,
+        actor_id: int | None,
+        notification_type: NotificationType = NotificationType.INFO,
+    ) -> None:
+        """Tell the teacher, and take them to their own view of the plan."""
+
+        await self._notify(
+            self._teacher_user_id(plan),
+            title,
+            message,
+            teacher_plan_path(plan["id"]),
+            actor_id,
+            notification_type,
         )
 
     async def _notify_director(
         self, plan: dict, title: str, message: str, actor_id: int | None
     ) -> None:
+        """Tell the director, on the screen where the plan is managed."""
+
         director_user_id = self.improvement_plans_repository.get_department_director_user_id(
             plan.get("department_id")
         )
 
-        await self._notify(director_user_id, title, message, plan["id"], actor_id)
+        await self._notify(
+            director_user_id,
+            title,
+            message,
+            manager_plan_path(plan["id"]),
+            actor_id,
+        )
 
     # ------------------------------------------------------------------ #
     # Requests
@@ -158,11 +185,10 @@ class ImprovementPlanEvidenceService:
             description=f"Solicitó la evidencia '{data.title}' en el plan {plan_id}",
         )
 
-        await self._notify(
-            self._teacher_user_id(plan),
+        await self._notify_teacher(
+            plan,
             "Nueva evidencia solicitada",
             f"El director solicitó: {data.title}",
-            plan_id,
             (current_user or {}).get("id"),
             NotificationType.WARNING,
         )
@@ -230,11 +256,10 @@ class ImprovementPlanEvidenceService:
                 actor_id,
             )
         else:
-            await self._notify(
-                self._teacher_user_id(plan),
+            await self._notify_teacher(
+                plan,
                 "Comentario del director",
                 data.body[:120],
-                plan_id,
                 actor_id,
             )
 
@@ -352,8 +377,8 @@ class ImprovementPlanEvidenceService:
 
         approved = data.status == EvidenceStatus.APROBADA
 
-        await self._notify(
-            self._teacher_user_id(plan),
+        await self._notify_teacher(
+            plan,
             "Evidencia aprobada" if approved else "Evidencia rechazada",
             data.comment
             or (
@@ -361,7 +386,6 @@ class ImprovementPlanEvidenceService:
                 if approved
                 else "El director rechazó la evidencia; debe enviar una nueva."
             ),
-            plan_id,
             actor_id,
             NotificationType.SUCCESS if approved else NotificationType.WARNING,
         )
