@@ -139,12 +139,20 @@ async def get_evaluation_by_period(
 )
 async def get_evaluation_by_id(
     evaluation_id: int,
+    modality: Modality | None = Query(
+        default=None,
+        description=(
+            "Calcular promedio, dimensiones, comentarios y número de docentes "
+            "solo con los grupos de esta modalidad. Sin el filtro se devuelve "
+            "la evaluación completa."
+        ),
+    ),
     _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by ID."""
+    """Endpoint to get an evaluation by ID, optionally restricted to one modality."""
 
-    evaluation = await controller.get_by_id(evaluation_id)
+    evaluation = await controller.get_by_id(evaluation_id, modality)
 
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")

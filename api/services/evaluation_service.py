@@ -24,7 +24,7 @@ from api.utils.evaluation_pdfs import (
     stored_pdf_filename,
 )
 from api.utils.file_validation import validate_file_size
-from api.utils.modalities import modality_label, normalize_modality
+from api.utils.modalities import modality_label, validated_modality
 from api.utils.pdf_parser import merge_parsed_evaluations, parse_pdf
 
 
@@ -81,25 +81,44 @@ class EvaluationService:
 
         return build_paginated_response(items, total, pagination)
 
-    async def get_by_id(self, evaluation_id: int) -> dict | None:
+    async def get_by_id(
+        self, evaluation_id: int, modality: str | None = None
+    ) -> dict | None:
         """Retrieve an evaluation by ID, including its pedagogical dimension averages
-        and a comparison against the department's evaluation in the previous period."""
+        and a comparison against the department's evaluation in the previous period.
 
-        evaluation = self.evaluations_repository.get_by_id_as_dict(evaluation_id)
+        With a `modality`, every figure — average, dimensions, risk counts,
+        teacher count and the previous-period comparison — is computed over
+        the groups of that kind of program only. Without it they cover the
+        whole evaluation, presencial and a distancia together."""
+
+        modality = validated_modality(modality)
+
+        evaluation = self.evaluations_repository.get_by_id_as_dict(
+            evaluation_id, modality
+        )
 
         if not evaluation:
             return None
 
+        evaluation["modality"] = modality
         evaluation["dimension_averages"] = (
-            self.evaluations_repository.get_dimension_averages(evaluation_id)
+            self.evaluations_repository.get_dimension_averages(evaluation_id, modality)
         )
-        evaluation["comparison"] = self._get_previous_period_comparison(evaluation)
+        evaluation["comparison"] = self._get_previous_period_comparison(
+            evaluation, modality
+        )
 
         return evaluation
 
-    def _get_previous_period_comparison(self, evaluation: dict) -> dict | None:
+    def _get_previous_period_comparison(
+        self, evaluation: dict, modality: str | None = None
+    ) -> dict | None:
         """Compare `evaluation` against the same department's evaluation in the
         academic period immediately before it (e.g. "2025-2" -> "2025-1").
+
+        A `modality` restricts both sides of the comparison to that kind of
+        program, so presencial is never compared against a distancia average.
 
         Returns None if there is no previous period or no evaluation for the
         department there.
@@ -128,10 +147,10 @@ class EvaluationService:
             return None
 
         prev_evaluation = self.evaluations_repository.get_by_id_as_dict(
-            prev_evaluation["id"]
+            prev_evaluation["id"], modality
         )
         prev_dimensions = self.evaluations_repository.get_dimension_averages(
-            prev_evaluation["id"]
+            prev_evaluation["id"], modality
         )
 
         current_avg = evaluation.get("overall_average")
@@ -243,12 +262,7 @@ class EvaluationService:
         if not pdf_url:
             raise ResourceNotFoundError("evaluation pdf", evaluation_id)
 
-        if modality is not None and normalize_modality(modality) is None:
-            raise ValidationError(
-                f"Modalidad '{modality}' no válida. Use PRESENCIAL o DISTANCIA"
-            )
-
-        pdf_path = select_pdf_url(pdf_url, modality)
+        pdf_path = select_pdf_url(pdf_url, validated_modality(modality))
 
         if not pdf_path:
             raise ResourceNotFoundError("evaluation pdf", evaluation_id)

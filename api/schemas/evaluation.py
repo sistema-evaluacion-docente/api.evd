@@ -52,6 +52,7 @@ class EvaluationOut(BaseModel):
     department_id: Optional[int]
     pdf_url: Optional[str]
     pdf_urls: list[str] = []
+    modality: Optional[str] = None
     active: Optional[bool]
     status: Optional[str]
     ai_status: Optional[str] = None

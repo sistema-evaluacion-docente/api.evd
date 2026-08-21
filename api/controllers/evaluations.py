@@ -24,10 +24,10 @@ class EvaluationsController:
 
         return await self.service.get_all(user_email, filters, pagination)
 
-    async def get_by_id(self, evaluation_id: int):
-        """Retrieve an evaluation by ID."""
+    async def get_by_id(self, evaluation_id: int, modality: str | None = None):
+        """Retrieve an evaluation by ID, optionally restricted to one modality."""
 
-        return await self.service.get_by_id(evaluation_id)
+        return await self.service.get_by_id(evaluation_id, modality)
 
     async def get_by_period(self, period_id: int):
         """Retrieve an evaluation by academic period ID."""
