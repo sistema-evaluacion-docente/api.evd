@@ -120,6 +120,11 @@ class ImprovementPlansController:
 
         return await self.service.update(plan_id, data, current_user)
 
+    async def delete(self, plan_id: int, current_user):
+        """Delete an improvement plan and everything hanging off it."""
+
+        return await self.service.delete(plan_id, current_user)
+
     async def upsert_case_report(
         self, plan_id: int, data: ImprovementPlanCaseReportUpsert, current_user
     ):
