@@ -140,7 +140,7 @@ class TestEvaluationsController:
         result = await controller.get_dimension_detail(1, current_user)
 
         mock_service.get_dimension_detail.assert_called_once_with(
-            1, current_user, None, None
+            1, current_user, None, None, None
         )
         assert result["evaluation_id"] == 1
 
@@ -160,7 +160,27 @@ class TestEvaluationsController:
             1, current_user, teacher_id=7, course_id=3
         )
 
-        mock_service.get_dimension_detail.assert_called_once_with(1, current_user, 7, 3)
+        mock_service.get_dimension_detail.assert_called_once_with(
+            1, current_user, 7, 3, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_passes_the_requested_modality(
+        self, controller, mock_service
+    ):
+        """Test get_dimension_detail forwards the modality it is scoped to."""
+
+        current_user = {"uid": "director-uid"}
+        mock_service.get_dimension_detail.return_value = {
+            "evaluation_id": 1,
+            "dimensions": [],
+        }
+
+        await controller.get_dimension_detail(1, current_user, modality="DISTANCIA")
+
+        mock_service.get_dimension_detail.assert_called_once_with(
+            1, current_user, None, None, "DISTANCIA"
+        )
 
     @pytest.mark.asyncio
     async def test_get_teacher_detail_delegates_to_service(

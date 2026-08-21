@@ -464,7 +464,9 @@ class TestEvaluationService:
         result = await service.get_dimension_detail(1, {"uid": "director-uid"})
 
         assert result == detail
-        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(1, None, None)
+        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(
+            1, None, None, None
+        )
 
     @pytest.mark.asyncio
     async def test_get_dimension_detail_passes_teacher_and_course_filters(
@@ -493,7 +495,66 @@ class TestEvaluationService:
             1, {"uid": "director-uid"}, teacher_id=7, course_id=3
         )
 
-        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(1, 7, 3)
+        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(
+            1, 7, 3, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_scopes_the_breakdown_to_one_modality(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test the modality reaches the repository in canonical form."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+        mock_evaluations_repo.get_dimension_detail.return_value = {
+            "evaluation_id": 1,
+            "dimensions": [],
+        }
+
+        await service.get_dimension_detail(
+            1, {"uid": "director-uid"}, teacher_id=7, modality="distancia"
+        )
+
+        mock_evaluations_repo.get_dimension_detail.assert_called_once_with(
+            1, 7, None, "DISTANCIA"
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_dimension_detail_rejects_an_unknown_modality(
+        self,
+        service,
+        mock_evaluations_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_evaluation,
+    ):
+        """Test a modality outside the catalog never reaches the repository."""
+
+        mock_evaluations_repo.get_by_id.return_value = mock_evaluation
+        mock_user = MagicMock()
+        mock_user.id = 99
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_director = MagicMock()
+        mock_director.department_id = 1
+        mock_directors_repo.get_by_user_id.return_value = mock_director
+
+        with pytest.raises(ValidationError):
+            await service.get_dimension_detail(
+                1, {"uid": "director-uid"}, modality="VIRTUAL"
+            )
+
+        mock_evaluations_repo.get_dimension_detail.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_teacher_detail_returns_none_when_period_not_found(
