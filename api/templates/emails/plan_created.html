@@ -1,0 +1,25 @@
+{# Sent to a teacher the moment their department head draws up a plan for them. #}
+{% extends "_base.html" %}
+
+{% block content %}
+<p style="margin:0 0 16px 0;">Estimado(a) profesor(a) <strong>{{ teacher_name }}</strong>,</p>
+
+<p style="margin:0 0 16px 0;">
+  A partir de los resultados de la evaluación docente
+  {% if period_code %}del periodo <strong>{{ period_code }}</strong>{% endif %},
+  se ha registrado un plan de mejoramiento a su nombre: «<strong>{{ plan_title }}</strong>».
+</p>
+
+<p style="margin:0 0 16px 0;">
+  El plan recoge los compromisos acordados y el seguimiento que se hará durante el semestre. Puede
+  consultarlo en el Sistema de Evaluación Docente en el siguiente enlace:
+</p>
+
+<p style="margin:0 0 16px 0; text-align:left;">
+  <a href="{{ plan_url }}" style="color:#3f5a8a; word-break:break-all;">{{ plan_url }}</a>
+</p>
+
+<p style="margin:0 0 16px 0;">
+  Cualquier inquietud puede dirigirla a la dirección del departamento.
+</p>
+{% endblock %}
