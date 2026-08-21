@@ -5,7 +5,7 @@ Focus on the business rules the official UFPS forms impose: who may see or touch
 a plan, the duplicate-plan guard, and the acta lock.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -51,6 +51,20 @@ def mock_repository():
     repo.update = AsyncMock(return_value=_plan(title="Actualizado"))
     repo.set_acta_status = AsyncMock(return_value=_plan(acta_status="CERRADA"))
     repo.get_teacher_user_id = MagicMock(return_value=TEACHER["id"])
+    repo.delete = AsyncMock(return_value=True)
+    repo.get_teacher_contact = MagicMock(
+        return_value={
+            "user_id": TEACHER["id"],
+            "name": "Ada Lovelace",
+            "email": "ada@ufps.edu.co",
+        }
+    )
+    repo.get_department_context = MagicMock(
+        return_value={
+            "department_name": "Departamento de Sistemas",
+            "faculty_name": "Ingeniería",
+        }
+    )
     return repo
 
 
@@ -71,9 +85,24 @@ def mock_audit_service():
 
 
 @pytest.fixture
-def service(mock_repository, mock_settings_repository, mock_audit_service):
+def mock_notification_service():
+    service = MagicMock()
+    service.create = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def service(
+    mock_repository,
+    mock_settings_repository,
+    mock_audit_service,
+    mock_notification_service,
+):
     return ImprovementPlanService(
-        mock_repository, mock_settings_repository, mock_audit_service
+        mock_repository,
+        mock_settings_repository,
+        mock_audit_service,
+        mock_notification_service,
     )
 
 
@@ -232,6 +261,187 @@ class TestCreate:
             await service.create(self._payload(), ADMIN)
 
         mock_repository.create.assert_not_awaited()
+
+
+class TestAnnounceNewPlan:
+    """Creating a plan is the moment the teacher has to hear about it.
+
+    Everything here is best-effort: the plan is already created and audited by
+    the time the announcement runs, so nothing it does may turn a successful
+    creation into a failed request.
+    """
+
+    def _payload(self) -> ImprovementPlanCreate:
+        return ImprovementPlanCreate(
+            teacher_id=55, origin_period_id=3, title="Plan de prueba"
+        )
+
+    async def test_emails_the_teacher(self, service):
+        with patch(
+            "api.services.improvement_plan_service.send_email"
+        ) as send:
+            await service.create(self._payload(), DIRECTOR)
+
+        (message,) = send.call_args.args
+
+        assert message.to == "ada@ufps.edu.co"
+        assert "/mis-planes/7" in message.html
+
+    async def test_signs_the_mail_as_the_director_who_created_it(self, service):
+        with patch("api.services.improvement_plan_service.send_email") as send:
+            await service.create(self._payload(), {**DIRECTOR, "name": "Marco Adarme"})
+
+        (message,) = send.call_args.args
+
+        assert "Marco Adarme" in message.html
+        assert "Director Departamento de Sistemas" in message.html
+
+    async def test_also_rings_the_bell_in_the_app(
+        self, service, mock_notification_service
+    ):
+        with patch("api.services.improvement_plan_service.send_email"):
+            await service.create(self._payload(), DIRECTOR)
+
+        notification = mock_notification_service.create.await_args.args[0]
+
+        assert notification.user_id == TEACHER["id"]
+        # The teacher's own route: /planes/{id} is the director's screen.
+        assert notification.link == "/mis-planes/7"
+
+    async def test_a_dead_mail_server_does_not_lose_the_plan(self, service):
+        """Test the plan is already created: SMTP failing cannot undo that."""
+
+        with patch(
+            "api.services.improvement_plan_service.send_email",
+            side_effect=OSError("connection refused"),
+        ):
+            plan = await service.create(self._payload(), DIRECTOR)
+
+        assert plan["id"] == 7
+
+    async def test_a_failed_notification_does_not_lose_the_plan_either(
+        self, service, mock_notification_service
+    ):
+        mock_notification_service.create.side_effect = RuntimeError("websocket down")
+
+        with patch("api.services.improvement_plan_service.send_email"):
+            plan = await service.create(self._payload(), DIRECTOR)
+
+        assert plan["id"] == 7
+
+    async def test_says_nothing_to_a_teacher_without_an_account(
+        self, service, mock_repository, mock_notification_service
+    ):
+        """Test teachers imported from an evaluation may have no user yet."""
+
+        mock_repository.get_teacher_contact.return_value = None
+
+        with patch("api.services.improvement_plan_service.send_email") as send:
+            plan = await service.create(self._payload(), DIRECTOR)
+
+        assert plan["id"] == 7
+        send.assert_not_called()
+        mock_notification_service.create.assert_not_awaited()
+
+    async def test_still_notifies_a_teacher_without_an_email(
+        self, service, mock_repository, mock_notification_service
+    ):
+        """Test a missing address costs the mail, not the in-app notification."""
+
+        mock_repository.get_teacher_contact.return_value = {
+            "user_id": TEACHER["id"],
+            "name": "Ada",
+            "email": None,
+        }
+
+        with patch("api.services.improvement_plan_service.send_email") as send:
+            await service.create(self._payload(), DIRECTOR)
+
+        send.assert_not_called()
+        mock_notification_service.create.assert_awaited_once()
+
+
+class TestDelete:
+    """Undoing a plan: the director's own call, and it takes everything."""
+
+    async def test_deletes_and_audits(
+        self, service, mock_repository, mock_audit_service
+    ):
+        with patch("api.services.improvement_plan_service.delete_plan_files"):
+            assert await service.delete(7, DIRECTOR) is True
+
+        mock_repository.delete.assert_awaited_once_with(7)
+        mock_audit_service.log.assert_awaited_once()
+
+    async def test_names_the_plan_in_the_audit_trail(
+        self, service, mock_audit_service
+    ):
+        """Test the description is written while the row still exists."""
+
+        with patch("api.services.improvement_plan_service.delete_plan_files"):
+            await service.delete(7, DIRECTOR)
+
+        description = mock_audit_service.log.await_args.kwargs["description"]
+
+        assert "Plan de prueba" in description
+
+    async def test_takes_the_files_off_the_disk_too(self, service):
+        """Test the cascade is the database's; the PDFs are ours."""
+
+        with patch(
+            "api.services.improvement_plan_service.delete_plan_files"
+        ) as delete_files:
+            await service.delete(7, DIRECTOR)
+
+        delete_files.assert_called_once_with(7)
+
+    async def test_leaves_the_files_alone_when_the_row_was_already_gone(
+        self, service, mock_repository
+    ):
+        mock_repository.delete.return_value = False
+
+        with patch(
+            "api.services.improvement_plan_service.delete_plan_files"
+        ) as delete_files:
+            assert await service.delete(7, DIRECTOR) is False
+
+        delete_files.assert_not_called()
+
+    async def test_a_director_of_another_department_may_not(self, service):
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(7, OTHER_DIRECTOR)
+
+    async def test_not_even_an_admin(self, service, mock_repository):
+        """Test this belongs to whoever agreed the plan with the teacher."""
+
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(7, ADMIN)
+
+        mock_repository.delete.assert_not_awaited()
+
+    async def test_the_teacher_may_not_delete_their_own_plan(self, service):
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(7, TEACHER)
+
+    async def test_raises_for_an_unknown_plan(self, service, mock_repository):
+        mock_repository.get_by_id.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.delete(7, DIRECTOR)
+
+    async def test_a_signed_agreement_does_not_block_it(
+        self, service, mock_repository
+    ):
+        """Test a plan drawn up for the wrong teacher has to be undoable.
+
+        Signing it does not make the mistake right; what protects a signed plan
+        is the confirmation the director is shown, not a refusal here.
+        """
+
+        mock_repository.get_by_id.return_value = _plan(acta_status="FIRMADA")
+
+        with patch("api.services.improvement_plan_service.delete_plan_files"):
+            assert await service.delete(7, DIRECTOR) is True
 
 
 class TestActaLock:

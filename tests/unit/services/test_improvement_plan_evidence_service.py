@@ -118,9 +118,9 @@ class TestCreateRequest:
         mock_evidences_repository.create_request.assert_awaited_once()
         notification = mock_notification_service.create.call_args[0][0]
         assert notification.user_id == TEACHER_USER_ID
-        # The app routes are Spanish; a link the SPA cannot resolve is a
-        # notification that opens on a 404.
-        assert notification.link == "/planes/7"
+        # The teacher's own route. /planes/{id} is the director's screen, which
+        # answers a teacher with a page they have no business on.
+        assert notification.link == "/mis-planes/7"
 
     async def test_rejected_on_a_closed_plan(self, service, mock_plan_service):
         mock_plan_service.get_by_id.return_value = _plan(status="CERRADO_CUMPLIDO")
@@ -272,3 +272,50 @@ class TestDeleteEvidence:
             await service.delete_evidence(7, 5, other_teacher)
 
         mock_plan_service.ensure_can_manage.assert_called_once()
+
+
+class TestNotificationLinks:
+    """Each side of the loop reads the plan on its own screen.
+
+    Both roles are notified about the same plan, and the two views are different
+    routes: sending everyone to the director's one is how a teacher ends up on a
+    screen they cannot open.
+    """
+
+    async def test_the_teacher_is_sent_to_their_own_view(
+        self, service, mock_notification_service
+    ):
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        notification = mock_notification_service.create.call_args[0][0]
+
+        assert notification.user_id == TEACHER_USER_ID
+        assert notification.link == "/mis-planes/7"
+
+    async def test_the_director_is_sent_to_the_management_view(
+        self, service, mock_notification_service
+    ):
+        await service.add_comment(
+            7,
+            1,
+            ImprovementPlanEvidenceCommentCreate(body="Ya la subí"),
+            TEACHER,
+        )
+
+        notification = mock_notification_service.create.call_args[0][0]
+
+        assert notification.user_id == DIRECTOR_USER_ID
+        assert notification.link == "/planes/7"
+
+    async def test_a_review_takes_the_teacher_to_their_own_view(
+        self, service, mock_notification_service
+    ):
+        await service.review_evidence(
+            7, 3, ImprovementPlanEvidenceReview(status=EvidenceStatus.APROBADA), DIRECTOR
+        )
+
+        notification = mock_notification_service.create.call_args[0][0]
+
+        assert notification.link == "/mis-planes/7"
