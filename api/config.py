@@ -37,6 +37,40 @@ FIREBASE_CREDENTIALS = {
 }
 
 
+# Public base URL of the SPA, to turn a deep link into something clickable from
+# outside the app (an email has no router to resolve "/mis-planes/7" against).
+FRONTEND_URL = (os.getenv("FRONTEND_URL") or "http://localhost:5173").strip().rstrip("/")
+
+def _env(name: str, default: str = "") -> str:
+    """A trimmed environment value.
+
+    A trailing space in a .env line is invisible in an editor and travels all
+    the way into the SMTP login, where it fails as a wrong username. Nothing
+    here is ever meant to be padded, so it is trimmed once at the door.
+    """
+
+    return (os.getenv(name) or default).strip()
+
+
+# Outgoing mail. Credentials never live in the repo: fill them in .env.
+MAIL_ENABLED = _env("MAIL_ENABLED", "true").lower() in ("true", "1", "yes")
+# "smtp" sends for real; "console" only logs the rendered message, which is what
+# lets the app and the tests run without any credentials at all.
+MAIL_BACKEND = _env("MAIL_BACKEND", "console").lower()
+
+SMTP_HOST = _env("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(_env("SMTP_PORT", "587"))
+SMTP_USER = _env("SMTP_USER")
+# For Gmail this is a 16-character *app password*, not the account password.
+# Google prints it in groups of four; the spaces are for reading, not for
+# sending, so they come out here.
+SMTP_PASSWORD = _env("SMTP_PASSWORD").replace(" ", "")
+# STARTTLS on 587; port 465 speaks SSL from the first byte instead.
+SMTP_USE_TLS = _env("SMTP_USE_TLS", "true").lower() in ("true", "1", "yes")
+
+MAIL_FROM = _env("MAIL_FROM") or SMTP_USER
+MAIL_FROM_NAME = _env("MAIL_FROM_NAME", "Sistema de Evaluación Docente · UFPS")
+
 HUGGINGFACE_RISK_MODEL=os.getenv("HUGGINGFACE_RISK_MODEL")
 HUGGINGFACE_CATEGORY_MODEL=os.getenv("HUGGINGFACE_CATEGORY_MODEL")
 
@@ -55,6 +89,18 @@ class Config:
 
     UPLOAD_DIR = UPLOAD_DIR
     MAX_UPLOAD_SIZE_MB = MAX_UPLOAD_SIZE_MB
+
+    FRONTEND_URL = FRONTEND_URL
+
+    MAIL_ENABLED = MAIL_ENABLED
+    MAIL_BACKEND = MAIL_BACKEND
+    SMTP_HOST = SMTP_HOST
+    SMTP_PORT = SMTP_PORT
+    SMTP_USER = SMTP_USER
+    SMTP_PASSWORD = SMTP_PASSWORD
+    SMTP_USE_TLS = SMTP_USE_TLS
+    MAIL_FROM = MAIL_FROM
+    MAIL_FROM_NAME = MAIL_FROM_NAME
 
     HUGGINGFACE_RISK_MODEL=HUGGINGFACE_RISK_MODEL
     HUGGINGFACE_CATEGORY_MODEL=HUGGINGFACE_CATEGORY_MODEL
