@@ -5,6 +5,9 @@ Holds the business rules of the module: who may see or touch a plan, when the
 acta freezes, and the validations the official UFPS forms imply.
 """
 
+import asyncio
+import logging
+
 from api.core.pagination import PaginationParams
 from api.exceptions import (
     PermissionDeniedError,
@@ -21,8 +24,16 @@ from api.schemas.improvement_plan import (
     ImprovementPlanCreate,
     ImprovementPlanUpdate,
 )
+from api.schemas.notification import NotificationCreate, NotificationType
 from api.schemas.user import RoleName
 from api.services.audit_service import AuditService
+from api.services.notification_service import NotificationService
+from api.utils.email_sender import send_email
+from api.utils.plan_email import render_plan_created
+from api.utils.plan_files import delete_plan_files
+from api.utils.plan_links import teacher_plan_path
+
+logger = logging.getLogger(__name__)
 
 ENTITY = "improvement_plans"
 
@@ -49,10 +60,12 @@ class ImprovementPlanService:
         improvement_plans_repository: ImprovementPlansRepository,
         settings_repository: SettingsRepository,
         audit_service: AuditService,
+        notification_service: NotificationService,
     ):
         self.improvement_plans_repository = improvement_plans_repository
         self.settings_repository = settings_repository
         self.audit_service = audit_service
+        self.notification_service = notification_service
 
     # ------------------------------------------------------------------ #
     # Access control
@@ -310,7 +323,126 @@ class ImprovementPlanService:
             description=f"Creó el plan de mejoramiento '{plan['title']}'",
         )
 
+        await self._announce_new_plan(plan, current_user)
+
         return plan
+
+    async def _announce_new_plan(self, plan: dict, current_user) -> None:
+        """Tell the teacher a plan has been drawn up for them.
+
+        Best-effort, like the notifications of the evidence loop: the plan is
+        already created and audited by the time this runs, so a mail server that
+        is down or a teacher without an account must not turn a successful
+        creation into a 500. Everything here is logged and swallowed.
+        """
+
+        try:
+            contact = self.improvement_plans_repository.get_teacher_contact(
+                plan["teacher_id"]
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("No se pudo resolver el contacto del docente")
+            return
+
+        if not contact:
+            logger.info(
+                "El docente %s no tiene usuario; no se le avisa del plan %s",
+                plan["teacher_id"],
+                plan["id"],
+            )
+            return
+
+        actor_id = (current_user or {}).get("id")
+
+        await self._notify_teacher(plan, contact, actor_id)
+        await self._email_teacher(plan, contact, current_user)
+
+    async def _notify_teacher(self, plan: dict, contact: dict, actor_id) -> None:
+        """In-app notification, so the bell says it too."""
+
+        try:
+            await self.notification_service.create(
+                NotificationCreate(
+                    user_id=contact["user_id"],
+                    title="Nuevo plan de mejoramiento",
+                    message=(
+                        f"Se registró a tu nombre el plan «{plan['title']}». "
+                        "Revisa los compromisos acordados."
+                    ),
+                    type=NotificationType.INFO,
+                    link=teacher_plan_path(plan["id"]),
+                ),
+                actor_id=actor_id,
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo notificar en la app el plan %s", plan["id"]
+            )
+
+    async def _email_teacher(self, plan: dict, contact: dict, current_user) -> None:
+        """The institutional email, with the letterhead and a link to the plan."""
+
+        if not contact.get("email"):
+            logger.info("El docente %s no tiene correo", plan["teacher_id"])
+            return
+
+        try:
+            department = self.improvement_plans_repository.get_department_context(
+                plan.get("department_id")
+            )
+
+            message = render_plan_created(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                teacher_name=contact["name"],
+                teacher_email=contact["email"],
+                director_name=(current_user or {}).get("name") or "",
+                department_name=department.get("department_name"),
+                period_code=plan.get("origin_period_code"),
+            )
+
+            # smtplib blocks, and this runs on the event loop.
+            await asyncio.to_thread(send_email, message)
+        except Exception:
+            logger.exception(
+                "No se pudo enviar el correo del plan %s a %s",
+                plan["id"],
+                contact.get("email"),
+            )
+
+    async def delete(self, plan_id: int, current_user) -> bool:
+        """Remove a plan for good — the director's own call.
+
+        Deliberately not gated on the acta being signed: a plan drawn up for the
+        wrong teacher has to be undoable, and the signature does not make the
+        mistake right. What protects the signed ones is the confirmation the
+        director is shown, which spells out what disappears.
+
+        Not an ADMIN's call, though: like undoing a signature, this belongs to
+        the director who agreed the plan with the teacher.
+        """
+
+        plan = await self.get_by_id(plan_id, current_user)
+
+        self.ensure_is_department_director(current_user, plan)
+
+        # Audited before the row is gone, so the description can still name it.
+        await self.audit_service.log(
+            action="DELETE",
+            entity_name=ENTITY,
+            entity_id=plan_id,
+            actor_id=(current_user or {}).get("id"),
+            description=f"Eliminó el plan de mejoramiento '{plan['title']}'",
+        )
+
+        deleted = await self.improvement_plans_repository.delete(plan_id)
+
+        if deleted:
+            # After the row, so a failed delete does not strand the plan
+            # pointing at PDFs that are no longer there.
+            delete_plan_files(plan_id)
+
+        return deleted
 
     def ensure_acta_complete(self, plan: dict) -> None:
         """Reject freezing an acta that is not filled in yet.

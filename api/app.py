@@ -2,6 +2,7 @@
 FastAPI EVD API
 """
 
+import logging
 import os
 
 from fastapi import FastAPI
@@ -108,6 +109,15 @@ _ = (
 
 Base.metadata.create_all(bind=engine)
 
+
+# Nothing configured logging before, so every logger.info in the codebase went
+# nowhere: the app's own messages — a mail sent, a notification skipped — were
+# invisible while uvicorn's own request lines showed. Root stays at WARNING in
+# production so the log does not turn into noise.
+logging.basicConfig(
+    level=logging.INFO if config.DEBUG else logging.WARNING,
+    format="%(asctime)s %(levelname)-8s %(name)s | %(message)s",
+)
 
 app = FastAPI(title="EVD API")
 

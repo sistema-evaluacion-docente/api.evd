@@ -186,6 +186,53 @@ class ImprovementPlansRepository:
 
         return row[0] if row else None
 
+    async def delete(self, plan_id: int) -> bool:
+        """Remove a plan. Everything hanging off it goes with it.
+
+        The seven child tables declare ``ondelete="CASCADE"``, so items,
+        checkpoints, evidences, requests, courses, documents and the case report
+        are the database's problem, not this method's.
+        """
+
+        plan = (
+            self.db.query(ImprovementPlanModel)
+            .filter(ImprovementPlanModel.id == plan_id)
+            .first()
+        )
+
+        if not plan:
+            return False
+
+        self.db.delete(plan)
+        self.db.commit()
+
+        return True
+
+    def get_teacher_contact(self, teacher_id: int) -> dict | None:
+        """Who to tell when something happens to a teacher's plan.
+
+        ``None`` when the teacher has no user account behind them: those exist
+        (imported from an evaluation, never signed in) and there is nowhere to
+        write to, which the caller has to be able to tell apart from a failure.
+        """
+
+        row = (
+            self.db.query(
+                UserModel.id.label("user_id"),
+                UserModel.name,
+                UserModel.email,
+            )
+            .select_from(TeacherModel)
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+
+        if not row:
+            return None
+
+        return {"user_id": row.user_id, "name": row.name, "email": row.email}
+
     def get_teacher_department_id(self, teacher_id: int) -> int | None:
         """Department a teacher belongs to."""
 
@@ -221,6 +268,31 @@ class ImprovementPlansRepository:
 
         return {
             "code": row.institutional_code,
+            "department_name": row.department_name,
+            "faculty_name": row.faculty_name,
+        }
+
+    def get_department_context(self, department_id: int) -> dict:
+        """Header data the official forms print for a whole department.
+
+        Every candidate of a request belongs to the same department, so this is
+        resolved once instead of per teacher as ``get_teacher_context`` does."""
+
+        row = (
+            self.db.query(
+                DepartmentModel.name.label("department_name"),
+                FacultyModel.name.label("faculty_name"),
+            )
+            .select_from(DepartmentModel)
+            .outerjoin(FacultyModel, FacultyModel.id == DepartmentModel.faculty_id)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+
+        if not row:
+            return {"department_name": None, "faculty_name": None}
+
+        return {
             "department_name": row.department_name,
             "faculty_name": row.faculty_name,
         }
@@ -1036,6 +1108,9 @@ class ImprovementPlansRepository:
         averages_by_teacher = self._question_averages(teacher_ids, period_id)
         planned = self._teachers_with_plan(teacher_ids, period_id)
         risky_comments = self._high_risk_comment_counts(teacher_ids, period_id)
+        # The header of the official forms, so the creation page proposes it
+        # already filled in instead of asking the director to type it.
+        department_context = self.get_department_context(department_id)
 
         result: list[dict] = []
 
@@ -1065,6 +1140,8 @@ class ImprovementPlansRepository:
                 "below_threshold": below_threshold,
                 "has_plan": has_plan,
                 "high_risk_comment_count": risky_comments.get(teacher_id, 0),
+                "department_name": department_context["department_name"],
+                "faculty_name": department_context["faculty_name"],
                 "dimensions": dimensions,
                 "weak_dimensions": [d for d in dimensions if d["below_threshold"]],
                 "weak_questions": weak_questions,

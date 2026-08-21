@@ -34,6 +34,7 @@ def get_improvement_plan_service(
     ),
     settings_repository: SettingsRepository = Depends(get_settings_repository),
     audit_service: AuditService = Depends(get_audit_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> ImprovementPlanService:
     """Dependency injection for ImprovementPlanService."""
 
@@ -41,6 +42,7 @@ def get_improvement_plan_service(
         improvement_plans_repository,
         settings_repository,
         audit_service,
+        notification_service,
     )
 
 

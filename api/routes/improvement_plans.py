@@ -188,6 +188,23 @@ async def update_plan(
     return await controller.update(plan_id, payload, current_user)
 
 
+@router.delete("/{plan_id}", status_code=204)
+async def delete_plan(
+    plan_id: int,
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
+):
+    """Delete an improvement plan — only the director of its department.
+
+    Not open to an ADMIN on purpose: the plan is an agreement between a director
+    and a teacher, and undoing it belongs to whoever agreed it.
+    """
+
+    await controller.delete(plan_id, current_user)
+
+    return Response(status_code=204)
+
+
 @router.put("/{plan_id}/case-report", response_model=ImprovementPlanOut)
 async def upsert_case_report(
     plan_id: int,
