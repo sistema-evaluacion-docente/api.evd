@@ -219,13 +219,13 @@ class TestEvaluationService:
 
         await service.get_by_id(1, "PRESENCIAL")
 
-        assert (
-            mock_evaluations_repo.get_by_id_as_dict.call_args_list[-1][0]
-            == (7, "PRESENCIAL")
+        assert mock_evaluations_repo.get_by_id_as_dict.call_args_list[-1][0] == (
+            7,
+            "PRESENCIAL",
         )
-        assert (
-            mock_evaluations_repo.get_dimension_averages.call_args_list[-1][0]
-            == (7, "PRESENCIAL")
+        assert mock_evaluations_repo.get_dimension_averages.call_args_list[-1][0] == (
+            7,
+            "PRESENCIAL",
         )
 
     @pytest.mark.asyncio
@@ -284,9 +284,7 @@ class TestEvaluationService:
         assert comparison["average_difference"] == 1.0
         assert comparison["dimensions"][0]["difference"] == 1.0
         assert comparison["dimensions"][0]["questions"][0]["difference"] == 1.0
-        mock_evaluations_repo.get_by_period_and_department.assert_called_once_with(
-            9, 5
-        )
+        mock_evaluations_repo.get_by_period_and_department.assert_called_once_with(9, 5)
 
     @pytest.mark.asyncio
     async def test_get_by_id_comparison_is_none_without_previous_evaluation(
@@ -988,6 +986,155 @@ class TestEvaluationService:
 
         assert exc_info.value.status_code == 422
         assert "UNKNOWN" in exc_info.value.detail
+
+    @staticmethod
+    def _director(department_id=7):
+        """The token user of a director assigned to a department."""
+
+        return {
+            "uid": "director-uid",
+            "roles": ["DIRECTOR DE DEPARTAMENTO"],
+            "department_id": department_id,
+        }
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_a_pdf_of_another_department(
+        self, service, mock_academic_periods_repo, mock_evaluations_repo
+    ):
+        """Test a director may only upload the evaluation of their own department."""
+
+        mock_period = MagicMock()
+        mock_period.id = 1
+        mock_academic_periods_repo.get_by_code.return_value = mock_period
+
+        mock_department = MagicMock()
+        mock_department.id = 3
+        mock_department.name = "SISTEMAS"
+        mock_department.code = "52"
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            return_value=self._parsed(department_code="52"),
+        ):
+            with pytest.raises(PermissionDeniedError, match="SISTEMAS"):
+                await service.prepare_upload([self._pdf()], self._director(7))
+
+        mock_evaluations_repo.create_evaluation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_rejects_a_director_without_department(
+        self, service, mock_academic_periods_repo, mock_evaluations_repo
+    ):
+        """Test a director with no department cannot upload any evaluation."""
+
+        mock_period = MagicMock()
+        mock_period.id = 1
+        mock_academic_periods_repo.get_by_code.return_value = mock_period
+
+        mock_department = MagicMock()
+        mock_department.id = 3
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
+
+        with patch(
+            "api.services.evaluation_service.parse_pdf",
+            return_value=self._parsed(),
+        ):
+            with pytest.raises(PermissionDeniedError, match="no tiene un departamento"):
+                await service.prepare_upload([self._pdf()], self._director(None))
+
+        mock_evaluations_repo.create_evaluation.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_accepts_the_directors_own_department(
+        self,
+        service,
+        mock_academic_periods_repo,
+        mock_evaluations_repo,
+        mock_users_repo,
+    ):
+        """Test the upload goes through when the PDF matches the director's department."""
+
+        mock_period = MagicMock()
+        mock_period.id = 1
+        mock_academic_periods_repo.get_by_code.return_value = mock_period
+
+        mock_department = MagicMock()
+        mock_department.id = 7
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
+        mock_evaluations_repo.get_by_period_and_department.return_value = None
+
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_users_repo.get_by_uid.return_value = mock_user
+
+        mock_evaluations_repo.create_evaluation.return_value = MagicMock(
+            spec=EvaluationModel
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("api.services.evaluation_service.config") as mock_config:
+                mock_config.UPLOAD_DIR = tmpdir
+                with patch(
+                    "api.services.evaluation_service.parse_pdf",
+                    return_value=self._parsed(),
+                ):
+                    with patch(
+                        "api.services.evaluation_service.evaluation_to_dict",
+                        return_value={"id": 1},
+                    ):
+                        result, _ = await service.prepare_upload(
+                            [self._pdf()], self._director(7)
+                        )
+
+        assert result["id"] == 1
+        mock_evaluations_repo.create_evaluation.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_prepare_upload_lets_an_admin_upload_any_department(
+        self,
+        service,
+        mock_academic_periods_repo,
+        mock_evaluations_repo,
+        mock_users_repo,
+    ):
+        """Test the department restriction only applies to directors."""
+
+        mock_period = MagicMock()
+        mock_period.id = 1
+        mock_academic_periods_repo.get_by_code.return_value = mock_period
+
+        mock_department = MagicMock()
+        mock_department.id = 3
+        mock_evaluations_repo.get_department_by_code.return_value = mock_department
+        mock_evaluations_repo.get_by_period_and_department.return_value = None
+
+        mock_user = MagicMock()
+        mock_user.id = 10
+        mock_users_repo.get_by_uid.return_value = mock_user
+
+        mock_evaluations_repo.create_evaluation.return_value = MagicMock(
+            spec=EvaluationModel
+        )
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch("api.services.evaluation_service.config") as mock_config:
+                mock_config.UPLOAD_DIR = tmpdir
+                with patch(
+                    "api.services.evaluation_service.parse_pdf",
+                    return_value=self._parsed(),
+                ):
+                    with patch(
+                        "api.services.evaluation_service.evaluation_to_dict",
+                        return_value={"id": 1},
+                    ):
+                        result, _ = await service.prepare_upload(
+                            [self._pdf()],
+                            {"uid": "admin-uid", "roles": ["ADMIN"]},
+                        )
+
+        assert result["id"] == 1
+        mock_evaluations_repo.create_evaluation.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_prepare_upload_rejects_duplicate_completed_evaluation(

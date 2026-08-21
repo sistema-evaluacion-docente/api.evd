@@ -465,6 +465,8 @@ class EvaluationService:
                 }' no está registrado en el sistema",
             )
 
+        self._assert_director_owns_department(department, current_user)
+
         existing = self.evaluations_repository.get_by_period_and_department(
             period.id, department.id
         )
@@ -514,6 +516,34 @@ class EvaluationService:
         )
 
         return evaluation_to_dict(evaluation_model), parsed
+
+    @staticmethod
+    def _assert_director_owns_department(department, current_user: dict) -> None:
+        """Reject an upload whose PDF was issued for another department.
+
+        The department printed on the report has to be the one the director is
+        assigned to; an ADMIN registers the evaluation of any department.
+        """
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value not in set(
+            current_user.get("roles", [])
+        ):
+            return
+
+        director_department_id = current_user.get("department_id")
+
+        if not director_department_id:
+            raise PermissionDeniedError(
+                "El director no tiene un departamento asignado"
+            )
+
+        if director_department_id != department.id:
+            raise PermissionDeniedError(
+                f"El PDF corresponde al departamento {department.name} "
+                f"({department.code}), que no es el departamento asignado a "
+                "usted; solo puede subir las evaluaciones de su propio "
+                "departamento"
+            )
 
     def _parse_uploads(
         self, uploads: list[UploadedPdf]
