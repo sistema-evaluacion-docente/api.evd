@@ -85,6 +85,9 @@ class AcademicGroupsRepository(BaseRepository[AcademicGroupModel]):
         if filters.department_id is not None:
             query = query.filter(CourseModel.department_id == filters.department_id)
 
+        if filters.modality is not None:
+            query = query.filter(AcademicGroupModel.modality == filters.modality)
+
         query = query.order_by(AcademicGroupModel.created_at.desc())
 
         return self.paginate(query, pagination)
