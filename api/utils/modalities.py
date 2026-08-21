@@ -7,6 +7,8 @@ PDF per kind: the title line of every page reads 'Programas Presenciales' or
 it travels from there down to every academic group the document creates.
 """
 
+from api.exceptions import ValidationError
+
 PRESENCIAL = "PRESENCIAL"
 DISTANCIA = "DISTANCIA"
 
@@ -31,3 +33,22 @@ def modality_label(value: str | None) -> str:
     """Return the Spanish name of a modality, for user-facing messages."""
 
     return MODALITY_LABELS.get(normalize_modality(value) or "", "sin modalidad")
+
+
+def validated_modality(value: str | None) -> str | None:
+    """Return the canonical modality, rejecting values outside the catalog.
+
+    Endpoints declare the modality as a Literal, so FastAPI already refuses a
+    bad one; this guards the services against every other caller."""
+
+    if value is None:
+        return None
+
+    normalized = normalize_modality(value)
+
+    if normalized is None:
+        raise ValidationError(
+            f"Modalidad '{value}' no válida. Use PRESENCIAL o DISTANCIA"
+        )
+
+    return normalized
