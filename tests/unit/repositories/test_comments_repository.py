@@ -6,8 +6,10 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from api.core.pagination import PaginationParams
 from api.models.comment import CommentModel
 from api.repositories.comments import CommentsRepository
+from api.schemas.comment import CommentFilters
 
 
 class TestCommentsRepository:
@@ -36,6 +38,40 @@ class TestCommentsRepository:
         existing_link.pedagogical_category_id = 1
         comment.pedagogical_categories = [existing_link]
         return comment
+
+    @pytest.fixture
+    def mock_search_query(self, mock_db):
+        """Mock the chained query search() builds."""
+
+        query = MagicMock()
+        mock_db.query.return_value = query
+        query.outerjoin.return_value = query
+        query.join.return_value = query
+        query.filter.return_value = query
+        query.order_by.return_value = query
+        query.count.return_value = 0
+        query.offset.return_value.limit.return_value.all.return_value = []
+        return query
+
+    def test_search_filters_by_modality(self, repo, mock_search_query):
+        """Test search narrows the comments down to one kind of program."""
+
+        repo.search(
+            CommentFilters(modality="DISTANCIA"), PaginationParams(page=1, limit=10)
+        )
+
+        applied = [
+            str(call.args[0]) for call in mock_search_query.filter.call_args_list
+        ]
+
+        assert applied == ["academic_groups.modality = :modality_1"]
+
+    def test_search_without_modality_takes_every_group(self, repo, mock_search_query):
+        """Test the comments of both kinds of program come back by default."""
+
+        repo.search(CommentFilters(), PaginationParams(page=1, limit=10))
+
+        mock_search_query.filter.assert_not_called()
 
     def test_get_department_id_returns_id_when_found(self, repo, mock_db):
         """Test get_department_id returns the department_id of the linked evaluation."""
