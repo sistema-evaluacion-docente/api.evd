@@ -19,14 +19,21 @@ from decimal import Decimal, InvalidOperation
 import pdfplumber
 import pikepdf
 
+from api.utils.modalities import DISTANCIA, PRESENCIAL
+
 QUESTION_CODES = [f"{i:03d}" for i in range(1, 23)]
 
 _PERIOD_MAP = {"primer": "1", "segundo": "2"}
+_MODALITY_PATTERNS = (
+    (re.compile(r"Programas?\s+Presencial(?:es)?", re.IGNORECASE), PRESENCIAL),
+    (re.compile(r"Programas?\s+(?:a\s+)?Distancia", re.IGNORECASE), DISTANCIA),
+)
 _CONTRACT_TYPES = {"TC", "CT", "OTC", "MTC"}
 
 
 def _load_nlp():
     """Load Spanish NER model for comment anonymization. Returns None if unavailable."""
+
     try:
         import spacy
 
@@ -52,31 +59,57 @@ def _parse_period_code(text: str) -> str | None:
     'Primer Semestre de 2025'  → '2025-1'
     'Segundo Semestre de 2025' → '2025-2'
     """
+
     match = re.search(
         r"(Primer|Segundo)\s+Semestre\s+de\s+(\d{4})", text, re.IGNORECASE
     )
+
     if not match:
         return None
+
     semester = _PERIOD_MAP[match.group(1).lower()]
+
     return f"{match.group(2)}-{semester}"
+
+
+def _parse_modality(text: str) -> str | None:
+    """
+    Read the kind of program from the title line every page repeats:
+
+    '... Evaluación Docente - Programas Presenciales - Segundo Semestre de 2025'
+        → 'PRESENCIAL'
+    '... Evaluación Docente - Programas a Distancia - Segundo Semestre de 2025'
+        → 'DISTANCIA'
+    """
+
+    for pattern, modality in _MODALITY_PATTERNS:
+        if pattern.search(text):
+            return modality
+
+    return None
 
 
 def _parse_department(text: str) -> tuple[str, str] | None:
     """Extract department code and name from '52 SISTEMAS E INFORMATICA'."""
+    
     match = re.search(r"^\s*(\d{2})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ\s]+)$", text, re.MULTILINE)
+    
     if not match:
         return None
+    
     return match.group(1).strip(), match.group(2).strip()
 
 
 def _is_instrument_page(text: str) -> bool:
     """Detect the questionnaire instrument page (page 1), which contains no teacher data."""
+    
     markers = [
         "DESARROLLO DEL CONOCIMIENTO",
         "DESEMPEÑO DOCENTE",
         "PROCESOS DE EVALUACIÓN",
         "INTEGRACIÓN INTERPERSONAL",
     ]
+    
     return all(m in text for m in markers)
 
 
@@ -89,11 +122,13 @@ def _parse_teacher_header(text: str) -> dict | None:
     Detection is done by inspecting the last token of the line against
     _CONTRACT_TYPES to avoid regex backtracking ambiguity.
     """
+    
     match = re.search(
         r"^\s*(\d{5,})\s+([A-ZÁÉÍÓÚÑ][A-ZÁÉÍÓÚÑ0-9 ]+)\s*$",
         text,
         re.MULTILINE,
     )
+    
     if not match:
         return None
 
@@ -101,6 +136,7 @@ def _parse_teacher_header(text: str) -> dict | None:
     raw = match.group(2).strip()
 
     parts = raw.rsplit(None, 1)
+    
     if len(parts) == 2 and parts[1].upper() in _CONTRACT_TYPES:
         name, contract_type = parts[0].strip(), parts[1].upper()
     else:
@@ -123,6 +159,7 @@ def _parse_score_table(tables: list) -> tuple[list[dict], Decimal | None]:
 
     Returns (groups, teacher_overall_average).
     """
+    
     groups = []
     teacher_overall: Decimal | None = None
     course_code_re = re.compile(r"^(\d{7})([A-Z])(\d{2})$")
@@ -198,6 +235,7 @@ def _extract_comments(
     default_key:    key to use for comments before the first group header is found.
                     Required when a continuation page has no group header at all.
     """
+    
     lines = text.splitlines()
 
     if start_from_top:
@@ -248,7 +286,7 @@ def _extract_comments(
         if m:
             flush()
             current_key = f"{m.group(1)}{m.group(2)}_{m.group(3)}_{m.group(4)}"
-            full_name = line[m.end():].strip()
+            full_name = line[m.end() :].strip()
             if full_name:
                 names[current_key] = full_name
             continue
@@ -281,6 +319,7 @@ def parse_pdf(file_bytes: bytes) -> dict:
             "period_code": "2025-1",
             "department_code": "52",
             "department_name": "SISTEMAS E INFORMATICA",
+            "modality": "PRESENCIAL",
             "teachers": [
                 {
                     "code": "04041",
@@ -294,6 +333,7 @@ def parse_pdf(file_bytes: bytes) -> dict:
                             "group": "B",
                             "section": "01",
                             "respondent_count": 13,
+                            "modality": "PRESENCIAL",
                             "overall_average": Decimal("4.94"),
                             "question_scores": {"001": Decimal("5.00"), ...},
                             "comments": ["Excelente, se le entiende al explicar los temas"],
@@ -319,6 +359,7 @@ def parse_pdf(file_bytes: bytes) -> dict:
             "period_code": None,
             "department_code": None,
             "department_name": None,
+            "modality": None,
             "teachers": [],
         }
 
@@ -335,6 +376,14 @@ def parse_pdf(file_bytes: bytes) -> dict:
                     dept = _parse_department(text)
                     if dept:
                         result["department_code"], result["department_name"] = dept
+
+                # Every page repeats the title, so the modality is read per page
+                # instead of once: a document that mixes both kinds of programs
+                # still tags each group with the one printed above it.
+                page_modality = _parse_modality(text) or result["modality"]
+
+                if not result["modality"]:
+                    result["modality"] = page_modality
 
                 if _is_instrument_page(text):
                     continue
@@ -362,7 +411,9 @@ def parse_pdf(file_bytes: bytes) -> dict:
                     default_key = None
                     if last_groups:
                         lg = last_groups[-1]
-                        default_key = f"{lg['course_code']}_{lg['group']}_{lg['section']}"
+                        default_key = (
+                            f"{lg['course_code']}_{lg['group']}_{lg['section']}"
+                        )
                     comments_by_group, names_by_group = _extract_comments(
                         text, nlp, start_from_top=True, default_key=default_key
                     )
@@ -376,6 +427,7 @@ def parse_pdf(file_bytes: bytes) -> dict:
                     comments_by_group, names_by_group = _extract_comments(text, nlp)
                     teacher["overall_average"] = overall_average
                     for group in groups:
+                        group["modality"] = page_modality
                         key = f"{group['course_code']}_{group['group']}_{group['section']}"
                         group["comments"] = comments_by_group.get(key, [])
                         full_name = names_by_group.get(key)
@@ -394,7 +446,9 @@ def parse_pdf(file_bytes: bytes) -> dict:
                 if len(group["course_name"]) > len(best.get(code, "")):
                     best[code] = group["course_name"]
             for group in teacher["groups"]:
-                group["course_name"] = best.get(group["course_code"], group["course_name"])
+                group["course_name"] = best.get(
+                    group["course_code"], group["course_name"]
+                )
 
         return result
 
@@ -403,3 +457,42 @@ def parse_pdf(file_bytes: bytes) -> dict:
             os.remove(tmp_in.name)
         if os.path.exists(tmp_out_path):
             os.remove(tmp_out_path)
+
+
+def merge_parsed_evaluations(documents: list[dict]) -> dict:
+    """
+    Combine the PDFs uploaded for a single evaluation into one parsed document.
+
+    The caller has already checked that every document belongs to the same
+    period and department. A teacher listed in more than one of them keeps a
+    single entry whose groups are the union of all of them — a docente can
+    teach in a presencial and in a distancia program at the same time, and
+    each group carries the modality of the PDF it came from.
+    """
+    if len(documents) == 1:
+        return documents[0]
+
+    merged: dict = {
+        "period_code": documents[0]["period_code"],
+        "department_code": documents[0]["department_code"],
+        "department_name": documents[0]["department_name"],
+        "modality": documents[0]["modality"],
+        "teachers": [],
+    }
+
+    by_code: dict[str, dict] = {}
+
+    for document in documents:
+        for teacher in document.get("teachers", []):
+            already_seen = by_code.get(teacher["code"])
+
+            if already_seen:
+                already_seen["groups"].extend(teacher.get("groups", []))
+                continue
+
+            merged_teacher = dict(teacher)
+            merged_teacher["groups"] = list(teacher.get("groups", []))
+            by_code[teacher["code"]] = merged_teacher
+            merged["teachers"].append(merged_teacher)
+
+    return merged
