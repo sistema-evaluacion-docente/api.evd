@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError
+from api.exceptions import ResourceAlreadyExistsError, ValidationError
 from api.models.teacher import TeacherModel
 from api.schemas.teacher import (
     TeacherCreate,
@@ -142,8 +142,44 @@ class TestTeacherService:
         assert result["items"][0]["overall_average"] == 4.5
         assert result["items"][0]["high_risk_comments_count"] == 3
         mock_teachers_repo.search_with_averages.assert_called_once_with(
-            filters, pagination, 1, True
+            filters, pagination, 1, True, None
         )
+
+    @pytest.mark.asyncio
+    async def test_get_all_with_averages_restricts_the_figures_to_one_modality(
+        self, service, mock_teachers_repo, mock_teacher
+    ):
+        """Test the modality reaches the repository, which narrows both figures."""
+
+        mock_teachers_repo.search_with_averages.return_value = (
+            [(mock_teacher, 4.0, 0)],
+            1,
+        )
+
+        filters = TeacherFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        await service.get_all_with_averages(filters, pagination, 1, True, "distancia")
+
+        mock_teachers_repo.search_with_averages.assert_called_once_with(
+            filters, pagination, 1, True, "DISTANCIA"
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_all_with_averages_rejects_an_unknown_modality(
+        self, service, mock_teachers_repo
+    ):
+        """Test a modality outside the catalog never reaches the repository."""
+
+        filters = TeacherFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(ValidationError):
+            await service.get_all_with_averages(
+                filters, pagination, 1, True, "VIRTUAL"
+            )
+
+        mock_teachers_repo.search_with_averages.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_all_batches_role_lookup(

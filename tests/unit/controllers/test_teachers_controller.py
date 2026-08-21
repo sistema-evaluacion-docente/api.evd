@@ -88,7 +88,32 @@ class TestTeachersController:
         result = await controller.get_all_with_averages(filters, pagination, 1)
 
         mock_service.get_all_with_averages.assert_called_once_with(
-            filters, pagination, 1, True
+            filters, pagination, 1, True, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_all_with_averages_passes_the_requested_modality(
+        self, controller, mock_service
+    ):
+        """Test get_all_with_averages forwards the modality to the service."""
+
+        mock_service.get_all_with_averages.return_value = {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "limit": 10,
+            "pages": 0,
+        }
+
+        filters = TeacherFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        await controller.get_all_with_averages(
+            filters, pagination, 1, True, "DISTANCIA"
+        )
+
+        mock_service.get_all_with_averages.assert_called_once_with(
+            filters, pagination, 1, True, "DISTANCIA"
         )
 
     @pytest.mark.asyncio
