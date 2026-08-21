@@ -99,7 +99,7 @@ La universidad publica **un reporte por tipo de programa**: presenciales y a dis
 
 ## Tests
 
-Solo hay `tests/unit/` (repositories, services, controllers, más middleware y exceptions) — todo con `MagicMock`; no existe `tests/integration/` pese a lo que dice el README. `asyncio_mode = "auto"`, así que los tests `async def` no necesitan marker. Fixtures compartidos en `tests/conftest.py` (`mock_db`, `mock_user_model`, ...). Al añadir una feature, la convención es tocar las tres capas y sus tres archivos de test.
+Solo hay `tests/unit/` (repositories, services, controllers, routes, más middleware y exceptions) — todo con `MagicMock`; no existe `tests/integration/` pese a lo que dice el README. Los tests de `routes/` montan el router sobre una app mínima con el envelope y los handlers, y sustituyen el controller y `get_user_service`/`get_current_user` por mocks (helpers en `tests/unit/routes/conftest.py`): cubren guardas de rol, el scoping por departamento del director y el 404 de la ruta. `asyncio_mode = "auto"`, así que los tests `async def` no necesitan marker. Fixtures compartidos en `tests/conftest.py` (`mock_db`, `mock_user_model`, ...). Al añadir una feature, la convención es tocar las tres capas y sus tres archivos de test.
 
 ## Otros
 
