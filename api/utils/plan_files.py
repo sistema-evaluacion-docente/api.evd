@@ -6,6 +6,7 @@ teacher-sensitive data and are only served through permission-checked endpoints.
 """
 
 import os
+import shutil
 import uuid
 
 from api.config import config
@@ -67,3 +68,24 @@ def delete_plan_file(filepath: str | None) -> None:
             os.remove(target)
         except OSError:
             pass
+
+
+def delete_plan_files(plan_id: int) -> None:
+    """Best-effort removal of everything a plan stored on disk.
+
+    Documents and evidences of a plan all live under one directory per plan, so
+    dropping it takes the lot. Deleting the row cascades in the database but
+    says nothing about the filesystem, which would otherwise keep the PDFs of a
+    plan nobody can reach any more.
+    """
+
+    directory = os.path.abspath(
+        os.path.join(config.UPLOAD_DIR, PLANS_SUBDIR, str(plan_id))
+    )
+    uploads_root = os.path.abspath(config.UPLOAD_DIR)
+
+    # Never step outside UPLOAD_DIR, whatever the id turns out to be.
+    if not directory.startswith(uploads_root + os.sep) or not os.path.isdir(directory):
+        return
+
+    shutil.rmtree(directory, ignore_errors=True)
