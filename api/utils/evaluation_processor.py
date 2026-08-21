@@ -808,6 +808,14 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
     """
     db = SessionLocal()
 
+    CATEGORIES_LABEL = {
+        "DESARROLLO DEL CONOCIMIENTO": "LABEL_0",
+        "DESEMPEÑO DOCENTE": "LABEL_1",
+        "PROCESOS DE EVALUACIÓN": "LABEL_2",
+        "INTEGRACIÓN INTERPERSONAL": "LABEL_3",
+        "SIN CATEGORIA": "LABEL_4",
+    }
+
     _broadcast_log(
         evaluation_id,
         level="info",
@@ -924,7 +932,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                 comment.pedagogical_category_ai_model = result.get("category_model")
 
             for category in category_labels:
-                category_label = category["label"]
+                category_label = CATEGORIES_LABEL[category["label"]]
 
                 if category_label not in category_cache:
                     category_cache[category_label] = category_name_to_id.get(
