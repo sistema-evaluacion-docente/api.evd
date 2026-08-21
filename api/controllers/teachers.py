@@ -42,11 +42,13 @@ class TeachersController:
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
+        modality: str | None = None,
     ):
-        """Retrieve teachers with averages for a given academic period."""
+        """Retrieve teachers with averages for a given academic period,
+        optionally restricted to one modality."""
 
         return await self.service.get_all_with_averages(
-            filters, pagination, academic_period_id, has_average
+            filters, pagination, academic_period_id, has_average, modality
         )
 
     async def get_by_id(self, teacher_id: int):

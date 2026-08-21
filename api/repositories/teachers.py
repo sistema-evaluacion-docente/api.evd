@@ -116,17 +116,24 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
+        modality: str | None = None,
     ) -> tuple[list[tuple[TeacherModel, float | None, int]], int]:
         """Search teachers with their overall_average and count of ALTO-risk
         comments for a given academic period, selecting both in the same query
         so callers don't need extra aggregate lookups. Honors `filters.sort_by`,
         including sorting by average and by high-risk comment count.
 
+        With a `modality`, both figures are computed over the groups of that
+        kind of program only, so a teacher who does not teach in it drops out
+        of the listing when `has_average` is on.
+
         Returns a list of (teacher, avg_score, high_risk_comments_count) tuples.
         """
 
-        avg_subq = self._build_average_subquery(academic_period_id)
-        high_risk_subq = self._build_high_risk_comments_subquery(academic_period_id)
+        avg_subq = self._build_average_subquery(academic_period_id, modality)
+        high_risk_subq = self._build_high_risk_comments_subquery(
+            academic_period_id, modality
+        )
 
         query = (
             self.db.query(
@@ -201,10 +208,13 @@ class TeachersRepository(BaseRepository[TeacherModel]):
 
         return self.paginate(query, pagination)
 
-    def _build_average_subquery(self, academic_period_id: int):
-        """Build a subquery of teacher average scores for an academic period."""
+    def _build_average_subquery(
+        self, academic_period_id: int, modality: str | None = None
+    ):
+        """Build a subquery of teacher average scores for an academic period,
+        optionally over the groups of a single modality."""
 
-        return (
+        query = (
             self.db.query(
                 AcademicGroupModel.teacher_id.label("teacher_id"),
                 func.avg(EvaluationScoreModel.overall_average).label("avg_score"),
@@ -218,15 +228,20 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 EvaluationScoreModel.evaluation_id == EvaluationModel.id,
             )
             .filter(EvaluationModel.academic_period_id == academic_period_id)
-            .group_by(AcademicGroupModel.teacher_id)
-            .subquery()
         )
 
-    def _build_high_risk_comments_subquery(self, academic_period_id: int):
-        """Build a subquery counting ALTO-risk comments per teacher for an
-        academic period."""
+        if modality:
+            query = query.filter(AcademicGroupModel.modality == modality)
 
-        return (
+        return query.group_by(AcademicGroupModel.teacher_id).subquery()
+
+    def _build_high_risk_comments_subquery(
+        self, academic_period_id: int, modality: str | None = None
+    ):
+        """Build a subquery counting ALTO-risk comments per teacher for an
+        academic period, optionally over the groups of a single modality."""
+
+        query = (
             self.db.query(
                 CommentModel.teacher_id.label("teacher_id"),
                 func.count(CommentModel.id).label("high_risk_count"),
@@ -237,9 +252,15 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 EvaluationModel.academic_period_id == academic_period_id,
                 RiskLevelModel.name == "ALTO",
             )
-            .group_by(CommentModel.teacher_id)
-            .subquery()
         )
+
+        if modality:
+            query = query.join(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            ).filter(AcademicGroupModel.modality == modality)
+
+        return query.group_by(CommentModel.teacher_id).subquery()
 
     @staticmethod
     def _filter_by_has_average(query, avg_subq, has_average: bool):

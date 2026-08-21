@@ -7,6 +7,7 @@ import openpyxl
 
 from api.core.pagination import PaginationParams
 from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ValidationError
+from api.utils.modalities import validated_modality
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.evaluations import EvaluationsRepository
 from api.repositories.stats import StatsRepository
@@ -72,11 +73,19 @@ class TeacherService:
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
+        modality: str | None = None,
     ) -> dict:
-        """Retrieve teachers with overall_average for a given academic period."""
+        """Retrieve teachers with overall_average for a given academic period.
+
+        A `modality` restricts the average and the high-risk comment count to
+        the groups of that kind of program."""
 
         rows, total = self.teachers_repository.search_with_averages(
-            filters, pagination, academic_period_id, has_average
+            filters,
+            pagination,
+            academic_period_id,
+            has_average,
+            validated_modality(modality),
         )
 
         roles_by_user = self.users_repository.get_user_role_names_bulk(

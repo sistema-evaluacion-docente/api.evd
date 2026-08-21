@@ -9,6 +9,7 @@ from api.controllers.teachers import TeachersController, get_teachers_controller
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
 from api.middlewares.auth import get_current_user, require_roles
+from api.schemas.academic_group import Modality
 from api.schemas.evaluation_summary import (
     CourseHistoryOut,
     TeacherDashboardOut,
@@ -120,6 +121,13 @@ async def get_teachers_with_averages(
     has_average: bool = Query(
         True, description="Filter teachers that have an overall average or not"
     ),
+    modality: Modality | None = Query(
+        default=None,
+        description=(
+            "Calcular el promedio y los comentarios de alto riesgo solo con "
+            "los grupos de esta modalidad. Sin el filtro se toman todos."
+        ),
+    ),
     current_user=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
@@ -127,6 +135,10 @@ async def get_teachers_with_averages(
 
     Directors are restricted to their own department — any client-supplied
     department_id is ignored and replaced by the one from the token.
+
+    With `modality`, the average and the high-risk comment count cover only
+    that kind of program, and teachers who do not teach in it drop out of the
+    listing (unless `has_average` is false).
     """
 
     if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", []):
@@ -136,7 +148,7 @@ async def get_teachers_with_averages(
         filters.department_id = department_id
 
     return await controller.get_all_with_averages(
-        filters, pagination, academic_period_id, has_average
+        filters, pagination, academic_period_id, has_average, modality
     )
 
 
