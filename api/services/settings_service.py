@@ -14,11 +14,18 @@ from api.services.audit_service import AuditService
 class SettingService:
     """Service for setting-related business operations.
 
-    Settings live in two scopes. The institutional ones (``department_id`` is
-    None) are the defaults an ADMIN maintains for the whole system; every
-    department can override any of them with its own value, which its director
-    maintains. A director never sees or touches another department's settings,
-    and can read the institutional ones but not modify them.
+    Settings live in two scopes and **each role is confined to one of them**.
+    The institutional ones (``department_id`` is None) are the defaults an
+    ADMIN maintains for the whole system, and they are all an ADMIN ever sees:
+    what a department does with its own configuration is the director's
+    business, not the administration's. A director maintains its department's
+    values — never another department's — and reads the institutional ones,
+    which it falls back to, but cannot modify them.
+
+    The scope comes from who the caller is, never from a parameter. A caller
+    may still name its own scope and gets refused for any other — asking for
+    someone else's is an error worth an exception, not something to quietly
+    reinterpret as its own.
     """
 
     def __init__(
@@ -35,8 +42,8 @@ class SettingService:
 
         roles = set((current_user or {}).get("roles", []))
 
-        if RoleName.ADMIN.value in roles:
-            return False
+        # if RoleName.ADMIN.value in roles:
+        #     return False
 
         return RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
 
@@ -51,44 +58,52 @@ class SettingService:
 
         return department_id
 
-    def _readable_department_id(
-        self, current_user: dict | None, department_id: int | None
+    def _scope_department_id(
+        self, current_user: dict | None, requested_department_id: int | None = None
     ) -> int | None:
-        """The department a read may cover.
+        """The scope the caller works in, for both reads and writes.
 
-        A director is pinned to its own department whatever it asked for; an
-        ADMIN gets the department it asked for, or None for the institutional
-        scope.
+        A director is pinned to its department, everyone else to the
+        institutional settings. A request that names another scope is refused
+        instead of being answered with the caller's own — a caller asking about
+        department 19 must never be handed the institutional value as if it
+        were the one it asked for.
         """
 
         if self._is_director(current_user):
-            return self._director_department_id(current_user)
+            own_department_id = self._director_department_id(current_user)
 
-        return department_id
+            if (
+                requested_department_id is not None
+                and requested_department_id != own_department_id
+            ):
+                raise PermissionDeniedError(
+                    "Solo puede administrar las configuraciones de su propio "
+                    "departamento"
+                )
 
-    def _writable_department_id(
-        self, current_user: dict | None, department_id: int | None
-    ) -> int | None:
-        """The department a write may target, rejecting anything out of reach."""
+            return own_department_id
 
-        if not self._is_director(current_user):
-            return department_id
-
-        own_department_id = self._director_department_id(current_user)
-
-        if department_id is not None and department_id != own_department_id:
+        if requested_department_id is not None:
             raise PermissionDeniedError(
-                "Solo puede administrar las configuraciones de su propio departamento"
+                "Las configuraciones de un departamento las administra su "
+                "director, no la administración"
             )
 
-        return own_department_id
+        return None
 
     def _ensure_can_manage(
         self, current_user: dict | None, setting: SettingModel
     ) -> None:
-        """Reject writing an institutional setting, or another department's."""
+        """Reject writing a setting outside the caller's own scope."""
 
         if not self._is_director(current_user):
+            if setting.department_id is not None:
+                raise PermissionDeniedError(
+                    "Las configuraciones de un departamento solo las administra "
+                    "su director"
+                )
+
             return
 
         own_department_id = self._director_department_id(current_user)
@@ -108,9 +123,16 @@ class SettingService:
     def _ensure_can_read(
         self, current_user: dict | None, setting: SettingModel
     ) -> None:
-        """A director reads the institutional settings and its department's."""
+        """A director reads the institutional settings and its department's;
+        an ADMIN only the institutional ones."""
 
         if not self._is_director(current_user):
+            if setting.department_id is not None:
+                raise PermissionDeniedError(
+                    "Las configuraciones de un departamento solo las consulta "
+                    "su director"
+                )
+
             return
 
         own_department_id = self._director_department_id(current_user)
@@ -128,7 +150,7 @@ class SettingService:
     ) -> dict:
         """Retrieve the settings the user may see, based on filters and pagination."""
 
-        filters.department_id = self._readable_department_id(
+        filters.department_id = self._scope_department_id(
             current_user, filters.department_id
         )
 
@@ -157,17 +179,16 @@ class SettingService:
         current_user: dict | None = None,
         department_id: int | None = None,
     ) -> dict | None:
-        """Retrieve the setting that applies to the caller's department.
+        """Retrieve the setting that applies to the caller.
 
-        The department's own value wins and the institutional one is the
-        fallback, so this answers "which value is in effect for me".
+        For a director its department's value wins and the institutional one is
+        the fallback; for an ADMIN it is the institutional value. Either way
+        this answers "which value is in effect for me".
         """
 
-        resolved_department_id = self._readable_department_id(
-            current_user, department_id
+        setting = self.settings_repository.resolve(
+            key, self._scope_department_id(current_user, department_id)
         )
-
-        setting = self.settings_repository.resolve(key, resolved_department_id)
 
         if not setting:
             return None
@@ -195,7 +216,7 @@ class SettingService:
     async def create(self, data: SettingCreate, current_user: dict) -> dict:
         """Create a setting, rejecting a key already taken in the same scope."""
 
-        department_id = self._writable_department_id(current_user, data.department_id)
+        department_id = self._scope_department_id(current_user, data.department_id)
 
         existing = self.settings_repository.get_by_key(data.key, department_id)
 

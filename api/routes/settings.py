@@ -1,9 +1,10 @@
 """Routes for setting operations.
 
 Settings come in two scopes: the institutional ones an ADMIN maintains, and
-the per-department ones each director maintains for its own department. A
-director only reaches its own department's settings — the service pins the
-scope, these routes just hand it the authenticated user.
+the per-department ones each director maintains for its own department. Each
+role reaches only its own scope — the service pins it from the authenticated
+user, and refuses (403) a request that names a department the caller does not
+manage instead of answering it with the caller's own scope.
 """
 
 from fastapi import Depends, HTTPException, Query
@@ -48,9 +49,11 @@ async def get_setting_by_key(
     current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """Get the setting in effect for a key.
+    """Get the setting in effect for the caller.
 
-    The department's own value wins; the institutional one is the fallback.
+    For a director its department's value wins and the institutional one is
+    the fallback; for an ADMIN it is the institutional value. Naming a
+    ``department_id`` the caller does not manage is a 403, not a fallback.
     """
 
     setting = await controller.get_by_key(key, current_user, department_id)
@@ -104,10 +107,10 @@ async def create_setting(
     current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """Create a new setting.
+    """Create a new setting in the caller's own scope.
 
-    A director creates it for its own department; an ADMIN creates an
-    institutional setting, or one for the department it names in the payload.
+    A director creates it for its department; an ADMIN creates an
+    institutional one. A payload naming another scope is refused.
     """
 
     return await controller.create(payload, current_user)

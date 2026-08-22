@@ -77,7 +77,13 @@ class SettingsRepository(BaseRepository[SettingModel]):
         filters: SettingFilters,
         pagination: PaginationParams,
     ) -> tuple[list[SettingModel], int]:
-        """Search for settings based on filters and pagination parameters."""
+        """Search for settings within one scope.
+
+        ``filters.department_id`` names that scope — a department, or the
+        institutional settings when it is None — and ``include_global`` decides
+        whether a department listing carries the institutional values it falls
+        back to.
+        """
 
         query = (
             self.db.query(SettingModel)
@@ -88,15 +94,17 @@ class SettingsRepository(BaseRepository[SettingModel]):
             )
         )
 
-        if filters.department_id is not None:
+        if filters.department_id is None:
+            # No department means the institutional scope, the same as it does
+            # in get_by_key and get_history — never "every scope at once".
+            query = query.filter(SettingModel.department_id.is_(None))
+        else:
             scope = SettingModel.department_id == filters.department_id
 
             if filters.include_global:
                 scope = or_(scope, SettingModel.department_id.is_(None))
 
             query = query.filter(scope)
-        elif not filters.include_global:
-            query = query.filter(SettingModel.department_id.isnot(None))
 
         if filters.search:
             term = filters.search.strip()

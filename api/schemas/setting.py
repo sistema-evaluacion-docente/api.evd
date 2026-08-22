@@ -19,8 +19,11 @@ class SettingScope(str, Enum):
 class SettingCreate(BaseModel):
     """Schema for creating a setting.
 
-    ``department_id`` is only honoured for an ADMIN: a director always creates
-    settings for its own department, whatever the payload says.
+    The setting is always created in the caller's own scope — a director's
+    department, or the institutional one for an ADMIN. ``department_id`` is
+    accepted only so that asking for someone else's scope can be refused out
+    loud: silently dropping it would file the setting somewhere the caller did
+    not ask for.
     """
 
     key: str
@@ -75,9 +78,10 @@ class SettingHistoryOut(BaseModel):
 class SettingFilters:
     """Dataclass to hold setting filters extracted from query parameters.
 
-    ``department_id`` narrows the list to one department; ``include_global``
-    decides whether the institutional settings come along with it. The service
-    overrides ``department_id`` for a director so it can only ever be its own.
+    ``department_id`` may only name the caller's own scope — the service
+    rejects any other and then sets it to that scope. ``include_global``
+    decides whether a department's listing carries the institutional settings
+    it falls back to.
     """
 
     search: str | None = None
