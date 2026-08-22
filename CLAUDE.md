@@ -76,10 +76,19 @@ department_id)` en cambio consulta un ámbito exacto. La unicidad de `key` es po
 eso hacen falta los dos). `settings_history` lleva el mismo `department_id` para que los
 historiales no se mezclen.
 
-Las reglas de permisos están en `SettingService`: un director queda fijado a su propio
-departamento en las lecturas, puede leer las configuraciones institucionales pero no
-modificarlas (crea una propia para sobreescribir el valor), y no ve las de otros
-departamentos. Un ADMIN opera sobre cualquier ámbito.
+Las reglas de permisos están en `SettingService`, y la idea es que **cada rol está
+confinado a su propio ámbito**: el ámbito nunca se toma de un parámetro, sale de quién
+pregunta (`_scope_department_id`). Un director queda fijado a su departamento, puede leer
+las configuraciones institucionales — de las que hereda — pero no modificarlas (crea una
+propia para sobreescribir el valor), y no ve las de otros departamentos. Un ADMIN solo ve
+y administra las institucionales: lo que cada departamento configure es asunto de su
+director. Un `department_id` que no sea el del propio ámbito (en el query de
+`GET /settings/` o `/settings/by-key/{key}`, o en el payload de `SettingCreate`) se
+**rechaza con 403**, nunca se ignora: contestarle con el valor institucional a quien
+preguntó por el departamento 19 lo lleva a guardar donde no quería.
+`SettingsRepository.search` con `department_id=None` devuelve **solo** las institucionales,
+igual que `get_by_key` y `get_history`; `include_global` solo aplica cuando sí hay un
+departamento en juego.
 
 No toda clave se usa por ámbito: `improvement_plan.score_threshold` es **institucional** —
 existe una sola fila, la global — y quien lo consume lo lee sin departamento
