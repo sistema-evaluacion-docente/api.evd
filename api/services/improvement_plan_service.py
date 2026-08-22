@@ -643,26 +643,3 @@ class ImprovementPlanService:
         )
 
         return updated
-
-    async def evaluate(self, plan_id: int, current_user) -> dict:
-        """Recompute compliance against the verification period's grades."""
-
-        plan = await self.get_by_id(plan_id, current_user)
-        self.ensure_can_manage(current_user, plan)
-
-        updated = await self.improvement_plans_repository.evaluate(
-            plan_id, self.get_threshold()
-        )
-
-        if not updated:
-            raise ResourceNotFoundError("Plan de mejoramiento", plan_id)
-
-        await self.audit_service.log(
-            action="UPDATE",
-            entity_name=ENTITY,
-            entity_id=plan_id,
-            actor_id=(current_user or {}).get("id"),
-            description="Verificó el cumplimiento del plan de mejoramiento",
-        )
-
-        return updated
