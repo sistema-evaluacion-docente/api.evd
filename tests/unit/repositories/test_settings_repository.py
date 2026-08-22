@@ -52,12 +52,22 @@ class TestSettingsRepository:
 
         assert isinstance(repo, BaseRepository)
 
+    @staticmethod
+    def _stub_by_key(mock_db, result):
+        """Wire the query chain `get_by_key` walks to end in ``result``."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.first.return_value = result
+
+        return mock_query
+
     def test_get_by_key_found(self, repo, mock_db, mock_setting_model):
         """Test get_by_key returns setting when found."""
 
-        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
-            mock_setting_model
-        )
+        self._stub_by_key(mock_db, mock_setting_model)
 
         result = repo.get_by_key("app_name")
 
@@ -66,13 +76,69 @@ class TestSettingsRepository:
     def test_get_by_key_not_found(self, repo, mock_db):
         """Test get_by_key returns None when not found."""
 
-        mock_db.query.return_value.options.return_value.filter.return_value.first.return_value = (
-            None
-        )
+        self._stub_by_key(mock_db, None)
 
         result = repo.get_by_key("nonexistent")
 
         assert result is None
+
+    def test_get_by_key_without_department_filters_by_key_and_global_scope(
+        self, repo, mock_db, mock_setting_model
+    ):
+        """Test get_by_key narrows to the institutional row by default."""
+
+        mock_query = self._stub_by_key(mock_db, mock_setting_model)
+
+        repo.get_by_key("app_name")
+
+        # One filter for the key, one pinning the scope.
+        assert mock_query.filter.call_count == 2
+
+    def test_get_by_key_with_department_filters_by_that_department(
+        self, repo, mock_db, mock_setting_model
+    ):
+        """Test get_by_key narrows to a department's own row."""
+
+        mock_query = self._stub_by_key(mock_db, mock_setting_model)
+
+        result = repo.get_by_key("app_name", department_id=7)
+
+        assert result == mock_setting_model
+        assert mock_query.filter.call_count == 2
+
+    def test_resolve_without_department_returns_global_setting(
+        self, repo, mock_db, mock_setting_model
+    ):
+        """Test resolve falls back to the institutional value."""
+
+        self._stub_by_key(mock_db, mock_setting_model)
+
+        result = repo.resolve("app_name")
+
+        assert result == mock_setting_model
+
+    def test_resolve_prefers_department_setting_over_global(self, repo):
+        """Test resolve returns the department override when it exists."""
+
+        department_setting = MagicMock(spec=SettingModel)
+        repo.get_by_key = MagicMock(return_value=department_setting)
+
+        result = repo.resolve("app_name", department_id=7)
+
+        assert result == department_setting
+        repo.get_by_key.assert_called_once_with("app_name", 7)
+
+    def test_resolve_falls_back_to_global_when_department_has_no_override(self, repo):
+        """Test resolve reads the institutional value for a department without one."""
+
+        global_setting = MagicMock(spec=SettingModel)
+        repo.get_by_key = MagicMock(side_effect=[None, global_setting])
+
+        result = repo.resolve("app_name", department_id=7)
+
+        assert result == global_setting
+        assert repo.get_by_key.call_args_list[0].args == ("app_name", 7)
+        assert repo.get_by_key.call_args_list[1].args == ("app_name",)
 
     def test_search_no_filters(self, repo, mock_db, mock_setting_model):
         """Test search with no filters returns all settings paginated."""
@@ -115,6 +181,52 @@ class TestSettingsRepository:
         pagination = PaginationParams(page=1, limit=10)
 
         items, total = repo.search(filters, pagination)
+
+        assert total == 1
+        mock_query.filter.assert_called_once()
+
+    def test_search_with_department_includes_global_settings(
+        self, repo, mock_db, mock_setting_model
+    ):
+        """Test search of a department also brings the institutional settings."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 2
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_setting_model
+        ]
+
+        filters = SettingFilters(department_id=7)
+        pagination = PaginationParams(page=1, limit=10)
+
+        _items, total = repo.search(filters, pagination)
+
+        assert total == 2
+        mock_query.filter.assert_called_once()
+
+    def test_search_excluding_global_keeps_only_department_settings(
+        self, repo, mock_db, mock_setting_model
+    ):
+        """Test search can drop the institutional settings from the list."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_setting_model
+        ]
+
+        filters = SettingFilters(include_global=False)
+        pagination = PaginationParams(page=1, limit=10)
+
+        _items, total = repo.search(filters, pagination)
 
         assert total == 1
         mock_query.filter.assert_called_once()
@@ -243,7 +355,26 @@ class TestSettingsRepository:
         items, total = repo.get_history(key="app_name", pagination=pagination)
 
         assert total == 1
-        mock_query.filter.assert_called_once()
+        # One filter for the key, one pinning the scope.
+        assert mock_query.filter.call_count == 2
+
+    def test_get_history_scoped_to_a_department(
+        self, repo, mock_db, mock_history_model
+    ):
+        """Test get_history returns the entries of one department only."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.outerjoin.return_value.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.all.return_value = [mock_history_model]
+
+        items, total = repo.get_history(key="app_name", department_id=7)
+
+        assert total == 1
+        assert items == [mock_history_model]
+        assert mock_query.filter.call_count == 2
 
     def test_get_history_without_pagination(self, repo, mock_db, mock_history_model):
         """Test get_history returns all items without pagination."""

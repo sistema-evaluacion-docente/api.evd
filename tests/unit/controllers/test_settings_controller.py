@@ -50,32 +50,56 @@ class TestSettingsController:
 
         filters = SettingFilters()
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_all(filters, pagination)
+        current_user = {"id": 99, "uid": "test-uid"}
+        result = await controller.get_all(filters, pagination, current_user)
 
-        mock_service.get_all.assert_called_once_with(filters, pagination)
+        mock_service.get_all.assert_called_once_with(filters, pagination, current_user)
         assert result["total"] == 0
 
     @pytest.mark.asyncio
     async def test_get_by_id_delegates_to_service(self, controller, mock_service):
         """Test get_by_id delegates to service."""
 
-        mock_service.get_by_id.return_value = {"id": 1, "key": "app_name", "value": "My App"}
+        mock_service.get_by_id.return_value = {
+            "id": 1,
+            "key": "app_name",
+            "value": "My App",
+        }
 
-        result = await controller.get_by_id(1)
+        current_user = {"id": 99, "uid": "test-uid"}
+        result = await controller.get_by_id(1, current_user)
 
-        mock_service.get_by_id.assert_called_once_with(1)
+        mock_service.get_by_id.assert_called_once_with(1, current_user)
         assert result["id"] == 1
 
     @pytest.mark.asyncio
     async def test_get_by_key_delegates_to_service(self, controller, mock_service):
         """Test get_by_key delegates to service."""
 
-        mock_service.get_by_key.return_value = {"id": 1, "key": "app_name", "value": "My App"}
+        mock_service.get_by_key.return_value = {
+            "id": 1,
+            "key": "app_name",
+            "value": "My App",
+        }
 
-        result = await controller.get_by_key("app_name")
+        current_user = {"id": 99, "uid": "test-uid"}
+        result = await controller.get_by_key("app_name", current_user)
 
-        mock_service.get_by_key.assert_called_once_with("app_name")
+        mock_service.get_by_key.assert_called_once_with("app_name", current_user, None)
         assert result["key"] == "app_name"
+
+    @pytest.mark.asyncio
+    async def test_get_by_key_forwards_department_to_service(
+        self, controller, mock_service
+    ):
+        """Test get_by_key passes the requested department along."""
+
+        mock_service.get_by_key.return_value = {"id": 1, "key": "app_name"}
+
+        current_user = {"id": 99, "uid": "test-uid"}
+        await controller.get_by_key("app_name", current_user, 7)
+
+        mock_service.get_by_key.assert_called_once_with("app_name", current_user, 7)
 
     @pytest.mark.asyncio
     async def test_create_delegates_to_service(self, controller, mock_service):
@@ -83,7 +107,11 @@ class TestSettingsController:
 
         current_user = {"id": 99, "uid": "test-uid"}
         data = SettingCreate(key="app_name", value="My App")
-        mock_service.create.return_value = {"id": 1, "key": "app_name", "value": "My App"}
+        mock_service.create.return_value = {
+            "id": 1,
+            "key": "app_name",
+            "value": "My App",
+        }
 
         result = await controller.create(data, current_user)
 
@@ -96,7 +124,11 @@ class TestSettingsController:
 
         current_user = {"id": 99, "uid": "test-uid"}
         data = SettingUpdate(value="New Value")
-        mock_service.update.return_value = {"id": 1, "key": "app_name", "value": "New Value"}
+        mock_service.update.return_value = {
+            "id": 1,
+            "key": "app_name",
+            "value": "New Value",
+        }
 
         result = await controller.update(1, data, current_user)
 
@@ -125,7 +157,9 @@ class TestSettingsController:
         }
 
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_history(key="app_name", pagination=pagination)
+        result = await controller.get_history(
+            key="app_name", pagination=pagination, department_id=7
+        )
 
-        mock_service.get_history.assert_called_once_with("app_name", pagination)
+        mock_service.get_history.assert_called_once_with("app_name", pagination, 7)
         assert result["total"] == 0
