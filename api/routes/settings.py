@@ -1,6 +1,13 @@
-"""Routes for setting operations."""
+"""Routes for setting operations.
 
-from fastapi import Depends, HTTPException
+Settings come in two scopes: the institutional ones an ADMIN maintains, and
+the per-department ones each director maintains for its own department. Each
+role reaches only its own scope — the service pins it from the authenticated
+user, and refuses (403) a request that names a department the caller does not
+manage instead of answering it with the caller's own scope.
+"""
+
+from fastapi import Depends, HTTPException, Query
 
 from api.controllers.settings import (
     SettingsController,
@@ -20,30 +27,36 @@ from api.schemas.user import RoleName
 
 router = EnvelopeRouter(prefix="/settings", tags=["Settings"])
 
-_ROLES = [RoleName.ADMIN]
+_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 
 
 @router.get("/", response_model=list[SettingOut])
 async def get_all_settings(
     filters: SettingFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """List all settings with pagination and filters."""
+    """List the settings the user may see, with pagination and filters."""
 
-    return await controller.get_all(filters, pagination)
+    return await controller.get_all(filters, pagination, current_user)
 
 
 @router.get("/by-key/{key}", response_model=SettingOut)
 async def get_setting_by_key(
     key: str,
-    _=Depends(require_roles(_ROLES)),
+    department_id: int | None = Query(default=None),
+    current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """Get a setting by key."""
+    """Get the setting in effect for the caller.
 
-    setting = await controller.get_by_key(key)
+    For a director its department's value wins and the institutional one is
+    the fallback; for an ADMIN it is the institutional value. Naming a
+    ``department_id`` the caller does not manage is a 403, not a fallback.
+    """
+
+    setting = await controller.get_by_key(key, current_user, department_id)
 
     if not setting:
         raise HTTPException(status_code=404, detail="Configuración no encontrada")
@@ -54,12 +67,12 @@ async def get_setting_by_key(
 @router.get("/{setting_id}", response_model=SettingOut)
 async def get_setting_by_id(
     setting_id: int,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
     """Get a setting by ID."""
 
-    setting = await controller.get_by_id(setting_id)
+    setting = await controller.get_by_id(setting_id, current_user)
 
     if not setting:
         raise HTTPException(status_code=404, detail="Configuración no encontrada")
@@ -71,17 +84,21 @@ async def get_setting_by_id(
 async def get_setting_history(
     setting_id: int,
     pagination: PaginationDep,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """Get setting history by setting ID."""
+    """Get the history of a setting, in its own scope."""
 
-    setting = await controller.get_by_id(setting_id)
+    setting = await controller.get_by_id(setting_id, current_user)
 
     if not setting:
         raise HTTPException(status_code=404, detail="Configuración no encontrada")
 
-    return await controller.get_history(key=setting["key"], pagination=pagination)
+    return await controller.get_history(
+        key=setting["key"],
+        pagination=pagination,
+        department_id=setting["department_id"],
+    )
 
 
 @router.post("/", response_model=SettingOut, status_code=201)
@@ -90,7 +107,11 @@ async def create_setting(
     current_user=Depends(require_roles(_ROLES)),
     controller: SettingsController = Depends(get_settings_controller),
 ):
-    """Create a new setting."""
+    """Create a new setting in the caller's own scope.
+
+    A director creates it for its department; an ADMIN creates an
+    institutional one. A payload naming another scope is refused.
+    """
 
     return await controller.create(payload, current_user)
 

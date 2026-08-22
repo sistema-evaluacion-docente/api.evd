@@ -64,6 +64,38 @@ La **gestión de evidencias** es un ciclo entre director y docente: el director 
 
 Los tres formatos se **generan en PDF** con WeasyPrint + Jinja2: plantillas en `api/templates/improvement_plans/` (el Formato 3 va en horizontal), renderer puro en `api/utils/improvement_plan_pdf.py`, y el armado del contexto (agrupar items por aspecto, cruzar las notas de seguimiento) en `api/services/improvement_plan_document_service.py`. Flujo: `POST /{id}/documents/{formato}/generate` → descargar → firmar a mano → `POST .../signed`; subir el Formato 2 firmado pasa el acta a `FIRMADA`. WeasyPrint necesita librerías de sistema (Pango/HarfBuzz) — ya están en ambos Dockerfiles.
 
+### Configuraciones
+
+`settings` vive en **dos ámbitos**, separados por `department_id`: `NULL` es el valor
+institucional que mantiene un ADMIN, y un id de departamento es el valor que mantiene su
+director. Al resolver una clave, el valor del departamento gana y el institucional es el
+fallback — eso es `SettingsRepository.resolve(key, department_id)`; `get_by_key(key,
+department_id)` en cambio consulta un ámbito exacto. La unicidad de `key` es por ámbito:
+`uq_settings_key_department` cubre las filas de departamento y el índice parcial
+`uq_settings_key_global` las institucionales (Postgres trata los NULL como distintos, por
+eso hacen falta los dos). `settings_history` lleva el mismo `department_id` para que los
+historiales no se mezclen.
+
+Las reglas de permisos están en `SettingService`, y la idea es que **cada rol está
+confinado a su propio ámbito**: el ámbito nunca se toma de un parámetro, sale de quién
+pregunta (`_scope_department_id`). Un director queda fijado a su departamento, puede leer
+las configuraciones institucionales — de las que hereda — pero no modificarlas (crea una
+propia para sobreescribir el valor), y no ve las de otros departamentos. Un ADMIN solo ve
+y administra las institucionales: lo que cada departamento configure es asunto de su
+director. Un `department_id` que no sea el del propio ámbito (en el query de
+`GET /settings/` o `/settings/by-key/{key}`, o en el payload de `SettingCreate`) se
+**rechaza con 403**, nunca se ignora: contestarle con el valor institucional a quien
+preguntó por el departamento 19 lo lleva a guardar donde no quería.
+`SettingsRepository.search` con `department_id=None` devuelve **solo** las institucionales,
+igual que `get_by_key` y `get_history`; `include_global` solo aplica cuando sí hay un
+departamento en juego.
+
+No toda clave se usa por ámbito: `improvement_plan.score_threshold` es **institucional** —
+existe una sola fila, la global — y quien lo consume lo lee sin departamento
+(`ImprovementPlanService.get_threshold()` y `_score_threshold(db)` del procesador de
+evaluaciones). Una clave que sí admita sobreescritura por departamento debe leerse con
+`resolve(key, department_id)`.
+
 ### Response envelope
 
 Toda respuesta JSON exitosa se envuelve en `{status, data, pagination, error, timestamp}`. Hay **dos mecanismos que conviven** (ver `docs/adr/002-envelope-router.md`):
