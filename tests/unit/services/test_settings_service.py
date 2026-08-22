@@ -333,11 +333,11 @@ class TestSettingService:
     async def test_get_all_pins_a_director_to_its_own_department(
         self, service, mock_settings_repo, mock_setting, director_user
     ):
-        """Test get_all overrides the department a director asked for."""
+        """Test get_all scopes a director's listing to its own department."""
 
         mock_settings_repo.search.return_value = ([mock_setting], 1)
 
-        filters = SettingFilters(department_id=99)
+        filters = SettingFilters()
         pagination = PaginationParams(page=1, limit=10)
 
         await service.get_all(filters, pagination, director_user)
@@ -346,20 +346,49 @@ class TestSettingService:
         assert applied_filters.department_id == 7
 
     @pytest.mark.asyncio
-    async def test_get_all_keeps_the_department_an_admin_asked_for(
+    async def test_get_all_of_another_department_raises_for_a_director(
+        self, service, mock_settings_repo, director_user
+    ):
+        """Test a director asking for another department is refused."""
+
+        filters = SettingFilters(department_id=99)
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_all(filters, pagination, director_user)
+
+        mock_settings_repo.search.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_all_pins_an_admin_to_the_institutional_scope(
         self, service, mock_settings_repo, mock_setting, current_user
     ):
-        """Test get_all lets an ADMIN list any department."""
+        """Test an ADMIN's listing covers the institutional settings."""
 
         mock_settings_repo.search.return_value = ([mock_setting], 1)
 
-        filters = SettingFilters(department_id=99)
+        filters = SettingFilters()
         pagination = PaginationParams(page=1, limit=10)
 
         await service.get_all(filters, pagination, current_user)
 
         applied_filters = mock_settings_repo.search.call_args.args[0]
-        assert applied_filters.department_id == 99
+        assert applied_filters.department_id is None
+
+    @pytest.mark.asyncio
+    async def test_get_all_of_a_department_raises_for_an_admin(
+        self, service, mock_settings_repo, current_user
+    ):
+        """Test an ADMIN naming a department is refused, not answered with
+        the institutional settings as if they were the ones it asked for."""
+
+        filters = SettingFilters(department_id=19)
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_all(filters, pagination, current_user)
+
+        mock_settings_repo.search.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_all_for_a_director_without_department_raises(
@@ -389,6 +418,41 @@ class TestSettingService:
         mock_settings_repo.resolve.assert_called_once_with("app_name", 7)
         assert result["department_id"] == 7
         assert result["scope"] == "DEPARTMENT"
+
+    @pytest.mark.asyncio
+    async def test_get_by_key_resolves_the_institutional_value_for_an_admin(
+        self, service, mock_settings_repo, mock_setting, current_user
+    ):
+        """Test get_by_key answers an ADMIN with the institutional value."""
+
+        mock_settings_repo.resolve.return_value = mock_setting
+
+        result = await service.get_by_key("app_name", current_user)
+
+        mock_settings_repo.resolve.assert_called_once_with("app_name", None)
+        assert result["scope"] == "GLOBAL"
+
+    @pytest.mark.asyncio
+    async def test_get_by_key_of_a_department_raises_for_an_admin(
+        self, service, mock_settings_repo, current_user
+    ):
+        """Test an ADMIN asking for a department's value is refused."""
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_key("app_name", current_user, department_id=19)
+
+        mock_settings_repo.resolve.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_of_a_department_setting_raises_for_an_admin(
+        self, service, mock_settings_repo, department_setting, current_user
+    ):
+        """Test an ADMIN cannot read a department's setting."""
+
+        mock_settings_repo.get.return_value = department_setting
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_id(1, current_user)
 
     @pytest.mark.asyncio
     async def test_get_by_id_of_another_department_raises_for_a_director(
@@ -433,6 +497,40 @@ class TestSettingService:
         assert result["department_id"] == 7
 
     @pytest.mark.asyncio
+    async def test_create_by_an_admin_lands_on_the_institutional_scope(
+        self, service, mock_settings_repo, mock_setting, current_user
+    ):
+        """Test an ADMIN only ever creates institutional settings."""
+
+        mock_settings_repo.get_by_key.return_value = None
+        mock_settings_repo.create_setting.return_value = mock_setting
+
+        data = SettingCreate(key="app_name", value="My App")
+
+        result = await service.create(data, current_user)
+
+        payload = mock_settings_repo.create_setting.call_args.args[0]
+        assert payload["department_id"] is None
+        assert result["scope"] == "GLOBAL"
+
+    @pytest.mark.asyncio
+    async def test_create_for_a_department_raises_for_an_admin(
+        self, service, mock_settings_repo, current_user
+    ):
+        """Test an ADMIN's payload naming a department is refused.
+
+        Dropping it instead would file the setting institutionally, which is
+        not where the caller asked for it.
+        """
+
+        data = SettingCreate(key="app_name", value="My App", department_id=19)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.create(data, current_user)
+
+        mock_settings_repo.create_setting.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_create_by_a_director_for_another_department_raises(
         self, service, mock_settings_repo, director_user
     ):
@@ -444,22 +542,6 @@ class TestSettingService:
             await service.create(data, director_user)
 
         mock_settings_repo.create_setting.assert_not_called()
-
-    @pytest.mark.asyncio
-    async def test_create_by_an_admin_keeps_the_requested_department(
-        self, service, mock_settings_repo, department_setting, current_user
-    ):
-        """Test an ADMIN creates a setting for any department."""
-
-        mock_settings_repo.get_by_key.return_value = None
-        mock_settings_repo.create_setting.return_value = department_setting
-
-        data = SettingCreate(key="app_name", value="My App", department_id=7)
-
-        await service.create(data, current_user)
-
-        payload = mock_settings_repo.create_setting.call_args.args[0]
-        assert payload["department_id"] == 7
 
     @pytest.mark.asyncio
     async def test_create_checks_duplicates_within_the_same_scope_only(
@@ -519,6 +601,21 @@ class TestSettingService:
             await service.update(1, data, director_user)
 
     @pytest.mark.asyncio
+    async def test_update_of_a_department_setting_raises_for_an_admin(
+        self, service, mock_settings_repo, department_setting, current_user
+    ):
+        """Test an ADMIN cannot change what a department configured."""
+
+        mock_settings_repo.get.return_value = department_setting
+
+        data = SettingUpdate(value="New Value")
+
+        with pytest.raises(PermissionDeniedError):
+            await service.update(1, data, current_user)
+
+        mock_settings_repo.update_setting.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_update_of_its_own_department_setting_records_the_scope(
         self, service, mock_settings_repo, department_setting, director_user
     ):
@@ -561,6 +658,19 @@ class TestSettingService:
 
         assert result is not None
         mock_settings_repo.delete_setting.assert_called_once_with(1)
+
+    @pytest.mark.asyncio
+    async def test_delete_of_a_department_setting_raises_for_an_admin(
+        self, service, mock_settings_repo, department_setting, current_user
+    ):
+        """Test an ADMIN cannot delete what a department configured."""
+
+        mock_settings_repo.get.return_value = department_setting
+
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(1, current_user)
+
+        mock_settings_repo.delete_setting.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_history_forwards_the_department_scope(

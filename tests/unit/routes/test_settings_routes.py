@@ -131,11 +131,13 @@ class TestSettingsScopeWiring:
         _filters, _pagination, current_user = controller.get_all.call_args.args
         assert current_user["department_id"] == DIRECTOR_USER["department_id"]
 
-    async def test_list_forwards_the_department_filter(self, client, controller, auth):
-        """An ADMIN narrows the list to one department."""
+    async def test_list_forwards_the_requested_department(
+        self, client, controller, auth
+    ):
+        """The service is the one that accepts or refuses the scope asked for."""
 
         auth.as_user(ADMIN_USER)
-        controller.get_all.return_value = paginated([DEPARTMENT_SETTING])
+        controller.get_all.return_value = paginated([GLOBAL_SETTING])
 
         client.get("/settings/?department_id=7&include_global=false")
 
@@ -146,10 +148,10 @@ class TestSettingsScopeWiring:
     async def test_by_key_forwards_the_user_and_department(
         self, client, controller, auth
     ):
-        """The by-key lookup resolves against a department."""
+        """The by-key lookup hands the service both the user and the scope."""
 
         auth.as_user(ADMIN_USER)
-        controller.get_by_key.return_value = DEPARTMENT_SETTING
+        controller.get_by_key.return_value = GLOBAL_SETTING
 
         response = client.get(
             "/settings/by-key/improvement_plan.score_threshold?department_id=7"
