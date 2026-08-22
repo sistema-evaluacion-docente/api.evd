@@ -22,24 +22,55 @@ class SettingsRepository(BaseRepository[SettingModel]):
         super().__init__(SettingModel, db)
 
     def get(self, setting_id: int) -> SettingModel | None:
-        """Get a setting by ID with changed-by user loaded."""
+        """Get a setting by ID with its department and changed-by user loaded."""
 
         return (
             self.db.query(SettingModel)
-            .options(joinedload(SettingModel.changed_by_user))
+            .options(
+                joinedload(SettingModel.changed_by_user),
+                joinedload(SettingModel.department),
+            )
             .filter(SettingModel.id == setting_id)
             .first()
         )
 
-    def get_by_key(self, key: str) -> SettingModel | None:
-        """Get a setting by key with changed-by user loaded."""
+    def get_by_key(
+        self, key: str, department_id: int | None = None
+    ) -> SettingModel | None:
+        """Get the setting of exactly one scope: a department's, or the global one."""
 
-        return (
+        query = (
             self.db.query(SettingModel)
-            .options(joinedload(SettingModel.changed_by_user))
+            .options(
+                joinedload(SettingModel.changed_by_user),
+                joinedload(SettingModel.department),
+            )
             .filter(SettingModel.key == key)
-            .first()
         )
+
+        if department_id is None:
+            query = query.filter(SettingModel.department_id.is_(None))
+        else:
+            query = query.filter(SettingModel.department_id == department_id)
+
+        return query.first()
+
+    def resolve(
+        self, key: str, department_id: int | None = None
+    ) -> SettingModel | None:
+        """Get the setting that applies to a department.
+
+        The department's own value wins; the institutional one is the fallback
+        for a department that has not overridden the key.
+        """
+
+        if department_id is not None:
+            scoped = self.get_by_key(key, department_id)
+
+            if scoped:
+                return scoped
+
+        return self.get_by_key(key)
 
     def search(
         self,
@@ -51,8 +82,21 @@ class SettingsRepository(BaseRepository[SettingModel]):
         query = (
             self.db.query(SettingModel)
             .outerjoin(UserModel, UserModel.uid == SettingModel.changed_by)
-            .options(contains_eager(SettingModel.changed_by_user))
+            .options(
+                contains_eager(SettingModel.changed_by_user),
+                joinedload(SettingModel.department),
+            )
         )
+
+        if filters.department_id is not None:
+            scope = SettingModel.department_id == filters.department_id
+
+            if filters.include_global:
+                scope = or_(scope, SettingModel.department_id.is_(None))
+
+            query = query.filter(scope)
+        elif not filters.include_global:
+            query = query.filter(SettingModel.department_id.isnot(None))
 
         if filters.search:
             term = filters.search.strip()
@@ -70,7 +114,11 @@ class SettingsRepository(BaseRepository[SettingModel]):
         if filters.value_type:
             query = query.filter(SettingModel.value_type == filters.value_type)
 
-        query = query.order_by(SettingModel.key.asc())
+        # The institutional value first, then the departments that override it.
+        query = query.order_by(
+            SettingModel.key.asc(),
+            SettingModel.department_id.asc().nullsfirst(),
+        )
 
         return self.paginate(query, pagination)
 
@@ -116,8 +164,13 @@ class SettingsRepository(BaseRepository[SettingModel]):
         self,
         key: str | None = None,
         pagination: PaginationParams | None = None,
+        department_id: int | None = None,
     ) -> tuple[list[SettingHistoryModel], int]:
-        """Get setting history with optional filters and pagination."""
+        """Get setting history with optional filters and pagination.
+
+        The history is scoped like the setting itself: passing no
+        ``department_id`` returns the institutional entries only.
+        """
 
         query = (
             self.db.query(SettingHistoryModel)
@@ -127,6 +180,11 @@ class SettingsRepository(BaseRepository[SettingModel]):
 
         if key:
             query = query.filter(SettingHistoryModel.key == key)
+
+        if department_id is None:
+            query = query.filter(SettingHistoryModel.department_id.is_(None))
+        else:
+            query = query.filter(SettingHistoryModel.department_id == department_id)
 
         query = query.order_by(SettingHistoryModel.changed_at.desc())
 

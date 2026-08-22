@@ -22,20 +22,26 @@ class SettingsController:
         self,
         filters: SettingFilters,
         pagination: PaginationParams,
+        current_user: dict | None = None,
     ):
         """Retrieve all settings based on filters and pagination."""
 
-        return await self.service.get_all(filters, pagination)
+        return await self.service.get_all(filters, pagination, current_user)
 
-    async def get_by_id(self, setting_id: int):
+    async def get_by_id(self, setting_id: int, current_user: dict | None = None):
         """Retrieve a setting by ID."""
 
-        return await self.service.get_by_id(setting_id)
+        return await self.service.get_by_id(setting_id, current_user)
 
-    async def get_by_key(self, key: str):
-        """Retrieve a setting by key."""
+    async def get_by_key(
+        self,
+        key: str,
+        current_user: dict | None = None,
+        department_id: int | None = None,
+    ):
+        """Retrieve the setting in effect for a key."""
 
-        return await self.service.get_by_key(key)
+        return await self.service.get_by_key(key, current_user, department_id)
 
     async def create(self, data: SettingCreate, current_user: dict):
         """Create a new setting."""
@@ -56,10 +62,11 @@ class SettingsController:
         self,
         key: str | None = None,
         pagination: PaginationParams | None = None,
+        department_id: int | None = None,
     ):
         """Retrieve setting history."""
 
-        return await self.service.get_history(key, pagination)
+        return await self.service.get_history(key, pagination, department_id)
 
 
 def get_settings_controller(
