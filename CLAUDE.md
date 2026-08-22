@@ -64,6 +64,25 @@ La **gestión de evidencias** es un ciclo entre director y docente: el director 
 
 Los tres formatos se **generan en PDF** con WeasyPrint + Jinja2: plantillas en `api/templates/improvement_plans/` (el Formato 3 va en horizontal), renderer puro en `api/utils/improvement_plan_pdf.py`, y el armado del contexto (agrupar items por aspecto, cruzar las notas de seguimiento) en `api/services/improvement_plan_document_service.py`. Flujo: `POST /{id}/documents/{formato}/generate` → descargar → firmar a mano → `POST .../signed`; subir el Formato 2 firmado pasa el acta a `FIRMADA`. WeasyPrint necesita librerías de sistema (Pango/HarfBuzz) — ya están en ambos Dockerfiles.
 
+### Configuraciones
+
+`settings` vive en **dos ámbitos**, separados por `department_id`: `NULL` es el valor
+institucional que mantiene un ADMIN, y un id de departamento es el valor que mantiene su
+director. Al resolver una clave, el valor del departamento gana y el institucional es el
+fallback — eso es `SettingsRepository.resolve(key, department_id)`; `get_by_key(key,
+department_id)` en cambio consulta un ámbito exacto. La unicidad de `key` es por ámbito:
+`uq_settings_key_department` cubre las filas de departamento y el índice parcial
+`uq_settings_key_global` las institucionales (Postgres trata los NULL como distintos, por
+eso hacen falta los dos). `settings_history` lleva el mismo `department_id` para que los
+historiales no se mezclen.
+
+Las reglas de permisos están en `SettingService`: un director queda fijado a su propio
+departamento en las lecturas, puede leer las configuraciones institucionales pero no
+modificarlas (crea una propia para sobreescribir el valor), y no ve las de otros
+departamentos. Un ADMIN opera sobre cualquier ámbito. Quien consume una configuración debe
+pasar el departamento en juego — así lo hacen `ImprovementPlanService.get_threshold(department_id)`
+y `_score_threshold(db, department_id)` del procesador de evaluaciones.
+
 ### Response envelope
 
 Toda respuesta JSON exitosa se envuelve en `{status, data, pagination, error, timestamp}`. Hay **dos mecanismos que conviven** (ver `docs/adr/002-envelope-router.md`):
