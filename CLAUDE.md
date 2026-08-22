@@ -79,9 +79,13 @@ historiales no se mezclen.
 Las reglas de permisos están en `SettingService`: un director queda fijado a su propio
 departamento en las lecturas, puede leer las configuraciones institucionales pero no
 modificarlas (crea una propia para sobreescribir el valor), y no ve las de otros
-departamentos. Un ADMIN opera sobre cualquier ámbito. Quien consume una configuración debe
-pasar el departamento en juego — así lo hacen `ImprovementPlanService.get_threshold(department_id)`
-y `_score_threshold(db, department_id)` del procesador de evaluaciones.
+departamentos. Un ADMIN opera sobre cualquier ámbito.
+
+No toda clave se usa por ámbito: `improvement_plan.score_threshold` es **institucional** —
+existe una sola fila, la global — y quien lo consume lo lee sin departamento
+(`ImprovementPlanService.get_threshold()` y `_score_threshold(db)` del procesador de
+evaluaciones). Una clave que sí admita sobreescritura por departamento debe leerse con
+`resolve(key, department_id)`.
 
 ### Response envelope
 
