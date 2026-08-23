@@ -29,7 +29,11 @@ from api.schemas.user import RoleName
 from api.services.audit_service import AuditService
 from api.services.notification_service import NotificationService
 from api.utils.email_sender import send_email
-from api.utils.plan_email import render_plan_created
+from api.utils.plan_email import (
+    close_result_label,
+    render_plan_closed,
+    render_plan_created,
+)
 from api.utils.plan_files import delete_plan_files
 from api.utils.plan_links import teacher_plan_path
 
@@ -410,6 +414,99 @@ class ImprovementPlanService:
                 contact.get("email"),
             )
 
+    async def _announce_closed_plan(self, plan: dict, data, current_user) -> None:
+        """Tell the teacher their plan has been settled.
+
+        The twin of ``_announce_new_plan``, and best-effort for the same reason:
+        the plan is already closed and audited by the time this runs, so a mail
+        server that is down must not turn a successful closing into a 500.
+        """
+
+        try:
+            contact = self.improvement_plans_repository.get_teacher_contact(
+                plan["teacher_id"]
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("No se pudo resolver el contacto del docente")
+            return
+
+        if not contact:
+            logger.info(
+                "El docente %s no tiene usuario; no se le avisa del cierre del plan %s",
+                plan["teacher_id"],
+                plan["id"],
+            )
+            return
+
+        result = data.result.value
+        reason = (data.reason or "").strip() or None
+
+        await self._notify_teacher_of_closing(plan, contact, result, current_user)
+        await self._email_teacher_of_closing(plan, contact, result, reason, current_user)
+
+    async def _notify_teacher_of_closing(
+        self, plan: dict, contact: dict, result: str, current_user
+    ) -> None:
+        """In-app notification, so the bell says it too."""
+
+        try:
+            await self.notification_service.create(
+                NotificationCreate(
+                    user_id=contact["user_id"],
+                    title="Plan de mejoramiento cerrado",
+                    message=(
+                        f"Se cerró el plan «{plan['title']}» con resultado "
+                        f"{close_result_label(result).lower()}."
+                    ),
+                    type=(
+                        NotificationType.SUCCESS
+                        if result == "CUMPLIDO"
+                        else NotificationType.INFO
+                    ),
+                    link=teacher_plan_path(plan["id"]),
+                ),
+                actor_id=(current_user or {}).get("id"),
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo notificar en la app el cierre del plan %s", plan["id"]
+            )
+
+    async def _email_teacher_of_closing(
+        self, plan: dict, contact: dict, result: str, reason: str | None, current_user
+    ) -> None:
+        """The institutional email, with the letterhead and the verdict."""
+
+        if not contact.get("email"):
+            logger.info("El docente %s no tiene correo", plan["teacher_id"])
+            return
+
+        try:
+            department = self.improvement_plans_repository.get_department_context(
+                plan.get("department_id")
+            )
+
+            message = render_plan_closed(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                teacher_name=contact["name"],
+                teacher_email=contact["email"],
+                director_name=(current_user or {}).get("name") or "",
+                department_name=department.get("department_name"),
+                result=result,
+                reason=reason,
+                period_code=plan.get("origin_period_code"),
+            )
+
+            # smtplib blocks, and this runs on the event loop.
+            await asyncio.to_thread(send_email, message)
+        except Exception:
+            logger.exception(
+                "No se pudo enviar el correo de cierre del plan %s a %s",
+                plan["id"],
+                contact.get("email"),
+            )
+
     async def delete(self, plan_id: int, current_user) -> bool:
         """Remove a plan for good — the director's own call.
 
@@ -641,5 +738,7 @@ class ImprovementPlanService:
             actor_id=(current_user or {}).get("id"),
             description=f"Cerró el plan de mejoramiento como {data.result.value}",
         )
+
+        await self._announce_closed_plan(updated or plan, data, current_user)
 
         return updated

@@ -6,6 +6,7 @@ import pytest
 
 from api.utils import plan_links
 from api.utils.plan_email import (
+    close_result_label,
     director_title,
     manager_plan_url,
     plan_url,
@@ -14,6 +15,7 @@ from api.utils.plan_email import (
     render_evidence_requested,
     render_evidence_reviewed,
     render_evidence_submitted,
+    render_plan_closed,
     render_plan_created,
 )
 
@@ -137,6 +139,142 @@ class TestPlanCreated:
 
         assert "del periodo" not in message.html
         assert "del periodo" not in message.text
+
+
+@pytest.fixture
+def closed():
+    """The mail a teacher gets when their plan is settled at the end."""
+
+    return render_plan_closed(
+        plan_id=42,
+        plan_title="Plan de mejoramiento 2026-1",
+        teacher_name="Ada Lovelace",
+        teacher_email="ada@ufps.edu.co",
+        director_name="Marco Antonio Adarme Jaimes",
+        department_name="Departamento de Sistemas e Informática",
+        result="CUMPLIDO",
+        reason="Alcanzó la meta en las cuatro dimensiones.",
+        period_code="2026-1",
+    )
+
+
+class TestPlanClosed:
+    """The message that settles a plan."""
+
+    def test_is_addressed_to_the_teacher(self, closed):
+        assert closed.to == "ada@ufps.edu.co"
+        assert "Ada Lovelace" in closed.html
+        assert "Ada Lovelace" in closed.text
+
+    def test_names_the_plan_and_says_it_is_a_closing(self, closed):
+        assert "Plan de mejoramiento 2026-1" in closed.subject
+        assert "Cierre" in closed.subject
+        assert "Plan de mejoramiento 2026-1" in closed.html
+
+    def test_states_the_verdict_where_it_cannot_be_missed(self, closed):
+        """Test the result is the point of the message, not a footnote."""
+
+        assert "Cumplido" in closed.html
+        assert "Cumplido" in closed.text
+
+    def test_carries_the_directors_observations_when_there_are_any(self, closed):
+        assert "Alcanzó la meta en las cuatro dimensiones." in closed.html
+        assert "Alcanzó la meta en las cuatro dimensiones." in closed.text
+
+    def test_says_nothing_extra_when_the_director_left_no_reason(self):
+        message = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="CUMPLIDO",
+        )
+
+        assert "Observaciones" not in message.html
+        assert "Observaciones" not in message.text
+
+    def test_a_plan_not_met_reads_differently_from_one_that_was(self):
+        """Test the two verdicts do not share one piece of boilerplate."""
+
+        met = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="CUMPLIDO",
+        )
+        unmet = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="NO_CUMPLIDO",
+        )
+
+        assert "No cumplido" in unmet.html
+        assert "Cumplido" in met.html
+        assert met.html != unmet.html
+
+    def test_carries_the_link_to_the_plan(self, closed):
+        assert "/mis-planes/42" in closed.html
+        assert "/mis-planes/42" in closed.text
+
+    def test_signs_off_as_the_director_who_closed_it(self, closed):
+        assert "Marco Antonio Adarme Jaimes" in closed.html
+        assert "Director Departamento de Sistemas e Informática" in closed.html
+
+    def test_ships_the_letterhead_like_every_other_message(self, closed):
+        (header,) = closed.inline_images
+
+        assert f"cid:{header.cid}" in closed.html
+        assert "data:image" not in closed.html
+
+    def test_always_carries_a_plain_text_twin(self, closed):
+        assert closed.text.strip()
+        assert "<" not in closed.text
+
+    def test_escapes_a_reason_that_looks_like_markup(self):
+        """Test the closing reason is data: the director types it into a form."""
+
+        message = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="NO_CUMPLIDO",
+            reason="Faltó <b> evidencia & seguimiento",
+        )
+
+        assert "<b>" not in message.html
+        assert "&lt;b&gt;" in message.html
+
+    def test_leaves_the_period_out_when_there_is_none(self, closed):
+        message = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="CUMPLIDO",
+        )
+
+        assert "del periodo" not in message.html
+        assert "2026-1" in closed.html
+
+    def test_an_unknown_verdict_still_reads_as_a_closing(self):
+        """Test a value the copy does not know about never leaks the raw enum."""
+
+        assert close_result_label("MANUAL") == "Cerrado administrativamente"
+        assert close_result_label("ALGO_NUEVO") == "Cerrado"
 
 
 @pytest.fixture

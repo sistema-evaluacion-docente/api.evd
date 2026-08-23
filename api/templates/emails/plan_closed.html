@@ -1,0 +1,57 @@
+{# Sent to a teacher when their department head settles the plan at the end of
+   the semester. The verdict is the whole point of the message, so it is stated
+   in its own block rather than buried in a paragraph. #}
+{% extends "_base.html" %}
+
+{% block content %}
+<p style="margin:0 0 16px 0;">Estimado(a) profesor(a) <strong>{{ teacher_name }}</strong>,</p>
+
+<p style="margin:0 0 16px 0;">
+  Le informamos que su plan de mejoramiento «<strong>{{ plan_title }}</strong>»
+  {% if period_code %}, originado en la evaluación docente del periodo <strong>{{ period_code }}</strong>,{% endif %}
+  ha sido cerrado por la dirección del departamento.
+</p>
+
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="margin:0 0 16px 0;">
+  <tr>
+    <td style="border-left:3px solid #d4d4d8; padding:2px 0 2px 14px;
+               font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px;
+               color:#3f3f46; text-align:left;">
+      <span style="display:block; font-size:11px; line-height:16px; color:#71717a;
+                   text-transform:uppercase; letter-spacing:0.4px;">Resultado del cierre</span>
+      <strong>{{ result_label }}</strong>
+    </td>
+  </tr>
+</table>
+
+{% if reason %}
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="margin:0 0 16px 0;">
+  <tr>
+    <td style="border-left:3px solid #d4d4d8; padding:2px 0 2px 14px;
+               font-family:Arial,Helvetica,sans-serif; font-size:14px; line-height:22px;
+               color:#3f3f46; text-align:left;">
+      <span style="display:block; font-size:11px; line-height:16px; color:#71717a;
+                   text-transform:uppercase; letter-spacing:0.4px;">Observaciones</span>
+      {{ reason }}
+    </td>
+  </tr>
+</table>
+{% endif %}
+
+<p style="margin:0 0 16px 0;">{{ closing_note }}</p>
+
+<p style="margin:0 0 16px 0;">
+  Puede consultar el plan cerrado, con sus compromisos y seguimientos, en el Sistema de
+  Evaluación Docente:
+</p>
+
+<p style="margin:0 0 16px 0; text-align:left;">
+  <a href="{{ plan_url }}" style="color:#3f5a8a; word-break:break-all;">{{ plan_url }}</a>
+</p>
+
+<p style="margin:0 0 16px 0;">
+  Cualquier inquietud puede dirigirla a la dirección del departamento.
+</p>
+{% endblock %}

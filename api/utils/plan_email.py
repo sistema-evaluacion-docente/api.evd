@@ -166,6 +166,130 @@ Teléfono (057)(7) 5776655
 """
 
 
+# How each verdict reads to the teacher, and what the message says after it.
+# The enum carries three values (the two the director picks plus the manual
+# close an admin can force), and a plan settled either way still deserves a
+# sentence that does not read as boilerplate.
+_CLOSE_RESULT_LABEL = {
+    "CUMPLIDO": "Cumplido",
+    "NO_CUMPLIDO": "No cumplido"
+}
+
+_CLOSE_RESULT_NOTE = {
+    "CUMPLIDO": (
+        "Agradecemos su compromiso con el proceso. El cumplimiento se verificará con "
+        "los resultados de la evaluación docente del siguiente periodo."
+    ),
+    "NO_CUMPLIDO": (
+        "Quedaron compromisos sin alcanzar. La dirección del departamento le indicará "
+        "los pasos a seguir."
+    )
+}
+
+
+def close_result_label(result: str) -> str:
+    """How a close verdict is written out for a person to read."""
+
+    return _CLOSE_RESULT_LABEL.get(result, "Cerrado")
+
+
+def render_plan_closed(
+    *,
+    plan_id: int,
+    plan_title: str,
+    teacher_name: str,
+    teacher_email: str,
+    director_name: str,
+    department_name: str | None,
+    result: str,
+    reason: str | None = None,
+    period_code: str | None = None,
+) -> OutgoingEmail:
+    """The message a teacher gets when their plan is settled and closed."""
+
+    url = plan_url(plan_id)
+    label = close_result_label(result)
+    note = _CLOSE_RESULT_NOTE.get(result, _CLOSE_RESULT_NOTE["MANUAL"])
+    subject = f"Cierre de su plan de mejoramiento: {plan_title}"
+
+    html = _environment().get_template("plan_closed.html").render(
+        subject=subject,
+        header_cid=HEADER_CID,
+        teacher_name=teacher_name,
+        plan_title=plan_title,
+        period_code=period_code,
+        result_label=label,
+        reason=reason,
+        closing_note=note,
+        plan_url=url,
+        signer_name=director_name,
+        signer_title=director_title(department_name),
+    )
+
+    return OutgoingEmail(
+        to=teacher_email,
+        subject=subject,
+        html=html,
+        text=_plan_closed_text(
+            teacher_name=teacher_name,
+            plan_title=plan_title,
+            period_code=period_code,
+            result_label=label,
+            reason=reason,
+            closing_note=note,
+            url=url,
+            director_name=director_name,
+            director_title=director_title(department_name),
+        ),
+        inline_images=(_header_image(),),
+    )
+
+
+def _plan_closed_text(
+    *,
+    teacher_name: str,
+    plan_title: str,
+    period_code: str | None,
+    result_label: str,
+    reason: str | None,
+    closing_note: str,
+    url: str,
+    director_name: str,
+    director_title: str,
+) -> str:
+    """Plain-text twin of the message, for clients that refuse HTML."""
+
+    period = f", originado en la evaluación docente del periodo {period_code}," if period_code else ""
+    observations = f"\nObservaciones: {reason}\n" if reason else ""
+
+    return f"""Estimado(a) profesor(a) {teacher_name},
+
+Le informamos que su plan de mejoramiento «{plan_title}»{period} ha sido cerrado
+por la dirección del departamento.
+
+Resultado del cierre: {result_label}
+{observations}
+{closing_note}
+
+Puede consultar el plan cerrado, con sus compromisos y seguimientos, en el
+Sistema de Evaluación Docente:
+
+{url}
+
+Cualquier inquietud puede dirigirla a la dirección del departamento.
+
+Cordialmente,
+
+{director_name}
+{director_title}
+Cúcuta,CO
+
+--
+Avenida Gran Colombia No. 12E-96 Barrio Colsag, San José de Cúcuta - Colombia.
+Teléfono (057)(7) 5776655
+"""
+
+
 # --------------------------------------------------------------------------- #
 # The evidence loop                                                            #
 # --------------------------------------------------------------------------- #
