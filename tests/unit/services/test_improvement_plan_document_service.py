@@ -22,6 +22,7 @@ DIRECTOR = {"id": 2, "roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 10}
 def _plan(**overrides) -> dict:
     plan = {
         "id": 7,
+        "title": "Plan de mejoramiento 2025-1",
         "teacher_id": 55,
         "department_id": 10,
         "teacher_name": "Docente de Prueba",
@@ -54,6 +55,26 @@ def _plan(**overrides) -> dict:
     return plan
 
 
+TEACHER_CONTACT = {"user_id": 4, "name": "Ada Lovelace", "email": "ada@ufps.edu.co"}
+
+
+@pytest.fixture
+def mock_notification_service():
+    service = MagicMock()
+    service.create = AsyncMock()
+    return service
+
+
+@pytest.fixture
+def sent_email():
+    """Every message the service hands to the transport, without sending any."""
+
+    with patch(
+        "api.services.improvement_plan_document_service.send_email"
+    ) as send:
+        yield send
+
+
 @pytest.fixture
 def mock_documents_repository():
     repo = MagicMock()
@@ -77,6 +98,12 @@ def mock_plans_repository():
         }
     )
     repo.set_acta_status = AsyncMock()
+    repo.get_teacher_contact = MagicMock(
+        return_value=dict(TEACHER_CONTACT)
+    )
+    repo.get_department_context = MagicMock(
+        return_value={"department_name": "Sistemas"}
+    )
     return repo
 
 
@@ -101,12 +128,14 @@ def service(
     mock_plans_repository,
     mock_plan_service,
     mock_audit_service,
+    mock_notification_service,
 ):
     return ImprovementPlanDocumentService(
         mock_documents_repository,
         mock_plans_repository,
         mock_plan_service,
         mock_audit_service,
+        mock_notification_service,
     )
 
 
@@ -402,3 +431,76 @@ class TestRefreshFollowupFormat:
 
         mock_documents_repository.clear_signed.assert_called_once_with(7, "FORMATO_3")
         delete.assert_any_call("/uploads/firmado.pdf")
+
+
+class TestTellingTheTeacherItIsSigned:
+    """The signed scan is what the agreement actually is, so it is announced.
+
+    Before this the document simply turned up on the teacher's page one day: the
+    bell said nothing, and nothing on their side gave them a reason to look.
+    """
+
+    async def _sign(self, service, slug="formato-2", actor=ADMIN):
+        with patch(
+            "api.services.improvement_plan_document_service.save_plan_document",
+            return_value="/uploads/firmado.pdf",
+        ):
+            await service.upload_signed(7, slug, b"%PDF", actor)
+
+    async def test_the_bell_says_which_form_was_signed(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._sign(service)
+
+        notification = mock_notification_service.create.call_args[0][0]
+        assert notification.user_id == TEACHER_CONTACT["user_id"]
+        assert notification.title == "Formato 2 firmado"
+        # The teacher's own route; /planes/{id} is the director's screen.
+        assert notification.link == "/mis-planes/7"
+
+    async def test_the_same_goes_out_by_email(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._sign(service)
+
+        message = sent_email.call_args[0][0]
+        assert message.to == TEACHER_CONTACT["email"]
+        assert "Formato 2" in message.subject
+        assert "/mis-planes/7" in message.text
+
+    async def test_the_seguimiento_is_announced_too(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._sign(service, slug="formato-3")
+
+        assert mock_notification_service.create.call_args[0][0].title == "Formato 3 firmado"
+
+    async def test_the_caso_reportado_is_not(
+        self, service, mock_notification_service, sent_email
+    ):
+        # Formato 1 is what the academic programme sent the department head:
+        # internal to them, and not the teacher's to be told about.
+        await self._sign(service, slug="formato-1")
+
+        mock_notification_service.create.assert_not_awaited()
+        sent_email.assert_not_called()
+
+    async def test_a_teacher_with_no_account_is_simply_skipped(
+        self, service, mock_plans_repository, mock_notification_service, sent_email
+    ):
+        mock_plans_repository.get_teacher_contact.return_value = None
+
+        await self._sign(service)
+
+        mock_notification_service.create.assert_not_awaited()
+        sent_email.assert_not_called()
+
+    async def test_a_mail_server_that_is_down_does_not_undo_the_upload(
+        self, service, mock_documents_repository, sent_email
+    ):
+        sent_email.side_effect = OSError("connection refused")
+
+        await self._sign(service)
+
+        # The scan is already stored and audited by the time the notice goes.
+        mock_documents_repository.set_signed.assert_called_once()

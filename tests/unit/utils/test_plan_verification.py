@@ -8,7 +8,9 @@ Covers:
   - the verdict against the agreed target, and the per-subject breakdown that
     catches the same shortcoming moving to another course
   - the comment rule: ALTO raises the alert, MEDIO is context only
-  - what the director is told, and that they are told once
+  - what the director is told, that they are told once, and that it is the
+    director currently running the department
+  - the two entry points the evaluation processor hangs all of this off
 """
 
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -30,14 +32,17 @@ from api.utils.plan_verification import (
     COMMENTS_ALERT_TITLE,
     COURSE_ALERT_TITLE,
     SCORES_ALERT_TITLE,
+    _director_user_id,
     _indicator_label,
     _indicator_value,
     _notify_comments,
     _notify_scores,
     _previous_period_code,
     plans_to_verify,
+    verify_comments_for_evaluation,
     verify_plan_comments,
     verify_plan_scores,
+    verify_scores_for_evaluation,
 )
 
 MODULE = "api.utils.plan_verification"
@@ -73,6 +78,22 @@ class _FakeQuery:
 
     def all(self):
         return self._all_result
+
+
+class _RecordingQuery(_FakeQuery):
+    """`_FakeQuery` that keeps what it was filtered by, so a test can read it.
+
+    The base fake drops its filters on the floor, which is fine while the thing
+    under test is the result — but useless when the filter *is* the behaviour.
+    """
+
+    def __init__(self, first_result=None, all_result=None):
+        super().__init__(first_result, all_result)
+        self.filters: list = []
+
+    def filter(self, *criteria, **_k):
+        self.filters.extend(criteria)
+        return self
 
 
 def _make_db(queries: dict):
@@ -523,3 +544,214 @@ class TestNotifications:
         director = MagicMock(spec=DirectorsModel)
         director.user_id = 55
         return director
+
+
+class TestDirectorLookup:
+    """Who the alert is addressed to."""
+
+    def _db(self, directors):
+        return _make_db({DirectorsModel: _FakeQuery(first_result=directors)})
+
+    def _director(self, user_id):
+        director = MagicMock(spec=DirectorsModel)
+        director.user_id = user_id
+        return director
+
+    def test_reads_the_department_the_plan_carries(self):
+        plan = _plan([])
+        plan.department_id = 4
+
+        assert _director_user_id(self._db(self._director(55)), plan, 9) == 55
+
+    def test_falls_back_to_the_department_of_the_evaluation(self):
+        # `improvement_plans.department_id` is nullable, and a plan drawn up
+        # before the column existed has none.
+        plan = _plan([])
+        plan.department_id = None
+
+        assert _director_user_id(self._db(self._director(55)), plan, 9) == 55
+
+    def test_with_no_department_at_all_there_is_nobody_to_tell(self):
+        plan = _plan([])
+        plan.department_id = None
+
+        assert _director_user_id(self._db(self._director(55)), plan, None) is None
+
+    def test_a_department_without_an_active_director_is_left_alone(self):
+        plan = _plan([])
+        plan.department_id = 4
+
+        assert _director_user_id(self._db(None), plan, 9) is None
+
+    def test_asks_for_the_director_currently_running_the_department(self):
+        # A department keeps the rows of whoever ran it before, so filtering by
+        # department alone hands back whichever one the database returns first —
+        # often a former director, while the current one hears nothing. The
+        # fake query ignores its filters, so the criteria are read back instead.
+        plan = _plan([])
+        plan.department_id = 4
+        query = _RecordingQuery()
+
+        _director_user_id(_make_db({DirectorsModel: query}), plan, 9)
+
+        criteria = [str(criterion) for criterion in query.filters]
+        assert any("department_id" in criterion for criterion in criteria)
+        assert any("active" in criterion for criterion in criteria)
+
+
+def _evaluation(evaluation_id=12, period_id=3, period_code="2025-2", department_id=1):
+    evaluation = MagicMock()
+    evaluation.id = evaluation_id
+    evaluation.academic_period_id = period_id
+    evaluation.department_id = department_id
+
+    if period_code is None:
+        evaluation.academic_period = None
+    else:
+        period = MagicMock(spec=AcademicPeriodModel)
+        period.code = period_code
+        evaluation.academic_period = period
+
+    return evaluation
+
+
+class TestVerifyScoresForEvaluation:
+    """The hook the evaluation processor calls once the grades have landed.
+
+    Hangs off the processing and not off the AI analysis, which is triggered by
+    hand: a director who never runs the analysis must still get the numbers
+    verified.
+    """
+
+    def _run(self, evaluation, *, plans, verification=None, threshold=3.5):
+        db = MagicMock()
+
+        with (
+            patch(f"{MODULE}.evaluated_teacher_ids", return_value=[3]) as teachers,
+            patch(f"{MODULE}.plans_to_verify", return_value=plans) as to_verify,
+            patch(f"{MODULE}.score_threshold", return_value=threshold),
+            patch(
+                f"{MODULE}.verify_plan_scores", return_value=verification
+            ) as verify,
+            patch(f"{MODULE}._notify_scores") as notify,
+        ):
+            verify_scores_for_evaluation(db, evaluation)
+
+        return db, teachers, to_verify, verify, notify
+
+    def test_verifies_and_reports_every_plan_this_evaluation_settles(self):
+        plans = [_plan([], plan_id=7), _plan([], plan_id=8)]
+        _, _, _, verify, notify = self._run(
+            _evaluation(), plans=plans, verification=_verification()
+        )
+
+        assert verify.call_count == 2
+        assert notify.call_count == 2
+        # The period code the alert says it happened in comes off the evaluation.
+        assert notify.call_args[0][3] == "2025-2"
+        assert notify.call_args[0][4] == 1
+
+    def test_narrows_to_the_teachers_this_evaluation_brought_grades_for(self):
+        _, teachers, to_verify, _, _ = self._run(
+            _evaluation(), plans=[_plan([])], verification=_verification()
+        )
+
+        teachers.assert_called_once()
+        assert to_verify.call_args[0][1:] == (3, [3])
+
+    def test_a_plan_with_nothing_to_compare_is_not_reported(self):
+        _, _, _, _, notify = self._run(
+            _evaluation(), plans=[_plan([])], verification=None
+        )
+
+        notify.assert_not_called()
+
+    def test_an_evaluation_without_a_period_settles_nothing(self):
+        evaluation = _evaluation()
+        evaluation.academic_period_id = None
+
+        _, _, to_verify, _, notify = self._run(evaluation, plans=[_plan([])])
+
+        to_verify.assert_not_called()
+        notify.assert_not_called()
+
+    def test_says_nothing_about_where_when_the_period_has_no_code(self):
+        _, _, _, _, notify = self._run(
+            _evaluation(period_code=None),
+            plans=[_plan([])],
+            verification=_verification(),
+        )
+
+        assert notify.call_args[0][3] is None
+
+    def test_a_failure_here_never_undoes_an_upload_that_worked(self):
+        # Best-effort by design: the grades are already stored by the time this
+        # runs, and a verification that blows up must not fail the upload.
+        db = MagicMock()
+
+        with (
+            patch(f"{MODULE}.evaluated_teacher_ids", return_value=[3]),
+            patch(f"{MODULE}.plans_to_verify", side_effect=RuntimeError("boom")),
+            patch(f"{MODULE}.logger") as logger,
+        ):
+            verify_scores_for_evaluation(db, _evaluation())
+
+        logger.warning.assert_called_once()
+
+
+class TestVerifyCommentsForEvaluation:
+    """The hook that looks for the complaint behind a commitment coming back.
+
+    Only once the analysis has run: a comment carries no risk level nor
+    pedagogical category until the AI has classified it.
+    """
+
+    def _run(self, evaluation, *, plans, verification=None):
+        db = MagicMock()
+
+        with (
+            patch(f"{MODULE}.evaluated_teacher_ids", return_value=[3]),
+            patch(f"{MODULE}.plans_to_verify", return_value=plans),
+            patch(
+                f"{MODULE}.verify_plan_comments", return_value=verification
+            ) as verify,
+            patch(f"{MODULE}._notify_comments") as notify,
+        ):
+            verify_comments_for_evaluation(db, evaluation)
+
+        return verify, notify
+
+    def test_reports_the_reincidencia_of_every_plan_of_the_period(self):
+        plans = [_plan([], plan_id=7), _plan([], plan_id=8)]
+        verify, notify = self._run(
+            _evaluation(), plans=plans, verification=_verification()
+        )
+
+        assert verify.call_count == 2
+        assert notify.call_count == 2
+
+    def test_a_plan_whose_complaints_did_not_come_back_is_not_reported(self):
+        _, notify = self._run(_evaluation(), plans=[_plan([])], verification=None)
+
+        notify.assert_not_called()
+
+    def test_an_evaluation_without_a_period_settles_nothing(self):
+        evaluation = _evaluation()
+        evaluation.academic_period_id = None
+
+        verify, notify = self._run(evaluation, plans=[_plan([])])
+
+        verify.assert_not_called()
+        notify.assert_not_called()
+
+    def test_a_failure_here_never_undoes_an_analysis_that_worked(self):
+        db = MagicMock()
+
+        with (
+            patch(f"{MODULE}.evaluated_teacher_ids", return_value=[3]),
+            patch(f"{MODULE}.plans_to_verify", side_effect=RuntimeError("boom")),
+            patch(f"{MODULE}.logger") as logger,
+        ):
+            verify_comments_for_evaluation(db, _evaluation())
+
+        logger.warning.assert_called_once()

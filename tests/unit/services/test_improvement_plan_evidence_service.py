@@ -31,6 +31,7 @@ DIRECTOR_USER_ID = DIRECTOR["id"]
 def _plan(**overrides) -> dict:
     plan = {
         "id": 7,
+        "title": "Plan de mejoramiento 2025-1",
         "teacher_id": 55,
         "department_id": 10,
         "status": "EN_SEGUIMIENTO",
@@ -60,12 +61,46 @@ def mock_evidences_repository():
     return repo
 
 
+TEACHER_CONTACT = {
+    "user_id": TEACHER_USER_ID,
+    "name": "Ada Lovelace",
+    "email": "ada@ufps.edu.co",
+}
+DIRECTOR_CONTACT = {
+    "user_id": DIRECTOR_USER_ID,
+    "name": "Orlando Beltrán",
+    "email": "orlando@ufps.edu.co",
+}
+
+
 @pytest.fixture
 def mock_plans_repository():
     repo = MagicMock()
     repo.get_teacher_user_id = MagicMock(return_value=TEACHER_USER_ID)
     repo.get_department_director_user_id = MagicMock(return_value=DIRECTOR_USER_ID)
+    repo.get_teacher_contact = MagicMock(return_value=dict(TEACHER_CONTACT))
+    repo.get_department_director_contact = MagicMock(
+        return_value=dict(DIRECTOR_CONTACT)
+    )
+    repo.get_department_context = MagicMock(
+        return_value={"department_name": "Departamento de Sistemas"}
+    )
     return repo
+
+
+@pytest.fixture
+def sent_email():
+    """Every message the loop hands to the transport, without sending any.
+
+    Patched at the service, not at `email_sender`, because the service dispatches
+    it through `asyncio.to_thread` — the calls have to be recorded on the object
+    the service actually holds.
+    """
+
+    with patch(
+        "api.services.improvement_plan_evidence_service.send_email"
+    ) as send:
+        yield send
 
 
 @pytest.fixture
@@ -319,3 +354,123 @@ class TestNotificationLinks:
         notification = mock_notification_service.create.call_args[0][0]
 
         assert notification.link == "/mis-planes/7"
+
+
+class TestEmail:
+    """The inbox half of the loop.
+
+    The bell only reaches someone already on the site, and both sides of this
+    loop are waiting on the other: a deliverable has a deadline, and a review is
+    what unblocks the teacher's next attempt.
+    """
+
+    async def test_a_requested_deliverable_reaches_the_teacher(
+        self, service, sent_email
+    ):
+        payload = ImprovementPlanEvidenceRequestCreate(
+            title="Listas de asistencia", description="Semanas 1 a 8"
+        )
+
+        await service.create_request(7, payload, DIRECTOR)
+
+        sent_email.assert_called_once()
+        message = sent_email.call_args[0][0]
+        assert message.to == TEACHER_CONTACT["email"]
+        assert "Listas de asistencia" in message.text
+        # The teacher's own screen, same as the notification's link.
+        assert "/mis-planes/7" in message.text
+
+    async def test_a_submission_reaches_the_director(self, service, sent_email):
+        await service.add_evidence(7, "/uploads/e.pdf", TEACHER, request_id=9)
+
+        message = sent_email.call_args[0][0]
+        assert message.to == DIRECTOR_CONTACT["email"]
+        # The screen a plan is managed from, which is where the review happens.
+        assert "/planes/7" in message.text
+
+    async def test_a_review_tells_the_teacher_how_it_went(self, service, sent_email):
+        await service.review_evidence(
+            7,
+            5,
+            ImprovementPlanEvidenceReview(
+                status=EvidenceStatus.RECHAZADA, comment="Falta la firma"
+            ),
+            DIRECTOR,
+        )
+
+        message = sent_email.call_args[0][0]
+        assert message.to == TEACHER_CONTACT["email"]
+        assert "rechazada" in message.subject.lower()
+        assert "Falta la firma" in message.text
+
+    async def test_an_approval_says_so_instead(self, service, sent_email):
+        await service.review_evidence(
+            7, 5, ImprovementPlanEvidenceReview(status=EvidenceStatus.APROBADA), DIRECTOR
+        )
+
+        assert "aprobada" in sent_email.call_args[0][0].subject.lower()
+
+    async def test_each_comment_reaches_the_other_side(self, service, sent_email):
+        comment = ImprovementPlanEvidenceCommentCreate(body="¿Sirve así?")
+
+        await service.add_comment(7, 9, comment, TEACHER)
+        assert sent_email.call_args[0][0].to == DIRECTOR_CONTACT["email"]
+
+        await service.add_comment(7, 9, comment, DIRECTOR)
+        assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
+
+    async def test_nobody_is_written_to_about_their_own_doing(
+        self, service, sent_email, mock_plans_repository
+    ):
+        # The director requesting a deliverable *is* the plan's teacher — an
+        # account holding both roles. Same rule the notifications already apply.
+        mock_plans_repository.get_teacher_contact.return_value = {
+            **TEACHER_CONTACT,
+            "user_id": DIRECTOR["id"],
+        }
+
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        sent_email.assert_not_called()
+
+    async def test_a_teacher_with_no_account_is_simply_skipped(
+        self, service, sent_email, mock_plans_repository
+    ):
+        # Teachers imported from an evaluation and never signed in have no user
+        # behind them, so there is nowhere to write to.
+        mock_plans_repository.get_teacher_contact.return_value = None
+
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        sent_email.assert_not_called()
+
+    async def test_a_contact_with_no_address_is_skipped_too(
+        self, service, sent_email, mock_plans_repository
+    ):
+        mock_plans_repository.get_teacher_contact.return_value = {
+            **TEACHER_CONTACT,
+            "email": None,
+        }
+
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        sent_email.assert_not_called()
+
+    async def test_a_mail_server_that_is_down_does_not_undo_the_request(
+        self, service, sent_email, mock_evidences_repository
+    ):
+        sent_email.side_effect = OSError("connection refused")
+
+        request = await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        # The evidence is already stored and audited by the time the mail goes.
+        assert request == {"id": 9, "title": "Listas"}
+        mock_evidences_repository.create_request.assert_awaited_once()
