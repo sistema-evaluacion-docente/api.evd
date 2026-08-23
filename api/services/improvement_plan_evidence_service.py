@@ -6,6 +6,9 @@ evidence, the teacher submits it, both sides can comment, and the director
 approves it or sends it back for a new submission.
 """
 
+import asyncio
+import logging
+
 from api.exceptions import ResourceNotFoundError, ValidationError
 from api.repositories.improvement_plan_evidences import (
     ImprovementPlanEvidencesRepository,
@@ -22,8 +25,18 @@ from api.schemas.notification import NotificationCreate, NotificationType
 from api.services.audit_service import AuditService
 from api.services.improvement_plan_service import ImprovementPlanService
 from api.services.notification_service import NotificationService
+from api.utils.email_sender import send_email
+from api.utils.plan_email import (
+    render_evidence_comment_for_director,
+    render_evidence_comment_for_teacher,
+    render_evidence_requested,
+    render_evidence_reviewed,
+    render_evidence_submitted,
+)
 from api.utils.plan_files import delete_plan_file
 from api.utils.plan_links import manager_plan_path, teacher_plan_path
+
+logger = logging.getLogger(__name__)
 
 ENTITY = "improvement_plan_evidences"
 REQUEST_ENTITY = "improvement_plan_evidence_requests"
@@ -141,6 +154,55 @@ class ImprovementPlanEvidenceService:
         )
 
     # ------------------------------------------------------------------ #
+    # Email
+    # ------------------------------------------------------------------ #
+    # The bell only says something happened while the person is on the site. A
+    # deliverable has a deadline and a review blocks the teacher's next step, so
+    # both sides also hear about it where they actually read: their inbox.
+    #
+    # Best-effort throughout, like the notifications above and like
+    # `ImprovementPlanService._email_teacher`: the evidence is already stored
+    # and audited by the time any of this runs, so a mail server that is down
+    # must not turn a successful request into a 500.
+    async def _send(self, build, *, recipient: dict | None, actor_id) -> None:
+        """Renders and sends one message, unless there is nobody to send it to."""
+
+        if not recipient or not recipient.get("email"):
+            return
+
+        # Same rule as `_notify`: nobody is written to about their own doing.
+        if recipient.get("user_id") == actor_id:
+            return
+
+        try:
+            # smtplib blocks, and this runs on the event loop.
+            await asyncio.to_thread(send_email, build(recipient))
+        except Exception:
+            logger.exception("No se pudo enviar el correo a %s", recipient.get("email"))
+
+    def _teacher_contact(self, plan: dict) -> dict | None:
+        return self.improvement_plans_repository.get_teacher_contact(plan["teacher_id"])
+
+    def _director_contact(self, plan: dict) -> dict | None:
+        return self.improvement_plans_repository.get_department_director_contact(
+            plan.get("department_id")
+        )
+
+    def _department_name(self, plan: dict) -> str | None:
+        department_id = plan.get("department_id")
+
+        if department_id is None:
+            return None
+
+        return self.improvement_plans_repository.get_department_context(
+            department_id
+        ).get("department_name")
+
+    @staticmethod
+    def _actor_name(current_user) -> str:
+        return (current_user or {}).get("name") or ""
+
+    # ------------------------------------------------------------------ #
     # Requests
     # ------------------------------------------------------------------ #
     async def list_requests(self, plan_id: int, current_user) -> list[dict]:
@@ -185,12 +247,29 @@ class ImprovementPlanEvidenceService:
             description=f"Solicitó la evidencia '{data.title}' en el plan {plan_id}",
         )
 
+        actor_id = (current_user or {}).get("id")
+
         await self._notify_teacher(
             plan,
             "Nueva evidencia solicitada",
             f"El director solicitó: {data.title}",
-            (current_user or {}).get("id"),
+            actor_id,
             NotificationType.WARNING,
+        )
+        await self._send(
+            lambda teacher: render_evidence_requested(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                request_title=data.title,
+                request_description=data.description,
+                due_date=data.due_date,
+                teacher_name=teacher["name"],
+                teacher_email=teacher["email"],
+                director_name=self._actor_name(current_user),
+                department_name=self._department_name(plan),
+            ),
+            recipient=self._teacher_contact(plan),
+            actor_id=actor_id,
         )
 
         return request
@@ -255,12 +334,37 @@ class ImprovementPlanEvidenceService:
                 data.body[:120],
                 actor_id,
             )
+            await self._send(
+                lambda director: render_evidence_comment_for_director(
+                    plan_id=plan["id"],
+                    plan_title=plan["title"],
+                    comment=data.body,
+                    teacher_name=self._actor_name(current_user),
+                    director_name=director["name"],
+                    director_email=director["email"],
+                ),
+                recipient=self._director_contact(plan),
+                actor_id=actor_id,
+            )
         else:
             await self._notify_teacher(
                 plan,
                 "Comentario del director",
                 data.body[:120],
                 actor_id,
+            )
+            await self._send(
+                lambda teacher: render_evidence_comment_for_teacher(
+                    plan_id=plan["id"],
+                    plan_title=plan["title"],
+                    comment=data.body,
+                    teacher_name=teacher["name"],
+                    teacher_email=teacher["email"],
+                    director_name=self._actor_name(current_user),
+                    department_name=self._department_name(plan),
+                ),
+                recipient=self._teacher_contact(plan),
+                actor_id=actor_id,
             )
 
         return comment
@@ -321,6 +425,17 @@ class ImprovementPlanEvidenceService:
                 "Nueva evidencia enviada",
                 "El docente adjuntó una evidencia pendiente de revisión.",
                 actor_id,
+            )
+            await self._send(
+                lambda director: render_evidence_submitted(
+                    plan_id=plan["id"],
+                    plan_title=plan["title"],
+                    teacher_name=self._actor_name(current_user),
+                    director_name=director["name"],
+                    director_email=director["email"],
+                ),
+                recipient=self._director_contact(plan),
+                actor_id=actor_id,
             )
 
         return evidence
@@ -388,6 +503,20 @@ class ImprovementPlanEvidenceService:
             ),
             actor_id,
             NotificationType.SUCCESS if approved else NotificationType.WARNING,
+        )
+        await self._send(
+            lambda teacher: render_evidence_reviewed(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                approved=approved,
+                comment=data.comment,
+                teacher_name=teacher["name"],
+                teacher_email=teacher["email"],
+                director_name=self._actor_name(current_user),
+                department_name=self._department_name(plan),
+            ),
+            recipient=self._teacher_contact(plan),
+            actor_id=actor_id,
         )
 
         return reviewed

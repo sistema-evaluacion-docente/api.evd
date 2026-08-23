@@ -230,6 +230,37 @@ class ImprovementPlansRepository:
 
         return {"user_id": row.user_id, "name": row.name, "email": row.email}
 
+    def get_department_director_contact(self, department_id: int | None) -> dict | None:
+        """Who to write to when something on a plan needs the director.
+
+        The twin of ``get_teacher_contact`` for the other side of the loop:
+        ``get_department_director_user_id`` above answers the bell, which only
+        needs an id, but an email needs a name and an address as well.
+        """
+
+        if department_id is None:
+            return None
+
+        row = (
+            self.db.query(
+                UserModel.id.label("user_id"),
+                UserModel.name,
+                UserModel.email,
+            )
+            .select_from(DirectorsModel)
+            .join(UserModel, UserModel.id == DirectorsModel.user_id)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active.is_(True),
+            )
+            .first()
+        )
+
+        if not row:
+            return None
+
+        return {"user_id": row.user_id, "name": row.name, "email": row.email}
+
     def get_teacher_department_id(self, teacher_id: int) -> int | None:
         """Department a teacher belongs to."""
 

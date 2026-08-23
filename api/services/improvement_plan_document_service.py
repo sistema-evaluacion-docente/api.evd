@@ -3,20 +3,30 @@ Improvement plan document service — renders the three official UFPS forms and
 tracks their generated / physically-signed copies.
 """
 
+import asyncio
+import logging
+
 from api.exceptions import ResourceNotFoundError, ValidationError
 from api.repositories.improvement_plan_documents import (
     ImprovementPlanDocumentsRepository,
 )
 from api.repositories.improvement_plans import ImprovementPlansRepository
+from api.schemas.notification import NotificationCreate, NotificationType
 from api.services.audit_service import AuditService
 from api.services.improvement_plan_service import ImprovementPlanService
+from api.services.notification_service import NotificationService
 from api.utils.dimensions import ASPECTS, STUDENT_COMMENTS_ASPECT
+from api.utils.email_sender import send_email
+from api.utils.plan_email import render_document_signed
+from api.utils.plan_links import teacher_plan_path
 from api.utils.improvement_plan_pdf import (
     FORMAT_TEMPLATES,
     render_formato,
     render_formato_word,
 )
 from api.utils.plan_files import delete_plan_file, save_plan_document
+
+logger = logging.getLogger(__name__)
 
 ENTITY = "improvement_plan_documents"
 
@@ -28,6 +38,17 @@ FORMAT_SLUGS = {
 }
 
 ACTA_FORMAT = "FORMATO_2"
+
+# How each form is named to the teacher: the number it is called by, and what
+# it is. Kept apart because they read in different places — "Formato 2 firmado"
+# as a heading, "el Formato 2 (Ficha de acuerdo)" inside a sentence.
+#
+# Formato 1 is missing on purpose: the case the academic programme reported is
+# internal to the department, and the teacher is not told about it.
+SIGNED_FORMAT_NAMES = {
+    "FORMATO_2": ("Formato 2", "Ficha de acuerdo"),
+    "FORMATO_3": ("Formato 3", "Plan de seguimiento"),
+}
 
 # The follow-up matrix printed by Formato 3 is the seguimientos section itself,
 # so the form is re-rendered every time one of them is recorded.
@@ -56,11 +77,13 @@ class ImprovementPlanDocumentService:
         improvement_plans_repository: ImprovementPlansRepository,
         plan_service: ImprovementPlanService,
         audit_service: AuditService,
+        notification_service: NotificationService,
     ):
         self.documents_repository = documents_repository
         self.improvement_plans_repository = improvement_plans_repository
         self.plan_service = plan_service
         self.audit_service = audit_service
+        self.notification_service = notification_service
 
     # ------------------------------------------------------------------ #
     # Rendering context
@@ -233,7 +256,87 @@ class ImprovementPlanDocumentService:
             ),
         )
 
+        await self._announce_signed(plan, format_type, current_user)
+
         return await self.plan_service.get_by_id(plan_id, current_user)
+
+    async def _announce_signed(self, plan: dict, format_type: str, current_user) -> None:
+        """Tell the teacher there is a signed copy of their plan to read.
+
+        Without this the document simply turns up on the page one day: the
+        teacher has no reason to go looking, and the signed form is what the
+        agreement actually *is*. Best-effort, like every other notice in the
+        module — the scan is already stored and audited by the time this runs.
+        """
+
+        naming = SIGNED_FORMAT_NAMES.get(format_type)
+
+        if not naming:
+            return
+
+        format_name, format_label = naming
+
+        try:
+            contact = self.improvement_plans_repository.get_teacher_contact(
+                plan["teacher_id"]
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("No se pudo resolver el contacto del docente")
+            return
+
+        if not contact:
+            return
+
+        actor_id = (current_user or {}).get("id")
+
+        if contact.get("user_id") == actor_id:
+            return
+
+        try:
+            await self.notification_service.create(
+                NotificationCreate(
+                    user_id=contact["user_id"],
+                    title=f"{format_name} firmado",
+                    message=(
+                        f"Ya puedes ver y descargar el {format_name} "
+                        f"({format_label}) firmado de tu plan «{plan['title']}»."
+                    ),
+                    type=NotificationType.SUCCESS,
+                    link=teacher_plan_path(plan["id"]),
+                ),
+                actor_id=actor_id,
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo notificar el formato firmado del plan %s", plan["id"]
+            )
+
+        if not contact.get("email"):
+            return
+
+        try:
+            department = self.improvement_plans_repository.get_department_context(
+                plan.get("department_id")
+            ) if plan.get("department_id") else {}
+
+            message = render_document_signed(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                format_name=format_name,
+                format_label=format_label,
+                teacher_name=contact["name"],
+                teacher_email=contact["email"],
+                director_name=(current_user or {}).get("name") or "",
+                department_name=department.get("department_name"),
+            )
+
+            # smtplib blocks, and this runs on the event loop.
+            await asyncio.to_thread(send_email, message)
+        except Exception:
+            logger.exception(
+                "No se pudo enviar el correo del formato firmado del plan %s",
+                plan["id"],
+            )
 
     async def delete_signed(self, plan_id: int, slug: str, current_user) -> dict:
         """Detach the signed copy of a form — the escape hatch for a wrong scan.
