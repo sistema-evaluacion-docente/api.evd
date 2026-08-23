@@ -261,12 +261,6 @@ async def download_teacher_evaluation_report(
         teacher_id, evaluation_id, current_user
     )
 
-    if pdf_bytes is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Reporte no encontrado o el docente no aparece en esta evaluación",
-        )
-
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
