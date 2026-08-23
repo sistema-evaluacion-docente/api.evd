@@ -21,6 +21,18 @@ from api.models.improvement_plan_checkpoint import ImprovementPlanCheckpointMode
 
 # from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
+from api.models.improvement_plan_verification import (
+    ImprovementPlanVerificationModel,
+)
+from api.models.improvement_plan_verification_comment import (
+    ImprovementPlanVerificationCommentModel,
+)
+from api.models.improvement_plan_verification_course import (
+    ImprovementPlanVerificationCourseModel,
+)
+from api.models.improvement_plan_verification_item import (
+    ImprovementPlanVerificationItemModel,
+)
 from api.models.notification import NotificationModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
