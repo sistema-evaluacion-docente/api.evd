@@ -20,10 +20,11 @@ class CommentsController:
         self,
         filters: CommentFilters,
         pagination: PaginationParams,
+        department_id: int | None = None,
     ):
         """Retrieve all comments based on filters and pagination."""
 
-        return await self.service.get_all(filters, pagination)
+        return await self.service.get_all(filters, pagination, department_id)
 
     async def get_by_id(self, comment_id: int):
         """Get a comment by ID."""

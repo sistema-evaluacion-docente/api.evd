@@ -30,6 +30,12 @@ from api.models.role import RoleModel
 from api.models.notification import NotificationModel
 from api.models.director import DirectorsModel
 from api.repositories.improvement_plans import ImprovementPlansRepository
+from api.repositories.settings import SettingsRepository
+from api.services.improvement_plan_service import (
+    DEFAULT_SCORE_THRESHOLD,
+    SCORE_THRESHOLD_SETTING,
+)
+from api.utils.modalities import normalize_modality
 from api.utils.plan_suggestion import suggestion_reasons
 from api.utils.plan_verification import (
     score_threshold,
@@ -54,6 +60,20 @@ PLAN_SUGGESTION_TITLE = "Docentes con plan de mejoramiento sugerido"
 
 # Cuántos nombres caben en el mensaje antes de resumir con "y N más".
 MAX_LISTED_TEACHERS = 5
+
+# The PDF prints the contract type as a short code next to the teacher name;
+# these are stored under the name the university uses for them. Codes without
+# a known name (OTC, MTC) are stored as they come.
+CONTRACT_TYPE_NAMES = {"TC": "Planta", "CT": "Catedra"}
+
+
+def _contract_type_name(raw: str | None) -> str | None:
+    """Translate the contract code parsed from the PDF into its stored name."""
+
+    if not raw:
+        return None
+
+    return CONTRACT_TYPE_NAMES.get(raw.upper(), raw)
 
 
 def _broadcast_progress(evaluation_id: int, stage: str, **kwargs) -> None:
@@ -281,10 +301,11 @@ def _create_high_risk_comment_notification(
     notification_type = "warning"
 
     link = None
+    
     if comment.teacher_id:
-        link = f"/docentes/{comment.teacher_id}"
+        link = f"/alertas/{comment.teacher_id}"
         if academic_period_name:
-            link += f"?period={quote(academic_period_name)}"
+            link += f"?period={quote(academic_period_name)}#{comment.id}"
 
     try:
         notification = NotificationModel(
@@ -518,6 +539,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
         for teacher_data in parsed["teachers"]:
             teacher_name = teacher_data["name"]
             teacher_code = teacher_data["code"]
+            contract_type = _contract_type_name(teacher_data.get("contract_type"))
 
             user = (
                 db.query(UserModel)
@@ -552,6 +574,12 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     teacher_name=teacher_name,
                     teacher_code=teacher_code,
                 )
+            else:
+                # Sync the canonical name from the PDF; the parser already
+                # strips any contract-type token, so this also heals stale
+                # records where the token was incorrectly stored in the name.
+                if user.name != teacher_name:
+                    user.name = teacher_name
 
             teacher = (
                 db.query(TeacherModel).filter(TeacherModel.user_id == user.id).first()
@@ -561,7 +589,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                 teacher = TeacherModel(
                     user_id=user.id,
                     department_id=department.id,
-                    contract_type=teacher_data.get("contract_type"),
+                    contract_type=contract_type,
                     active=True,
                 )
                 db.add(teacher)
@@ -573,6 +601,9 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     teacher_name=teacher_name,
                     teacher_code=teacher_code,
                 )
+            else:
+                if contract_type and teacher.contract_type != contract_type:
+                    teacher.contract_type = contract_type
 
             groups_count = 0
             comments_count = 0
@@ -606,12 +637,14 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                     )
 
                 group_name = f"{group_data['group']}{group_data['section']}"
+                modality = normalize_modality(group_data.get("modality"))
                 academic_group = (
                     db.query(AcademicGroupModel)
                     .filter(
                         AcademicGroupModel.course_id == course.id,
                         AcademicGroupModel.teacher_id == teacher.id,
                         AcademicGroupModel.academic_period_id == period.id,
+                        AcademicGroupModel.group_name == group_name,
                     )
                     .first()
                 )
@@ -622,9 +655,13 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
                         teacher_id=teacher.id,
                         academic_period_id=period.id,
                         group_name=group_name,
+                        modality=modality,
                     )
                     db.add(academic_group)
                     db.flush()
+                elif modality and academic_group.modality != modality:
+                    # Heals groups created before the modality was recorded.
+                    academic_group.modality = modality
 
                 eval_score = EvaluationScoreModel(
                     evaluation_id=evaluation_id,
@@ -766,6 +803,14 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
     """
     db = SessionLocal()
 
+    # CATEGORIES_LABEL = {
+    #     "DESARROLLO DEL CONOCIMIENTO": "LABEL_0",
+    #     "DESEMPEÑO DOCENTE": "LABEL_1",
+    #     "PROCESOS DE EVALUACIÓN": "LABEL_2",
+    #     "INTEGRACIÓN INTERPERSONAL": "LABEL_3",
+    #     "SIN CATEGORIA": "LABEL_4",
+    # }
+
     _broadcast_log(
         evaluation_id,
         level="info",
@@ -848,6 +893,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
 
                 comment.risk_level = risk_cache[risk_label]
                 comment.risk_score = result.get("risk_score")
+                comment.risk_level_ai_model = result.get("risk_model")
 
                 if comment.risk_level == HIGH_RISK_LEVEL_ID and director_user_id:
                     if comment.teacher_id not in teacher_name_cache:
@@ -875,24 +921,45 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                         ),
                     )
 
-            for category in result.get("category_labels", []):
-                category_label = category["label"]
+            category_labels = result.get("category_labels", [])
+            category_model = result.get("category_model")
 
-                if category_label not in category_cache:
-                    category_cache[category_label] = category_name_to_id.get(
-                        category_label.lower()
-                    )
+            print(
+                f"Comment {comment.original_text} risk: {risk_label}, categories: {category_labels}"
+            )
 
-                category_id = category_cache[category_label]
+            # Nothing to replace the current classification with when the model
+            # did not run (not configured, or inference failed): the categories
+            # of the previous analysis are left as they are.
+            if category_model:
+                assigned = []
 
-                if category_id is not None:
-                    db.add(
-                        CommentPedagogicalCategoryModel(
-                            comment_id=comment.id,
-                            pedagogical_category_id=category_id,
-                            score=category["score"],
+                for category in category_labels:
+                    category_label = category["label"]
+
+                    if category_label not in category_cache:
+                        category_cache[category_label] = category_name_to_id.get(
+                            category_label.lower()
                         )
-                    )
+
+                    category_id = category_cache[category_label]
+
+                    if category_id is not None:
+                        assigned.append(
+                            CommentPedagogicalCategoryModel(
+                                pedagogical_category_id=category_id,
+                                score=category["score"],
+                            )
+                        )
+
+                # Replaces the whole set instead of adding to it: re-analysing
+                # an evaluation used to keep the rows of the previous run, so a
+                # comment ended up with the same category repeated once per run.
+                # delete-orphan on the relationship removes the old rows.
+                comment.pedagogical_categories = assigned
+                comment.pedagogical_category_ai_model = (
+                    category_model if assigned else None
+                )
 
             analyzed_count += 1
 

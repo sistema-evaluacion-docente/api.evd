@@ -102,6 +102,31 @@ class ResourceAlreadyExistsError(AppException):
         )
 
 
+class SettingAlreadyExistsError(AppException):
+    """Raised when a key is already taken in the scope being written to.
+
+    Names the scope: the same key legitimately exists once per department plus
+    once institutionally, so "ya existe" on its own leaves the caller guessing
+    which row it collided with.
+    """
+
+    def __init__(self, key: str, department_name: str | None = None):
+        scope = (
+            f"en el departamento {department_name}"
+            if department_name
+            else "a nivel institucional"
+        )
+
+        super().__init__(
+            code="RESOURCE_ALREADY_EXISTS",
+            message=(
+                f"La configuración '{key}' ya existe {scope}. "
+                "Actualice la configuración existente en vez de crear otra."
+            ),
+            status_code=409,
+        )
+
+
 class ValidationError(AppException):
     """Raised when business validation fails."""
 

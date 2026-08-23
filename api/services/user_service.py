@@ -45,7 +45,7 @@ class UserService:
             return None
 
         if not user.uid:
-            self.users_repository.set_uid(user, current_user.uid)
+            self.users_repository.set_uid(user, current_user.uid, current_user.picture)
 
         return self._build_user_response(user)
 

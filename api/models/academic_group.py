@@ -41,6 +41,10 @@ class AcademicGroupModel(Base):
         Integer, ForeignKey("academic_periods.id"), nullable=True
     )
     group_name = Column(String(255), nullable=True)
+    # PRESENCIAL / DISTANCIA — see api/utils/modalities.py. Nullable because
+    # groups created before the university split the report in two documents
+    # carry no modality.
+    modality = Column(String(20), nullable=True, index=True)
 
     course = relationship("CourseModel", back_populates="academic_groups")
     teacher = relationship("TeacherModel", back_populates="academic_groups")

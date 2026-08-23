@@ -9,6 +9,8 @@ from typing import Annotated, Optional
 from fastapi import Depends, Query
 from pydantic import BaseModel, model_validator
 
+from api.schemas.academic_group import Modality
+
 
 class RiskLevelOut(BaseModel):
     """Schema for risk level output."""
@@ -50,6 +52,8 @@ class CommentOut(BaseModel):
     pedagogical_categories: list[PedagogicalCategoryScoreOut] = []
     risk_level_modified_by_director: bool = False
     pedagogical_category_modified_by_director: bool = False
+    risk_level_ai_model: Optional[str] = None
+    pedagogical_category_ai_model: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -87,6 +91,7 @@ class CommentFilters:
     academic_period_id: int | None = None
     risk_level: int | None = None
     pedagogical_category_id: int | None = None
+    modality: str | None = None
     search: str | None = None
 
 
@@ -97,6 +102,13 @@ def comment_filters(
     academic_period_id: int | None = Query(default=None),
     risk_level: int | None = Query(default=None),
     pedagogical_category_id: int | None = Query(default=None),
+    modality: Modality | None = Query(
+        default=None,
+        description=(
+            "Traer solo los comentarios de los grupos de esta modalidad "
+            "(PRESENCIAL o DISTANCIA). Sin el filtro se devuelven todos."
+        ),
+    ),
     search: str | None = Query(default=None, min_length=1),
 ) -> CommentFilters:
     """Dependency function to extract comment filters from query parameters."""
@@ -108,6 +120,7 @@ def comment_filters(
         academic_period_id=academic_period_id,
         risk_level=risk_level,
         pedagogical_category_id=pedagogical_category_id,
+        modality=modality,
         search=search,
     )
 

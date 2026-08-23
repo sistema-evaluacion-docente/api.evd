@@ -34,6 +34,7 @@ class TestTeachersController:
         service.count_by_department = AsyncMock()
         service.get_history = AsyncMock()
         service.upload_excel = AsyncMock()
+        service.get_evaluation_report = AsyncMock()
         return service
 
     @pytest.fixture
@@ -88,7 +89,32 @@ class TestTeachersController:
         result = await controller.get_all_with_averages(filters, pagination, 1)
 
         mock_service.get_all_with_averages.assert_called_once_with(
-            filters, pagination, 1, True
+            filters, pagination, 1, True, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_all_with_averages_passes_the_requested_modality(
+        self, controller, mock_service
+    ):
+        """Test get_all_with_averages forwards the modality to the service."""
+
+        mock_service.get_all_with_averages.return_value = {
+            "items": [],
+            "total": 0,
+            "page": 1,
+            "limit": 10,
+            "pages": 0,
+        }
+
+        filters = TeacherFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        await controller.get_all_with_averages(
+            filters, pagination, 1, True, "DISTANCIA"
+        )
+
+        mock_service.get_all_with_averages.assert_called_once_with(
+            filters, pagination, 1, True, "DISTANCIA"
         )
 
     @pytest.mark.asyncio
@@ -219,3 +245,30 @@ class TestTeachersController:
             b"", "test.xlsx", 1, current_user
         )
         assert "created" in result
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_delegates_to_service(
+        self, controller, mock_service
+    ):
+        """Test get_evaluation_report delegates to service."""
+
+        current_user = MagicMock()
+        current_user.uid = "test-uid"
+        mock_service.get_evaluation_report.return_value = b"%PDF-1.7"
+
+        result = await controller.get_evaluation_report(1, 2, current_user)
+
+        mock_service.get_evaluation_report.assert_called_once_with(1, 2, current_user)
+        assert result == b"%PDF-1.7"
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_returns_none_when_missing(
+        self, controller, mock_service
+    ):
+        """Test get_evaluation_report passes a missing report through as None."""
+
+        mock_service.get_evaluation_report.return_value = None
+
+        result = await controller.get_evaluation_report(1, 2, MagicMock())
+
+        assert result is None

@@ -33,8 +33,12 @@ class CommentsRepository(BaseRepository[CommentModel]):
         self,
         filters: CommentFilters,
         pagination: PaginationParams,
+        department_id: int | None = None,
     ) -> tuple[list[dict], int]:
-        """Search comments with filters and pagination."""
+        """Search comments with filters and pagination.
+
+        `filters.modality` narrows the result down to the comments written for
+        the groups of one kind of program."""
 
         base_query = (
             self.db.query(
@@ -77,11 +81,24 @@ class CommentsRepository(BaseRepository[CommentModel]):
                 CommentModel.academic_groups_id == filters.academic_groups_id
             )
 
-        if filters.academic_period_id is not None:
+        evaluation_joined = False
+
+        if department_id is not None:
             base_query = base_query.join(
                 EvaluationModel,
                 CommentModel.evaluation_id == EvaluationModel.id,
-            ).filter(EvaluationModel.academic_period_id == filters.academic_period_id)
+            ).filter(EvaluationModel.department_id == department_id)
+            evaluation_joined = True
+
+        if filters.academic_period_id is not None:
+            if not evaluation_joined:
+                base_query = base_query.join(
+                    EvaluationModel,
+                    CommentModel.evaluation_id == EvaluationModel.id,
+                )
+            base_query = base_query.filter(
+                EvaluationModel.academic_period_id == filters.academic_period_id
+            )
 
         if filters.risk_level is not None:
             base_query = base_query.filter(
@@ -95,6 +112,14 @@ class CommentsRepository(BaseRepository[CommentModel]):
                 )
             )
 
+        if filters.modality is not None:
+            # The group is outer-joined above; filtering on it also drops the
+            # comments that hang from no academic group at all, which is what
+            # asking for a modality means.
+            base_query = base_query.filter(
+                AcademicGroupModel.modality == filters.modality
+            )
+
         if filters.search:
             search_pattern = f"%{filters.search}%"
             base_query = base_query.filter(
@@ -105,12 +130,12 @@ class CommentsRepository(BaseRepository[CommentModel]):
 
         total = base_query.count()
 
-        results = (
-            base_query.order_by(CommentModel.created_at.desc())
-            .offset(pagination.offset)
-            .limit(pagination.limit)
-            .all()
-        )
+        if filters.risk_level is not None:
+            base_query = base_query.order_by(CommentModel.risk_score.desc())
+        else:
+            base_query = base_query.order_by(CommentModel.created_at.desc())
+
+        results = base_query.offset(pagination.offset).limit(pagination.limit).all()
 
         items = [
             comment_to_dict(
@@ -181,6 +206,18 @@ class CommentsRepository(BaseRepository[CommentModel]):
 
         return result[0] if result else None
 
+    def get_teacher_user_id(self, comment_id: int) -> int | None:
+        """Get the user_id of the teacher a comment is about, to notify them."""
+
+        result = (
+            self.db.query(TeacherModel.user_id)
+            .join(CommentModel, CommentModel.teacher_id == TeacherModel.id)
+            .filter(CommentModel.id == comment_id)
+            .first()
+        )
+
+        return result[0] if result else None
+
     def update_classification(
         self,
         comment_id: int,
@@ -192,7 +229,9 @@ class CommentsRepository(BaseRepository[CommentModel]):
         A field is only flagged as director-modified (and its confidence score
         set to 1, i.e. 100%, since it now reflects a human decision instead of
         the AI model's estimate) when the provided value actually differs from
-        the current one. Categories are replaced wholesale as a set.
+        the current one. The AI model attribution is cleared for the same
+        reason: no model produced the new value. Categories are replaced
+        wholesale as a set.
         """
 
         comment = self.get(comment_id)
@@ -204,6 +243,7 @@ class CommentsRepository(BaseRepository[CommentModel]):
             comment.risk_level = risk_level
             comment.risk_level_modified_by_director = True
             comment.risk_score = 1
+            comment.risk_level_ai_model = None
 
         if pedagogical_category_ids is not None:
             current_ids = {
@@ -218,6 +258,7 @@ class CommentsRepository(BaseRepository[CommentModel]):
                     for category_id in pedagogical_category_ids
                 ]
                 comment.pedagogical_category_modified_by_director = True
+                comment.pedagogical_category_ai_model = None
 
         self.db.commit()
         self.db.refresh(comment)

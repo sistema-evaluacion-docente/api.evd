@@ -51,6 +51,8 @@ def comment_to_dict(
         "pedagogical_category_modified_by_director": (
             comment.pedagogical_category_modified_by_director
         ),
+        "risk_level_ai_model": comment.risk_level_ai_model,
+        "pedagogical_category_ai_model": comment.pedagogical_category_ai_model,
         "created_at": comment.created_at,
         "updated_at": comment.updated_at,
     }

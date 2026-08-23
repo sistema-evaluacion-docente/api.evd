@@ -11,6 +11,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -20,7 +21,8 @@ from api.database import Base
 
 class EvaluationModel(Base):
     """
-    Evaluation model — one row per uploaded PDF (one per department per period)
+    Evaluation model — one row per department per period, backed by the one or
+    two PDFs the university publishes for it (presencial and a distancia)
     """
 
     __tablename__ = "evaluations"
@@ -31,7 +33,8 @@ class EvaluationModel(Base):
         Integer, ForeignKey("academic_periods.id"), nullable=True, index=True
     )
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True)
-    pdf_url = Column(String(255), nullable=True)
+    # One path, or several separated by commas — see api/utils/evaluation_pdfs.py.
+    pdf_url = Column(Text, nullable=True)
 
     academic_period = relationship("AcademicPeriodModel", lazy="joined")
     active = Column(Boolean, nullable=True, default=True)

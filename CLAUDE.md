@@ -66,6 +66,38 @@ La **verificación** es lo que dice el semestre siguiente sobre un plan ya cerra
 
 Los tres formatos se **generan en PDF** con WeasyPrint + Jinja2: plantillas en `api/templates/improvement_plans/` (el Formato 3 va en horizontal), renderer puro en `api/utils/improvement_plan_pdf.py`, y el armado del contexto (agrupar items por aspecto, cruzar las notas de seguimiento) en `api/services/improvement_plan_document_service.py`. Flujo: `POST /{id}/documents/{formato}/generate` → descargar → firmar a mano → `POST .../signed`; subir el Formato 2 firmado pasa el acta a `FIRMADA`. WeasyPrint necesita librerías de sistema (Pango/HarfBuzz) — ya están en ambos Dockerfiles.
 
+### Configuraciones
+
+`settings` vive en **dos ámbitos**, separados por `department_id`: `NULL` es el valor
+institucional que mantiene un ADMIN, y un id de departamento es el valor que mantiene su
+director. Al resolver una clave, el valor del departamento gana y el institucional es el
+fallback — eso es `SettingsRepository.resolve(key, department_id)`; `get_by_key(key,
+department_id)` en cambio consulta un ámbito exacto. La unicidad de `key` es por ámbito:
+`uq_settings_key_department` cubre las filas de departamento y el índice parcial
+`uq_settings_key_global` las institucionales (Postgres trata los NULL como distintos, por
+eso hacen falta los dos). `settings_history` lleva el mismo `department_id` para que los
+historiales no se mezclen.
+
+Las reglas de permisos están en `SettingService`, y la idea es que **cada rol está
+confinado a su propio ámbito**: el ámbito nunca se toma de un parámetro, sale de quién
+pregunta (`_scope_department_id`). Un director queda fijado a su departamento, puede leer
+las configuraciones institucionales — de las que hereda — pero no modificarlas (crea una
+propia para sobreescribir el valor), y no ve las de otros departamentos. Un ADMIN solo ve
+y administra las institucionales: lo que cada departamento configure es asunto de su
+director. Un `department_id` que no sea el del propio ámbito (en el query de
+`GET /settings/` o `/settings/by-key/{key}`, o en el payload de `SettingCreate`) se
+**rechaza con 403**, nunca se ignora: contestarle con el valor institucional a quien
+preguntó por el departamento 19 lo lleva a guardar donde no quería.
+`SettingsRepository.search` con `department_id=None` devuelve **solo** las institucionales,
+igual que `get_by_key` y `get_history`; `include_global` solo aplica cuando sí hay un
+departamento en juego.
+
+No toda clave se usa por ámbito: `improvement_plan.score_threshold` es **institucional** —
+existe una sola fila, la global — y quien lo consume lo lee sin departamento
+(`ImprovementPlanService.get_threshold()` y `_score_threshold(db)` del procesador de
+evaluaciones). Una clave que sí admita sobreescritura por departamento debe leerse con
+`resolve(key, department_id)`.
+
 ### Response envelope
 
 Toda respuesta JSON exitosa se envuelve en `{status, data, pagination, error, timestamp}`. Hay **dos mecanismos que conviven** (ver `docs/adr/002-envelope-router.md`):
@@ -91,7 +123,9 @@ Firebase Admin SDK (`api/middlewares/auth.py`). `require_roles([RoleName.ADMIN, 
 
 ### Procesamiento de evaluaciones
 
-`POST /evaluations/upload` guarda el PDF en `uploads/evaluations/{periodo}/{department_id}/` y lanza un `BackgroundTasks`: `api/utils/pdf_parser.py` extrae docente/curso/22 preguntas en 4 dimensiones/comentarios → `api/utils/evaluation_processor.py` persiste → `api/utils/ai_analyzer.py` clasifica cada comentario por nivel de riesgo y categoría pedagógica (modelos HuggingFace configurados por `HUGGINGFACE_RISK_MODEL` / `HUGGINGFACE_CATEGORY_MODEL`). El progreso se emite por WebSocket.
+`POST /evaluations/upload` guarda el/los PDF en `uploads/evaluations/{periodo}/{department_id}/` y lanza un `BackgroundTasks`: `api/utils/pdf_parser.py` extrae docente/curso/22 preguntas en 4 dimensiones/comentarios → `api/utils/evaluation_processor.py` persiste → `api/utils/ai_analyzer.py` clasifica cada comentario por nivel de riesgo y categoría pedagógica (modelos HuggingFace configurados por `HUGGINGFACE_RISK_MODEL` / `HUGGINGFACE_CATEGORY_MODEL`). El progreso se emite por WebSocket.
+
+La universidad publica **un reporte por tipo de programa**: presenciales y a distancia. El campo `file` del upload acepta uno o los dos PDFs; deben coincidir en periodo y departamento y ser de modalidades distintas, y quedan bajo una sola evaluación con sus rutas separadas por coma en `evaluations.pdf_url` (helpers en `api/utils/evaluation_pdfs.py`; los archivos se guardan con la modalidad en el nombre para poder distinguirlos después). La modalidad se lee del título que repite cada página (`Programas Presenciales` / `Programas a Distancia`), viaja en cada grupo del dict parseado y se persiste en `academic_groups.modality`; el catálogo está en `api/utils/modalities.py`. Un PDF cuyo título no declare la modalidad se rechaza. El departamento que trae el PDF debe ser el que el director tiene asignado — si no coincide, `prepare_upload` lanza `PermissionDeniedError` (403) antes de guardar nada; un ADMIN sube la evaluación de cualquier departamento.
 
 ### WebSockets
 
@@ -99,7 +133,7 @@ Firebase Admin SDK (`api/middlewares/auth.py`). `require_roles([RoleName.ADMIN, 
 
 ## Tests
 
-Solo hay `tests/unit/` (repositories, services, controllers, más middleware y exceptions) — todo con `MagicMock`; no existe `tests/integration/` pese a lo que dice el README. `asyncio_mode = "auto"`, así que los tests `async def` no necesitan marker. Fixtures compartidos en `tests/conftest.py` (`mock_db`, `mock_user_model`, ...). Al añadir una feature, la convención es tocar las tres capas y sus tres archivos de test.
+Solo hay `tests/unit/` (repositories, services, controllers, routes, más middleware y exceptions) — todo con `MagicMock`; no existe `tests/integration/` pese a lo que dice el README. Los tests de `routes/` montan el router sobre una app mínima con el envelope y los handlers, y sustituyen el controller y `get_user_service`/`get_current_user` por mocks (helpers en `tests/unit/routes/conftest.py`): cubren guardas de rol, el scoping por departamento del director y el 404 de la ruta. `asyncio_mode = "auto"`, así que los tests `async def` no necesitan marker. Fixtures compartidos en `tests/conftest.py` (`mock_db`, `mock_user_model`, ...). Al añadir una feature, la convención es tocar las tres capas y sus tres archivos de test.
 
 ## Otros
 

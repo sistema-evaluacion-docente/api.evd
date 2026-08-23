@@ -63,6 +63,36 @@ async def get_department_average_with_previous(
 
 
 @router.get(
+    "/departments/subjects/{course_code}/teachers-comparison",
+    response_model=list[dict],
+    responses={403: {"description": "Forbidden"}, 400: {"description": "Bad request"}},
+)
+async def get_subject_teachers_comparison(
+    course_code: str,
+    period: Annotated[str, Query(..., description="Código del periodo (ej. '2025-1')")],
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """
+    Get per-(teacher, group) comparison for a course in a period.
+    Returns dimensions, risk counts and pedagogical category counts per entry.
+    Only accessible by the department's director.
+    """
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    return await controller.get_subject_teachers_comparison(
+        department_id, course_code, period
+    )
+
+
+@router.get(
     "/departments/period-range",
     response_model=DepartmentPeriodRangeReport,
     responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
@@ -116,8 +146,9 @@ async def get_department_period_range_subjects(
     """
     Get subject (course) averages for the director's own department
     across a range of academic periods (e.g. from "2020-1" to "2022-1"),
-    with pagination and an optional search filter by subject name. Only
-    the department's director can access this report.
+    with pagination and optional filters by subject name, teacher name and
+    modality (PRESENCIAL/DISTANCIA). Only the department's director can
+    access this report.
     """
 
     department_id = current_user.get("department_id")

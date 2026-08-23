@@ -135,6 +135,7 @@ class TeacherCommentsOut(BaseModel):
 
     teacher_id: int
     evaluation_id: int
+    ai_status: str | None = None
     courses: list[CourseComments]
 
 
@@ -239,12 +240,14 @@ class EvaluationDimensionDetailOut(BaseModel):
 
     When filtered by `teacher_id` and/or `course_id`, `overall` carries the
     same breakdown for the whole evaluation so the filtered result can be
-    compared against it."""
+    compared against it. `modality` echoes the kind of program the whole
+    response is scoped to, or null when it covers the entire evaluation."""
 
     evaluation_id: int
     period_code: Optional[str]
     period_name: Optional[str]
     department_average: Optional[float]
+    modality: Optional[str] = None
     dimensions: list[DimensionDetailItem]
     overall: Optional["EvaluationDimensionDetailOut"] = None
 
@@ -278,3 +281,35 @@ class DimensionAveragesOut(BaseModel):
     error: Optional[str] = None
     timestamp: datetime
     path: str
+
+
+class CourseHistoryQuestion(BaseModel):
+    code: str
+    text: str
+    score: float | None = None
+
+
+class CourseHistoryDimension(BaseModel):
+    dimension: str
+    average: float | None = None
+    questions: list[CourseHistoryQuestion]
+
+
+class CourseHistoryItem(BaseModel):
+    academic_period_id: int
+    period_code: str
+    period_name: str
+    group_name: str | None = None
+    respondent_count: int
+    overall_average: float | None = None
+    department_average: float | None = None
+    dimensions: list[CourseHistoryDimension]
+
+
+class CourseHistoryOut(BaseModel):
+    """Per-period history of a teacher's course, with dimensions and department average."""
+
+    teacher_id: int
+    course_code: str
+    course_name: str | None = None
+    items: list[CourseHistoryItem]

@@ -14,6 +14,7 @@ from api.schemas.comment import (
     CommentOut,
     CommentUpdate,
 )
+from api.schemas.pagination import build_paginated_response
 from api.schemas.response import ResponseSchema
 from api.schemas.user import RoleName
 from api.database import get_db
@@ -21,7 +22,7 @@ from sqlalchemy.orm import Session
 
 router = EnvelopeRouter(prefix="/comments", tags=["Comments"])
 
-_EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+_ADMIN_AND_DIRECTOR = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 
 
 @router.get(
@@ -32,12 +33,17 @@ _EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 async def get_all_comments(
     filters: CommentFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
 ):
-    """List all comments with optional filters and pagination."""
+    """List all comments for the director's own department, with filters and pagination."""
 
-    return await controller.get_all(filters, pagination)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        return build_paginated_response([], 0, pagination)
+
+    return await controller.get_all(filters, pagination, department_id)
 
 
 @router.get(
@@ -134,7 +140,7 @@ async def count_comments_by_teacher_and_period(
 )
 async def get_comment_by_id(
     comment_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    _=Depends(require_roles(_ADMIN_AND_DIRECTOR)),
     controller: CommentsController = Depends(get_comments_controller),
 ):
     """Get a comment by ID."""

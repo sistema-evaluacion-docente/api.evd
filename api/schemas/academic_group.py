@@ -4,10 +4,14 @@ Schemas for request and response bodies related to academic groups.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel
+
+from api.utils.modalities import DISTANCIA, PRESENCIAL
+
+Modality = Literal[PRESENCIAL, DISTANCIA]
 
 
 class AcademicGroupCreate(BaseModel):
@@ -17,6 +21,7 @@ class AcademicGroupCreate(BaseModel):
     teacher_id: int
     academic_period_id: int
     group_name: Optional[str] = None
+    modality: Optional[Modality] = None
 
 
 class AcademicGroupUpdate(BaseModel):
@@ -26,6 +31,7 @@ class AcademicGroupUpdate(BaseModel):
     teacher_id: Optional[int] = None
     academic_period_id: Optional[int] = None
     group_name: Optional[str] = None
+    modality: Optional[Modality] = None
 
 
 class CourseSummary(BaseModel):
@@ -62,6 +68,7 @@ class AcademicGroupOut(BaseModel):
     teacher_id: Optional[int]
     academic_period_id: Optional[int]
     group_name: Optional[str]
+    modality: Optional[str] = None
     course: Optional[CourseSummary] = None
     teacher: Optional[TeacherSummary] = None
     academic_period: Optional[AcademicPeriodSummary] = None
@@ -78,6 +85,7 @@ class AcademicGroupFilters:
     teacher_id: int | None = None
     academic_period_id: int | None = None
     department_id: int | None = None
+    modality: str | None = None
 
 
 def academic_group_filters(
@@ -86,6 +94,7 @@ def academic_group_filters(
     teacher_id: int | None = Query(default=None),
     academic_period_id: int | None = Query(default=None),
     department_id: int | None = Query(default=None),
+    modality: Modality | None = Query(default=None),
 ) -> AcademicGroupFilters:
     """Dependency function to extract academic group filters from query parameters."""
 
@@ -95,6 +104,7 @@ def academic_group_filters(
         teacher_id=teacher_id,
         academic_period_id=academic_period_id,
         department_id=department_id,
+        modality=modality,
     )
 
 

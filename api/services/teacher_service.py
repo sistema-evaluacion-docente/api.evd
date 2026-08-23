@@ -6,8 +6,11 @@ import io
 import openpyxl
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ValidationError
+from api.utils.modalities import validated_modality
 from api.repositories.academic_periods import AcademicPeriodsRepository
+from api.repositories.evaluations import EvaluationsRepository
+from api.repositories.stats import StatsRepository
 from api.repositories.teachers import TeachersRepository
 from api.repositories.users import UsersRepository
 from api.schemas.pagination import build_paginated_response
@@ -34,12 +37,16 @@ class TeacherService:
         audit_service: AuditService,
         academic_periods_repository: AcademicPeriodsRepository,
         user_service: UserService,
+        stats_repository: StatsRepository | None = None,
+        evaluations_repository: EvaluationsRepository | None = None,
     ):
         self.teachers_repository = teachers_repository
         self.users_repository = users_repository
         self.audit_service = audit_service
+        self.stats_repository = stats_repository
         self.academic_periods_repository = academic_periods_repository
         self.user_service = user_service
+        self.evaluations_repository = evaluations_repository
 
     async def get_all(
         self,
@@ -66,24 +73,33 @@ class TeacherService:
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
+        modality: str | None = None,
     ) -> dict:
-        """Retrieve teachers with overall_average for a given academic period."""
+        """Retrieve teachers with overall_average for a given academic period.
+
+        A `modality` restricts the average and the high-risk comment count to
+        the groups of that kind of program."""
 
         rows, total = self.teachers_repository.search_with_averages(
-            filters, pagination, academic_period_id, has_average
+            filters,
+            pagination,
+            academic_period_id,
+            has_average,
+            validated_modality(modality),
         )
 
         roles_by_user = self.users_repository.get_user_role_names_bulk(
-            [teacher.user_id for teacher, _ in rows if teacher.user_id]
+            [teacher.user_id for teacher, _, _ in rows if teacher.user_id]
         )
 
         items = []
 
-        for teacher, avg_score in rows:
+        for teacher, avg_score, high_risk_count in rows:
             d = self._enrich_teacher_to_dict(
                 teacher, roles=roles_by_user.get(teacher.user_id, [])
             )
             d["overall_average"] = float(avg_score) if avg_score is not None else None
+            d["high_risk_comments_count"] = int(high_risk_count or 0)
 
             items.append(d)
 
@@ -364,6 +380,87 @@ class TeacherService:
         paginated = build_paginated_response(items, total, pagination)
 
         return {**teacher_info, **paginated}
+
+    async def get_course_history(
+        self,
+        current_user: TokenUser,
+        teacher_id: int,
+        course_code: str,
+        limit: int | None = None,
+    ) -> dict | None:
+        """Get per-period history for a teacher's course."""
+
+        user = self.users_repository.get_by_uid(current_user.uid)
+        teacher = self.teachers_repository.get_by_id(teacher_id)
+        roles = self.users_repository.get_user_role_names(user.id) if user else []
+
+        if not user or not teacher:
+            raise ValidationError("Usuario no encontrado")
+
+        is_admin = RoleName.ADMIN in roles
+        is_own_teacher = RoleName.DOCENTE in roles and teacher.user_id == user.id
+        is_department_director = False
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in roles:
+            director = self.users_repository.get_director_by_user_id(user.id)
+            is_department_director = bool(
+                director and director.department_id == teacher.department_id
+            )
+
+        if not (is_admin or is_own_teacher or is_department_director):
+            raise PermissionError("No tiene permiso para ver el historial de este docente")
+
+        return self.stats_repository.get_course_history(
+            teacher_id, course_code, teacher.department_id, limit
+        )
+
+    async def get_evaluation_report(
+        self, teacher_id: int, evaluation_id: int, current_user: TokenUser
+    ) -> bytes | None:
+        """Return a PDF with only the pages belonging to the teacher in the evaluation.
+
+        DOCENTE may only access their own report; DIRECTOR may access any
+        teacher in their department. Returns None when teacher or evaluation
+        is not found.
+        """
+        from api.utils.evaluation_pdfs import split_pdf_urls
+        from api.utils.pdf_extractor import extract_teacher_pages
+
+        user = self.users_repository.get_by_uid(current_user.uid)
+        teacher = self.teachers_repository.get_by_id(teacher_id)
+
+        if not user or not teacher:
+            return None
+
+        roles = self.users_repository.get_user_role_names(user.id)
+
+        is_own_teacher = RoleName.DOCENTE in roles and teacher.user_id == user.id
+        is_department_director = False
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in roles:
+            director = self.users_repository.get_director_by_user_id(user.id)
+            is_department_director = bool(
+                director and director.department_id == teacher.department_id
+            )
+
+        if not (is_own_teacher or is_department_director):
+            raise PermissionDeniedError(
+                "No tiene permiso para acceder al reporte de este docente"
+            )
+
+        if not self.evaluations_repository:
+            raise ValidationError("Repositorio de evaluaciones no disponible")
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+        if not evaluation or not evaluation.pdf_url:
+            return None
+
+        if not teacher.user or not teacher.user.institutional_code:
+            return None
+
+        return extract_teacher_pages(
+            split_pdf_urls(evaluation.pdf_url), teacher.user.institutional_code
+        )
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict

@@ -42,11 +42,13 @@ class TeachersController:
         pagination: PaginationParams,
         academic_period_id: int,
         has_average: bool = True,
+        modality: str | None = None,
     ):
-        """Retrieve teachers with averages for a given academic period."""
+        """Retrieve teachers with averages for a given academic period,
+        optionally restricted to one modality."""
 
         return await self.service.get_all_with_averages(
-            filters, pagination, academic_period_id, has_average
+            filters, pagination, academic_period_id, has_average, modality
         )
 
     async def get_by_id(self, teacher_id: int):
@@ -99,6 +101,28 @@ class TeachersController:
 
         return await self.service.upload_excel(
             file_bytes, filename, department_id, current_user
+        )
+
+    async def get_course_history(
+        self,
+        current_user,
+        teacher_id: int,
+        course_code: str,
+        limit: int | None = None,
+    ):
+        """Get per-period history for a teacher's course."""
+
+        return await self.service.get_course_history(
+            current_user, teacher_id, course_code, limit
+        )
+
+    async def get_evaluation_report(
+        self, teacher_id: int, evaluation_id: int, current_user
+    ) -> bytes | None:
+        """Return extracted PDF bytes for the teacher's pages in the evaluation."""
+
+        return await self.service.get_evaluation_report(
+            teacher_id, evaluation_id, current_user
         )
 
     async def get_dashboard(

@@ -58,13 +58,17 @@ def analyze_comment(text: str) -> dict:
     Returns the top label/score for risk level, and every pedagogical
     category whose confidence clears ``CATEGORY_SCORE_THRESHOLD`` (0, 1 or
     several — a comment can touch more than one pedagogical dimension).
+    Each half also reports the model id that produced it, so the stored
+    classification can be traced back to a concrete model version.
     Fields are None/empty if the model fails or is not configured.
     """
 
     result = {
         "risk_label": None,
         "risk_score": None,
+        "risk_model": None,
         "category_labels": [],
+        "category_model": None,
     }
 
     risk_pipe = _get_risk_pipeline()
@@ -75,6 +79,7 @@ def analyze_comment(text: str) -> dict:
 
             result["risk_label"] = output[0]["label"]
             result["risk_score"] = round(output[0]["score"], 4)
+            result["risk_model"] = config.HUGGINGFACE_RISK_MODEL
         except Exception as exc:
             logger.error("Risk model inference failed: %s", exc)
 
@@ -89,6 +94,7 @@ def analyze_comment(text: str) -> dict:
                 for item in output
                 if item["score"] >= CATEGORY_SCORE_THRESHOLD
             ]
+            result["category_model"] = config.HUGGINGFACE_CATEGORY_MODEL
         except Exception as exc:
             logger.error("Category model inference failed: %s", exc)
 

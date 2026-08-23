@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import Annotated, Optional
 
 from fastapi import Depends, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class DepartmentSummary(BaseModel):
@@ -32,6 +32,12 @@ class CourseUpdate(BaseModel):
     code: Optional[str] = None
     name: Optional[str] = None
     department_id: Optional[int] = None
+
+
+class CourseNameUpdate(BaseModel):
+    """Schema for a director patching only the course name."""
+
+    name: str = Field(..., min_length=1)
 
 
 class CourseOut(BaseModel):

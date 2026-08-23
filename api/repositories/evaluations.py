@@ -18,6 +18,7 @@ from api.models.department import DepartmentModel
 from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
+from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
 from api.repositories.base import BaseRepository
@@ -34,6 +35,15 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
     def __init__(self, db: Session):
         super().__init__(EvaluationModel, db)
+
+    def get_department_by_code(self, code: str) -> DepartmentModel | None:
+        """Get the department a PDF was issued for by its two-digit code."""
+
+        return (
+            self.db.query(DepartmentModel)
+            .filter(DepartmentModel.code == code)
+            .first()
+        )
 
     def create_evaluation(
         self,
@@ -69,8 +79,14 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             .first()
         )
 
-    def get_by_id_as_dict(self, evaluation_id: int) -> dict | None:
-        """Get an evaluation by ID as a dict, including its overall_average."""
+    def get_by_id_as_dict(
+        self, evaluation_id: int, modality: str | None = None
+    ) -> dict | None:
+        """Get an evaluation by ID as a dict, including its overall_average.
+
+        With a `modality`, the figures are computed over the groups of that
+        kind of program only, and `count` becomes the number of teachers
+        evaluated in it."""
 
         evaluation = self.get_by_id(evaluation_id)
 
@@ -78,7 +94,13 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             return None
 
         data = evaluation_to_dict(evaluation)
-        data["overall_average"] = self._get_overall_average(evaluation_id)
+        data["overall_average"] = self._get_overall_average(evaluation_id, modality)
+        data["comments_risk_counts"] = self._get_comment_risk_counts(
+            evaluation_id, modality
+        )
+
+        if modality:
+            data["count"] = self._get_teacher_count(evaluation_id, modality)
 
         return data
 
@@ -102,17 +124,76 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return grouped
 
-    def _get_overall_average(self, evaluation_id: int) -> float | None:
-        """Average of EvaluationScoreModel.overall_average across every teacher
-        scored in this evaluation."""
+    @staticmethod
+    def _restrict_scores_to_modality(query, modality: str | None):
+        """Narrow a query over evaluation_scores down to one kind of program."""
 
-        avg = (
-            self.db.query(func.avg(EvaluationScoreModel.overall_average))
-            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
-            .scalar()
+        if not modality:
+            return query
+
+        return query.join(
+            AcademicGroupModel,
+            EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+        ).filter(AcademicGroupModel.modality == modality)
+
+    def _get_overall_average(
+        self, evaluation_id: int, modality: str | None = None
+    ) -> float | None:
+        """Average of EvaluationScoreModel.overall_average across every teacher
+        scored in this evaluation, or in one of its modalities."""
+
+        query = self.db.query(func.avg(EvaluationScoreModel.overall_average)).filter(
+            EvaluationScoreModel.evaluation_id == evaluation_id
         )
 
+        avg = self._restrict_scores_to_modality(query, modality).scalar()
+
         return float(avg) if avg is not None else None
+
+    def _get_teacher_count(self, evaluation_id: int, modality: str) -> int:
+        """Number of teachers evaluated in one modality of this evaluation.
+
+        The stored ``count`` covers the whole evaluation, so it has to be
+        recomputed when only one kind of program is being looked at."""
+
+        return (
+            self.db.query(func.count(func.distinct(AcademicGroupModel.teacher_id)))
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.academic_group_id == AcademicGroupModel.id,
+            )
+            .filter(
+                EvaluationScoreModel.evaluation_id == evaluation_id,
+                AcademicGroupModel.modality == modality,
+            )
+            .scalar()
+            or 0
+        )
+
+    def _get_comment_risk_counts(
+        self, evaluation_id: int, modality: str | None = None
+    ) -> dict[str, int]:
+        """Count comments by risk level (BAJO/MEDIO/ALTO) for this evaluation,
+        or for the groups of one of its modalities."""
+
+        query = (
+            self.db.query(RiskLevelModel.name, func.count(CommentModel.id))
+            .join(CommentModel, CommentModel.risk_level == RiskLevelModel.id)
+            .filter(CommentModel.evaluation_id == evaluation_id)
+        )
+
+        if modality:
+            query = query.join(
+                AcademicGroupModel,
+                CommentModel.academic_groups_id == AcademicGroupModel.id,
+            ).filter(AcademicGroupModel.modality == modality)
+
+        rows = query.group_by(RiskLevelModel.name).all()
+
+        counts = {"BAJO": 0, "MEDIO": 0, "ALTO": 0}
+        counts.update(dict(rows))
+
+        return counts
 
     def search(
         self,
@@ -382,6 +463,7 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         return {
             "teacher_id": teacher_id,
             "evaluation_id": evaluation_id,
+            "ai_status": evaluation.ai_status,
             "courses": list(grouped.values()),
         }
 
@@ -682,19 +764,22 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             "ranking": ranking,
         }
 
-    def get_dimension_averages(self, evaluation_id: int) -> list[dict] | None:
-        """Return dimension-level averages aggregated across all groups for an evaluation."""
+    def get_dimension_averages(
+        self, evaluation_id: int, modality: str | None = None
+    ) -> list[dict] | None:
+        """Return dimension-level averages aggregated across all groups for an
+        evaluation, or across the groups of one of its modalities."""
 
         evaluation = self.get_by_id(evaluation_id)
 
         if not evaluation:
             return None
 
-        score_rows = (
-            self.db.query(EvaluationScoreModel)
-            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
-            .all()
+        score_query = self.db.query(EvaluationScoreModel).filter(
+            EvaluationScoreModel.evaluation_id == evaluation_id
         )
+
+        score_rows = self._restrict_scores_to_modality(score_query, modality).all()
 
         if not score_rows:
             return []
@@ -743,12 +828,18 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
         evaluation_id: int,
         teacher_id: int | None = None,
         course_id: int | None = None,
+        modality: str | None = None,
     ) -> dict | None:
         """Return an evaluation's pedagogical dimensions with per-question averages,
         optionally restricted to a single `teacher_id` and/or `course_id` (materia).
 
-        When a filter is given, the result also carries an `overall` key with
-        the unfiltered breakdown so the caller can compare against it."""
+        `modality` is a scope rather than one more filter: everything the
+        result carries — the breakdown, the department average and the
+        `overall` comparison — is computed within that kind of program.
+
+        When a teacher or course is given, the result also carries an `overall`
+        key with the unfiltered breakdown so the caller can compare against
+        it (within the same modality when one is scoped)."""
 
         evaluation = self.get_by_id(evaluation_id)
 
@@ -769,6 +860,9 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         if course_id is not None:
             query = query.filter(AcademicGroupModel.course_id == course_id)
+
+        if modality is not None:
+            query = query.filter(AcademicGroupModel.modality == modality)
 
         score_rows = query.all()
 
@@ -811,11 +905,9 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
                 }
             )
 
-        dept_avg = (
-            self.db.query(func.avg(EvaluationScoreModel.overall_average))
-            .filter(EvaluationScoreModel.evaluation_id == evaluation_id)
-            .scalar()
-        )
+        # The baseline the breakdown is compared against: the whole evaluation,
+        # or the whole of one kind of program when the request is scoped to one.
+        dept_avg = self._get_overall_average(evaluation_id, modality)
 
         period = evaluation.academic_period
 
@@ -823,12 +915,15 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             "evaluation_id": evaluation_id,
             "period_code": period.code if period else None,
             "period_name": period.name if period else None,
-            "department_average": float(dept_avg) if dept_avg else None,
+            "department_average": dept_avg,
+            "modality": modality,
             "dimensions": dimensions,
         }
 
         if teacher_id is not None or course_id is not None:
-            result["overall"] = self.get_dimension_detail(evaluation_id)
+            result["overall"] = self.get_dimension_detail(
+                evaluation_id, modality=modality
+            )
 
         return result
 

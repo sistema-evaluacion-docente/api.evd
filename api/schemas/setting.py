@@ -2,19 +2,35 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from enum import Enum
 from typing import Annotated, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
 
+class SettingScope(str, Enum):
+    """Who a setting belongs to."""
+
+    GLOBAL = "GLOBAL"
+    DEPARTMENT = "DEPARTMENT"
+
+
 class SettingCreate(BaseModel):
-    """Schema for creating a setting."""
+    """Schema for creating a setting.
+
+    The setting is always created in the caller's own scope — a director's
+    department, or the institutional one for an ADMIN. ``department_id`` is
+    accepted only so that asking for someone else's scope can be refused out
+    loud: silently dropping it would file the setting somewhere the caller did
+    not ask for.
+    """
 
     key: str
     value: str
     value_type: str = "STRING"
     description: Optional[str] = None
+    department_id: Optional[int] = None
 
 
 class SettingUpdate(BaseModel):
@@ -32,6 +48,9 @@ class SettingOut(BaseModel):
     value: str
     value_type: str
     description: Optional[str]
+    department_id: Optional[int]
+    department_name: Optional[str] = None
+    scope: SettingScope
     changed_by: Optional[str]
     changed_by_name: Optional[str]
     changed_by_avatar_url: Optional[str]
@@ -47,6 +66,7 @@ class SettingHistoryOut(BaseModel):
     key: str
     old_value: Optional[str]
     new_value: str
+    department_id: Optional[int]
     changed_by: Optional[str]
     changed_by_name: Optional[str]
     changed_by_avatar_url: Optional[str]
@@ -56,21 +76,33 @@ class SettingHistoryOut(BaseModel):
 
 @dataclass
 class SettingFilters:
-    """Dataclass to hold setting filters extracted from query parameters."""
+    """Dataclass to hold setting filters extracted from query parameters.
+
+    ``department_id`` may only name the caller's own scope — the service
+    rejects any other and then sets it to that scope. ``include_global``
+    decides whether a department's listing carries the institutional settings
+    it falls back to.
+    """
 
     search: str | None = None
     value_type: str | None = None
+    department_id: int | None = None
+    include_global: bool = True
 
 
 def setting_filters(
     search: str | None = Query(default=None, min_length=1),
     value_type: str | None = Query(default=None),
+    department_id: int | None = Query(default=None),
+    include_global: bool = Query(default=True),
 ) -> SettingFilters:
     """Dependency function to extract setting filters from query parameters."""
 
     return SettingFilters(
         search=search,
         value_type=value_type,
+        department_id=department_id,
+        include_global=include_global,
     )
 
 

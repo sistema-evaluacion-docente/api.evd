@@ -3,6 +3,7 @@
 from fastapi import Depends
 
 from api.dependencies.audits import get_audit_service
+from api.dependencies.notifications import get_notification_service
 from api.repositories.academic_periods import (
     AcademicPeriodsRepository,
     get_academic_periods_repository,
@@ -18,6 +19,7 @@ from api.repositories.risk_levels import (
 )
 from api.services.audit_service import AuditService
 from api.services.comment_service import CommentService
+from api.services.notification_service import NotificationService
 
 
 def get_comment_service(
@@ -30,6 +32,7 @@ def get_comment_service(
         get_pedagogical_categories_repository
     ),
     audit_service: AuditService = Depends(get_audit_service),
+    notification_service: NotificationService = Depends(get_notification_service),
 ) -> CommentService:
     """Dependency injection for CommentService."""
 
@@ -39,4 +42,5 @@ def get_comment_service(
         risk_levels_repository,
         pedagogical_categories_repository,
         audit_service,
+        notification_service,
     )

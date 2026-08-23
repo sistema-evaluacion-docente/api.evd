@@ -4,13 +4,23 @@ Schemas for request and response bodies related to evaluations.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, NamedTuple, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
 from api.schemas.comparison import DimensionComparisonDetail
 from api.schemas.evaluation_summary import DimensionAverageItem
+
+
+class UploadedPdf(NamedTuple):
+    """A PDF as it arrives in the upload request.
+
+    Lets the service validate and store the file without knowing anything
+    about FastAPI's ``UploadFile``."""
+
+    filename: str | None
+    content: bytes
 
 
 class EvaluationStatusUpdate(BaseModel):
@@ -41,11 +51,14 @@ class EvaluationOut(BaseModel):
     academic_period_code: Optional[str]
     department_id: Optional[int]
     pdf_url: Optional[str]
+    pdf_urls: list[str] = []
+    modality: Optional[str] = None
     active: Optional[bool]
     status: Optional[str]
     ai_status: Optional[str] = None
     count: Optional[int]
     overall_average: Optional[float] = None
+    comments_risk_counts: Optional[dict[str, int]] = None
     dimension_averages: Optional[list[DimensionAverageItem]] = None
     comparison: Optional[EvaluationPeriodComparison] = None
     created_at: datetime

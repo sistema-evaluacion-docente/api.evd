@@ -166,14 +166,11 @@ class DepartmentsRepository(BaseRepository[DepartmentModel]):
         return count > 0
 
     def has_active_director(self, department_id: int) -> bool:
-        """Check if a department has an active director assigned."""
+        """Check if a department has any director assigned (active or not)."""
 
         count = (
             self.db.query(DirectorsModel)
-            .filter(
-                DirectorsModel.department_id == department_id,
-                DirectorsModel.active == True,
-            )
+            .filter(DirectorsModel.department_id == department_id)
             .count()
         )
 

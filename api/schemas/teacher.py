@@ -98,6 +98,7 @@ class TeacherOut(BaseModel):
     user: Optional[UserOut] = None
     active: Optional[bool]
     overall_average: Optional[float] = None
+    high_risk_comments_count: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

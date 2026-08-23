@@ -11,6 +11,7 @@ from api.middlewares.auth import require_roles
 from api.schemas.course import (
     CourseCreate,
     CourseFiltersDep,
+    CourseNameUpdate,
     CourseOut,
     CourseUpdate,
 )
@@ -19,6 +20,7 @@ from api.schemas.user import RoleName
 router = EnvelopeRouter(prefix="/courses", tags=["Courses"])
 
 _ROLES = [RoleName.ADMIN]
+_DIRECTOR_ROLES = [RoleName.DIRECTOR_DE_DEPARTAMENTO]
 
 
 @router.get("/", response_model=list[CourseOut])
@@ -53,6 +55,31 @@ async def get_course_by_id(
     """Get a course by ID."""
 
     course = await controller.get_by_id(course_id)
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Curso no encontrado")
+
+    return course
+
+
+@router.patch("/{course_id}/name", response_model=CourseOut)
+async def patch_course_name(
+    course_id: int,
+    payload: CourseNameUpdate,
+    current_user=Depends(require_roles(_DIRECTOR_ROLES)),
+    controller: CoursesController = Depends(get_courses_controller),
+):
+    """Update only the name of a course. Restricted to the director's own department."""
+
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    course = await controller.update_name(course_id, payload.name, department_id, current_user)
 
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")

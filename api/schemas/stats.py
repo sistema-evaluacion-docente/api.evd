@@ -10,6 +10,8 @@ from typing import Annotated, Optional
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
+from api.schemas.academic_group import Modality
+
 
 class DepartmentPeriodStat(BaseModel):
     """Statistics for a department in a given academic period."""
@@ -434,6 +436,7 @@ class DepartmentPeriodRangeSubjectGroup(BaseModel):
 
     academic_group_id: int
     group_name: str | None
+    modality: str | None = None
     course_id: int
     course_code: str
     teacher_id: int | None
@@ -467,6 +470,7 @@ class DepartmentPeriodRangeSubjectFilters:
     end_period_code: str
     search: str | None = None
     teacher_name: str | None = None
+    modality: str | None = None
     sort_by: str | None = None
 
 
@@ -489,6 +493,15 @@ def department_period_range_subject_filters(
             "grupos de ese docente."
         ),
     ),
+    modality: Modality | None = Query(
+        default=None,
+        description=(
+            "Filtrar por modalidad del grupo (PRESENCIAL o DISTANCIA). "
+            "Cuando se envía, los promedios y conteos de cada asignatura "
+            "se recalculan solo con los grupos de esa modalidad. Los grupos "
+            "cargados antes de que se registrara la modalidad quedan fuera."
+        ),
+    ),
     sort_by: str | None = Query(
         default=None,
         description=(
@@ -507,6 +520,7 @@ def department_period_range_subject_filters(
         end_period_code=end_period,
         search=search,
         teacher_name=teacher_name,
+        modality=modality,
         sort_by=sort_by,
     )
 
@@ -532,6 +546,8 @@ class DepartmentPeriodRangeReport(BaseModel):
     evaluation_count: int
     period_averages: list[DepartmentPeriodRangePeriodAverage]
     dimensions: list[DepartmentPeriodRangeDimension]
+    comments_risk_counts: dict[str, int]
+    comments_pedagogical_category_counts: dict[str, int]
 
 
 class DepartmentPeriodRangeReportResponse(BaseModel):

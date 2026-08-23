@@ -38,6 +38,13 @@ class CoursesController:
 
         return await self.service.update(course_id, data, current_user)
 
+    async def update_name(
+        self, course_id: int, name: str, department_id: int, current_user: dict
+    ):
+        """Update only the course name (director-scoped)."""
+
+        return await self.service.update_name(course_id, name, department_id, current_user)
+
     async def delete(self, course_id: int, current_user: dict):
         """Delete a course."""
 
