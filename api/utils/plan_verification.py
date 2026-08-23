@@ -660,9 +660,17 @@ def _director_user_id(db, plan, fallback_department_id: int | None) -> int | Non
     if not department_id:
         return None
 
+    # `active` and not merely the department: a department keeps the rows of
+    # whoever ran it before, so without this the alert goes to whichever one the
+    # database hands back first — often a former director — and the person
+    # actually following the plan up never hears about it. Every other director
+    # lookup in the codebase already filters this way.
     director = (
         db.query(DirectorsModel)
-        .filter(DirectorsModel.department_id == department_id)
+        .filter(
+            DirectorsModel.department_id == department_id,
+            DirectorsModel.active.is_(True),
+        )
         .first()
     )
 
