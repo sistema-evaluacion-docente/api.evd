@@ -296,10 +296,11 @@ def _create_high_risk_comment_notification(
     notification_type = "warning"
 
     link = None
+    
     if comment.teacher_id:
-        link = f"/docentes/{comment.teacher_id}"
+        link = f"/alertas/{comment.teacher_id}"
         if academic_period_name:
-            link += f"?period={quote(academic_period_name)}"
+            link += f"?period={quote(academic_period_name)}#{comment.id}"
 
     try:
         notification = NotificationModel(
