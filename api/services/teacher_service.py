@@ -6,7 +6,7 @@ import io
 import openpyxl
 
 from api.core.pagination import PaginationParams
-from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ValidationError
+from api.exceptions import PermissionDeniedError, ResourceAlreadyExistsError, ResourceNotFoundError, ValidationError
 from api.utils.modalities import validated_modality
 from api.repositories.academic_periods import AcademicPeriodsRepository
 from api.repositories.evaluations import EvaluationsRepository
@@ -430,7 +430,7 @@ class TeacherService:
         teacher = self.teachers_repository.get_by_id(teacher_id)
 
         if not user or not teacher:
-            return None
+            raise ResourceNotFoundError("Docente no encontrado")
 
         roles = self.users_repository.get_user_role_names(user.id)
 
@@ -452,15 +452,26 @@ class TeacherService:
             raise ValidationError("Repositorio de evaluaciones no disponible")
 
         evaluation = self.evaluations_repository.get_by_id(evaluation_id)
-        if not evaluation or not evaluation.pdf_url:
-            return None
+        if not evaluation:
+            raise ResourceNotFoundError("Evaluación no encontrada")
+
+        pdf_paths = split_pdf_urls(evaluation.pdf_url)
+        if not pdf_paths:
+            raise ResourceNotFoundError("Esta evaluación no tiene un PDF asociado")
 
         if not teacher.user or not teacher.user.institutional_code:
-            return None
+            raise ResourceNotFoundError(
+                "El docente no tiene código institucional registrado"
+            )
 
-        return extract_teacher_pages(
-            split_pdf_urls(evaluation.pdf_url), teacher.user.institutional_code
-        )
+        pdf_bytes = extract_teacher_pages(pdf_paths, teacher.user.institutional_code)
+
+        if pdf_bytes is None:
+            raise ResourceNotFoundError(
+                "El docente no aparece en el PDF de esta evaluación"
+            )
+
+        return pdf_bytes
 
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
