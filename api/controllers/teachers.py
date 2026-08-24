@@ -118,7 +118,7 @@ class TeachersController:
 
     async def get_evaluation_report(
         self, teacher_id: int, evaluation_id: int, current_user
-    ) -> bytes | None:
+    ) -> bytes:
         """Return extracted PDF bytes for the teacher's pages in the evaluation."""
 
         return await self.service.get_evaluation_report(

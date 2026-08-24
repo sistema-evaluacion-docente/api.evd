@@ -18,8 +18,13 @@ Two passes, because the two inputs are ready at different moments:
 - ``verify_comments_for_evaluation`` runs when the AI analysis finishes, since
   comments carry no risk level nor pedagogical category until then
 
-Both are idempotent per (plan, period) and best-effort: a verification that
-fails must never undo an upload that succeeded.
+A third entry point, ``reverify_comment``, replays the second pass when a
+director re-tags a comment by hand: the finding carries a copy of the risk
+level and the category it was raised on, and that copy has to follow the
+comment it was taken from.
+
+All three are idempotent per (plan, period) and best-effort: a verification
+that fails must never undo the upload — or the edit — that triggered it.
 """
 
 import asyncio
@@ -388,6 +393,20 @@ def _upsert_verification(
     return verification
 
 
+def _qualitative_result(findings: list) -> str:
+    """Verdict of a plan whose commitments are *all* qualitative.
+
+    The agreed targets settle the verdict whenever the acta has any — a
+    complaint coming back does not undo a number that was met, and that is
+    ``verify_plan_scores``'s job. But a plan made only of commitments about
+    what the students wrote has no such number, and leaving it at "sin datos"
+    forever said nothing about a plan that had in fact been verified. There the
+    reincidencia is the only answer there is, so it becomes the verdict.
+    """
+
+    return "NO_MEJORO" if any(finding.is_alert for finding in findings) else "MEJORO"
+
+
 def verify_plan_scores(
     db,
     plan: ImprovementPlanModel,
@@ -598,6 +617,7 @@ def verify_plan_comments(
     db.flush()
 
     seen: set[tuple[int | None, int]] = set()
+    findings: list[ImprovementPlanVerificationCommentModel] = []
 
     for item_id, category_ids in categories_by_item.items():
         for row in comments:
@@ -607,7 +627,7 @@ def verify_plan_comments(
                 continue
 
             seen.add((item_id, row.comment_id))
-            db.add(
+            findings.append(
                 ImprovementPlanVerificationCommentModel(
                     verification_id=verification.id,
                     item_id=item_id,
@@ -630,7 +650,7 @@ def verify_plan_comments(
                 continue
 
             seen.add((None, row.comment_id))
-            db.add(
+            findings.append(
                 ImprovementPlanVerificationCommentModel(
                     verification_id=verification.id,
                     item_id=None,
@@ -641,6 +661,14 @@ def verify_plan_comments(
                     is_alert=True,
                 )
             )
+
+    for finding in findings:
+        db.add(finding)
+
+    # Only when the acta agreed on nothing measurable: otherwise the verdict
+    # belongs to the targets, and `verify_plan_scores` has already settled it.
+    if len(qualitative) == len(plan.items):
+        verification.result = _qualitative_result(findings)
 
     verification.comments_verified_at = datetime.datetime.now(datetime.timezone.utc)
     db.flush()
@@ -919,6 +947,70 @@ def verify_scores_for_evaluation(db, evaluation) -> None:
             getattr(evaluation, "id", None),
             exc,
         )
+
+
+def reverify_comment(db, comment_id: int) -> int:
+    """Re-run the comment pass of every plan a re-tagged comment can settle.
+
+    ``is_alert``, ``risk_level_name`` and the category are copied onto the
+    finding when the verification runs, so they are a snapshot of what the AI
+    said at that moment. A director who then re-tags the comment — ALTO down to
+    MEDIO, or into another pedagogical category — has changed the very thing
+    the finding was raised on, and leaving the copy behind means the plan keeps
+    reporting a reincidencia the department no longer recognises.
+
+    So the pass is simply run again: it rebuilds the findings from the comment
+    as it stands now, and settles the verdict off them. The director is not
+    notified — they are the one who just made the change, and the alert they
+    would get is the one they are looking at.
+
+    Returns how many plans were re-verified. Best-effort, like every other
+    verification here: it must never take down the edit that triggered it.
+    """
+
+    try:
+        comment = (
+            db.query(
+                CommentModel.teacher_id,
+                EvaluationModel.academic_period_id,
+                EvaluationModel.id.label("evaluation_id"),
+            )
+            .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+            .filter(CommentModel.id == comment_id)
+            .first()
+        )
+
+        if not comment or not comment.teacher_id or not comment.academic_period_id:
+            return 0
+
+        plans = plans_to_verify(
+            db, comment.academic_period_id, [comment.teacher_id]
+        )
+
+        verified = 0
+
+        for plan in plans:
+            if verify_plan_comments(
+                db,
+                plan,
+                comment.academic_period_id,
+                comment.evaluation_id,
+            ):
+                verified += 1
+
+        if verified:
+            db.commit()
+
+        return verified
+    except Exception as exc:
+        logger.warning(
+            "Failed to re-verify improvement plans for comment %s: %s",
+            comment_id,
+            exc,
+        )
+        db.rollback()
+
+        return 0
 
 
 def verify_comments_for_evaluation(db, evaluation) -> None:

@@ -8,6 +8,8 @@ Covers:
   - the verdict against the agreed target, and the per-subject breakdown that
     catches the same shortcoming moving to another course
   - the comment rule: ALTO raises the alert, MEDIO is context only
+  - re-running that rule when a director re-tags a comment, so the finding and
+    the comment never disagree
   - what the director is told, that they are told once, and that it is the
     director currently running the department
   - the two entry points the evaluation processor hangs all of this off
@@ -28,6 +30,7 @@ from api.models.improvement_plan_verification_item import (
     ImprovementPlanVerificationItemModel,
 )
 from api.models.notification import NotificationModel
+from api.models.comment import CommentModel
 from api.utils.plan_verification import (
     COMMENTS_ALERT_TITLE,
     COURSE_ALERT_TITLE,
@@ -39,6 +42,7 @@ from api.utils.plan_verification import (
     _notify_scores,
     _previous_period_code,
     plans_to_verify,
+    reverify_comment,
     verify_comments_for_evaluation,
     verify_plan_comments,
     verify_plan_scores,
@@ -755,3 +759,135 @@ class TestVerifyCommentsForEvaluation:
             verify_comments_for_evaluation(db, _evaluation())
 
         logger.warning.assert_called_once()
+
+
+class TestQualitativeVerdict:
+    """A plan whose commitments are all qualitative has no number to judge it
+    by, so what the students wrote again is the verdict."""
+
+    def _comment_row(self, comment_id, risk, category_id=9):
+        row = MagicMock()
+        row.comment_id = comment_id
+        row.risk_level_name = risk
+        row.category_id = category_id
+        row.category_name = "Puntualidad"
+        return row
+
+    def _run(self, items, comments, cited=None):
+        plan = _plan(items)
+        verification = _verification()
+        verification.result = "SIN_DATOS"
+        db = _make_db({})
+
+        with (
+            patch(
+                f"{MODULE}._cited_categories",
+                return_value=cited if cited is not None else {1: {9}},
+            ),
+            patch(f"{MODULE}._period_comments", return_value=comments),
+            patch(f"{MODULE}._upsert_verification", return_value=verification),
+        ):
+            verify_plan_comments(db, plan, period_id=2)
+
+        return verification
+
+    def test_a_complaint_coming_back_is_the_verdict(self):
+        verification = self._run(
+            [_item(1, "QUALITATIVE")], [self._comment_row(100, "ALTO")]
+        )
+
+        assert verification.result == "NO_MEJORO"
+
+    def test_nothing_coming_back_reads_as_improvement(self):
+        verification = self._run([_item(1, "QUALITATIVE")], [])
+
+        assert verification.result == "MEJORO"
+
+    def test_medium_risk_alone_is_context_and_not_a_verdict(self):
+        verification = self._run(
+            [_item(1, "QUALITATIVE")], [self._comment_row(101, "MEDIO")]
+        )
+
+        assert verification.result == "MEJORO"
+
+    def test_an_agreed_target_keeps_the_verdict_for_itself(self):
+        """With something measurable in the acta, the numbers decide — a
+        comment coming back never undoes a goal that was met."""
+
+        verification = self._run(
+            [_item(1, "QUALITATIVE"), _item(2, "QUESTION", "011")],
+            [self._comment_row(100, "ALTO")],
+        )
+
+        assert verification.result == "SIN_DATOS"
+
+
+class TestReverifyComment:
+    """Re-tagging a comment rewrites the findings that quoted it."""
+
+    def _comment(self, teacher_id=3, period_id=2, evaluation_id=5):
+        row = MagicMock()
+        row.teacher_id = teacher_id
+        row.academic_period_id = period_id
+        row.evaluation_id = evaluation_id
+        return row
+
+    def test_reruns_the_comment_pass_of_every_plan_the_period_settles(self):
+        db = _make_db({CommentModel.teacher_id: _FakeQuery(first_result=self._comment())})
+        plans = [_plan([], plan_id=7), _plan([], plan_id=8)]
+
+        with (
+            patch(f"{MODULE}.plans_to_verify", return_value=plans) as to_verify,
+            patch(f"{MODULE}.verify_plan_comments") as verify,
+        ):
+            verified = reverify_comment(db, 100)
+
+        to_verify.assert_called_once_with(db, 2, [3])
+        assert verify.call_count == 2
+        assert verified == 2
+        db.commit.assert_called_once()
+
+    def test_does_not_notify_the_director_who_just_made_the_change(self):
+        db = _make_db({CommentModel.teacher_id: _FakeQuery(first_result=self._comment())})
+
+        with (
+            patch(f"{MODULE}.plans_to_verify", return_value=[_plan([])]),
+            patch(f"{MODULE}.verify_plan_comments"),
+            patch(f"{MODULE}._notify_comments") as notify,
+        ):
+            reverify_comment(db, 100)
+
+        notify.assert_not_called()
+
+    def test_a_comment_of_a_period_no_plan_answers_changes_nothing(self):
+        db = _make_db({CommentModel.teacher_id: _FakeQuery(first_result=self._comment())})
+
+        with (
+            patch(f"{MODULE}.plans_to_verify", return_value=[]),
+            patch(f"{MODULE}.verify_plan_comments") as verify,
+        ):
+            verified = reverify_comment(db, 100)
+
+        verify.assert_not_called()
+        assert verified == 0
+        db.commit.assert_not_called()
+
+    def test_an_unknown_comment_settles_nothing(self):
+        db = _make_db({CommentModel.teacher_id: _FakeQuery(first_result=None)})
+
+        with patch(f"{MODULE}.plans_to_verify") as to_verify:
+            assert reverify_comment(db, 404) == 0
+
+        to_verify.assert_not_called()
+
+    def test_a_failure_here_never_undoes_the_edit_that_triggered_it(self):
+        db = _make_db({CommentModel.teacher_id: _FakeQuery(first_result=self._comment())})
+
+        with (
+            patch(f"{MODULE}.plans_to_verify", side_effect=RuntimeError("boom")),
+            patch(f"{MODULE}.logger") as logger,
+        ):
+            assert reverify_comment(db, 100) == 0
+
+        logger.warning.assert_called_once()
+        db.rollback.assert_called_once()

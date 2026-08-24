@@ -11,6 +11,7 @@ from api.schemas.notification import NotificationCreate, NotificationType
 from api.schemas.pagination import build_paginated_response
 from api.services.audit_service import AuditService
 from api.services.notification_service import NotificationService
+from api.utils.plan_verification import reverify_comment
 
 _TEXT_PREVIEW_LENGTH = 200
 
@@ -145,6 +146,12 @@ class CommentService:
         )
 
         result = self.comments_repository.get_by_id_enriched(comment_id)
+
+        # The plan verifications that quoted this comment copied its risk level
+        # and category when they ran; re-tagging it makes those copies say
+        # something the department no longer holds. Rebuilt here so the plan
+        # and the comment never disagree.
+        reverify_comment(self.comments_repository.db, comment_id)
 
         await self._notify_teacher_of_change(comment_id, before, result, current_user)
 

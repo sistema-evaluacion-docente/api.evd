@@ -301,11 +301,19 @@ def _create_high_risk_comment_notification(
     notification_type = "warning"
 
     link = None
-    
+
     if comment.teacher_id:
+        # The anchor is the point of the link: the alerts page of a teacher can
+        # hold a whole semester of comments, and the director is being told
+        # about this one. It used to hang off the period, so an alert without a
+        # period name landed on the list with nothing to say which comment it
+        # meant.
         link = f"/alertas/{comment.teacher_id}"
+
         if academic_period_name:
-            link += f"?period={quote(academic_period_name)}#{comment.id}"
+            link += f"?period={quote(academic_period_name)}"
+
+        link += f"#{comment.id}"
 
     try:
         notification = NotificationModel(
