@@ -171,8 +171,13 @@
     }
     .field-label { font-size: 11pt; margin: 0 0 4px 0; }
 
+    /* The gap the director and the teacher sign into. Measured off the
+       printed original, where the signature captions sit 124pt below the acto
+       administrativo line -- at 46px (34.5pt) the two rules landed almost on
+       top of it, with no room to write. The margin is 18pt short of that 124
+       because the rule and its caption take up the difference. */
     table.signatures {
-      margin-top: 46px;
+      margin-top: 106pt;
       page-break-inside: avoid;
       border-collapse: separate;
       border-spacing: 14px 0;

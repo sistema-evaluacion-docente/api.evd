@@ -38,7 +38,7 @@ class ImprovementPlanModel(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # BORRADOR / EN_SEGUIMIENTO / RESULTADO_DISPONIBLE /
-    # CERRADO_CUMPLIDO / CERRADO_NO_CUMPLIDO / CERRADO_MANUAL
+    # CERRADO_CUMPLIDO / CERRADO_NO_CUMPLIDO
     status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="EN_SEGUIMIENTO"
     )

@@ -44,7 +44,6 @@ REQUEST_ENTITY = "improvement_plan_evidence_requests"
 CLOSED_PLAN_STATUSES = (
     "CERRADO_CUMPLIDO",
     "CERRADO_NO_CUMPLIDO",
-    "CERRADO_MANUAL",
 )
 
 

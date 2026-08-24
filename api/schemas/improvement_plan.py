@@ -33,7 +33,6 @@ class PlanStatus(str, Enum):
     RESULTADO_DISPONIBLE = "RESULTADO_DISPONIBLE"
     CERRADO_CUMPLIDO = "CERRADO_CUMPLIDO"
     CERRADO_NO_CUMPLIDO = "CERRADO_NO_CUMPLIDO"
-    CERRADO_MANUAL = "CERRADO_MANUAL"
 
 
 class ActaStatus(str, Enum):
@@ -70,7 +69,6 @@ class CloseResult(str, Enum):
 
     CUMPLIDO = "CUMPLIDO"
     NO_CUMPLIDO = "NO_CUMPLIDO"
-    MANUAL = "MANUAL"
 
 
 class ImprovementPlanItemCreate(BaseModel):

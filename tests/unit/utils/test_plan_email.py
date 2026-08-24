@@ -273,8 +273,46 @@ class TestPlanClosed:
     def test_an_unknown_verdict_still_reads_as_a_closing(self):
         """Test a value the copy does not know about never leaks the raw enum."""
 
-        assert close_result_label("MANUAL") == "Cerrado administrativamente"
         assert close_result_label("ALGO_NUEVO") == "Cerrado"
+
+    @pytest.mark.parametrize("result", ["CUMPLIDO", "NO_CUMPLIDO"])
+    def test_renders_for_both_verdicts(self, result):
+        """Test the only two verdicts a director can pick both build a message.
+
+        The closing note used to be looked up with a default that named a
+        verdict that no longer exists; ``dict.get`` evaluates that default on
+        every call, so every closing mail raised ``KeyError`` and was swallowed
+        by the best-effort ``except`` around the send. Nobody got a mail and
+        nothing failed loudly.
+        """
+
+        message = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result=result,
+        )
+
+        assert close_result_label(result) in message.html
+        assert message.text.strip()
+
+    def test_leaves_no_empty_paragraph_when_the_verdict_has_no_note(self):
+        """Test an unknown verdict drops the sentence instead of printing a hole."""
+
+        message = render_plan_closed(
+            plan_id=7,
+            plan_title="Plan",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name="Departamento de Sistemas",
+            result="ALGO_NUEVO",
+        )
+
+        assert '<p style="margin:0 0 16px 0;"></p>' not in message.html
 
 
 @pytest.fixture

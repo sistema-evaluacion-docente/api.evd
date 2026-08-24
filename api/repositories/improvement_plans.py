@@ -60,7 +60,6 @@ MEASURABLE_TARGET_TYPES = ("OVERALL_AVERAGE", "DIMENSION", "QUESTION")
 CLOSE_RESULT_TO_STATUS = {
     "CUMPLIDO": "CERRADO_CUMPLIDO",
     "NO_CUMPLIDO": "CERRADO_NO_CUMPLIDO",
-    "MANUAL": "CERRADO_MANUAL",
 }
 
 
@@ -962,13 +961,16 @@ class ImprovementPlansRepository:
     async def close(
         self, plan_id: int, result: str, reason: str | None = None
     ) -> dict | None:
-        """Close a plan with the given result (CUMPLIDO / NO_CUMPLIDO / MANUAL)."""
+        """Close a plan with the given result (CUMPLIDO / NO_CUMPLIDO)."""
 
         plan = self._load(plan_id)
         if not plan:
             return None
 
-        plan.status = CLOSE_RESULT_TO_STATUS.get(result, "CERRADO_MANUAL")
+        # ``result`` is a ``CloseResult`` by the time it gets here, so the
+        # mapping is total: a missing key would be a bug, not a plan to close
+        # under some catch-all status.
+        plan.status = CLOSE_RESULT_TO_STATUS[result]
         plan.close_reason = reason
         plan.closed_at = datetime.now(timezone.utc)
 
