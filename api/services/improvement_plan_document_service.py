@@ -56,13 +56,37 @@ FOLLOWUP_FORMAT = "FORMATO_3"
 
 
 def resolve_format_type(slug: str) -> str:
-    """Translate the public slug into the stored format identifier."""
+    """Translate the public slug into the stored format identifier.
+
+    Every one of the three is a valid slot to file a signed PDF into — the
+    Formato 1 included, which is only ever filed and never rendered.
+    """
 
     format_type = FORMAT_SLUGS.get(slug.lower())
 
-    if not format_type or format_type not in FORMAT_TEMPLATES:
+    if not format_type:
         raise ValidationError(
             f"Formato inválido: '{slug}'. Use formato-1, formato-2 o formato-3"
+        )
+
+    return format_type
+
+
+def resolve_renderable_format_type(slug: str) -> str:
+    """Same, for the operations that draw the form themselves.
+
+    The Formato 1 is the case an academic programme reported: it is written and
+    signed outside the platform and arrives to the director by email, so there
+    is nothing to render — asking for it is a mistake worth naming.
+    """
+
+    format_type = resolve_format_type(slug)
+
+    if format_type not in FORMAT_TEMPLATES:
+        raise ValidationError(
+            f"El {format_type.replace('_', ' ').lower()} no lo genera la "
+            "plataforma: es el caso que remite el programa académico y se "
+            "adjunta ya diligenciado. Use formato-2 o formato-3"
         )
 
     return format_type
@@ -173,7 +197,7 @@ class ImprovementPlanDocumentService:
     async def generate(self, plan_id: int, slug: str, current_user) -> dict:
         """Render an official form filled with the plan data."""
 
-        format_type = resolve_format_type(slug)
+        format_type = resolve_renderable_format_type(slug)
         plan = await self.plan_service.get_by_id(plan_id, current_user)
         self.plan_service.ensure_can_manage(current_user, plan)
 
@@ -199,7 +223,7 @@ class ImprovementPlanDocumentService:
         signature. It is always rendered from the plan as it stands right now.
         """
 
-        format_type = resolve_format_type(slug)
+        format_type = resolve_renderable_format_type(slug)
         plan = await self.plan_service.get_by_id(plan_id, current_user)
         self.plan_service.ensure_can_manage(current_user, plan)
 
@@ -407,6 +431,10 @@ class ImprovementPlanDocumentService:
         asked for the generated original. A form that was never rendered is
         rendered now: the interface has no "generar" step any more, downloading
         is what asks for the document.
+
+        The Formato 1 is the exception, because there is nothing to fall back on:
+        it is only ever the PDF the director attached, so asking for one that was
+        never attached is a missing document, not a document still to draw.
         """
 
         format_type = resolve_format_type(slug)
@@ -422,6 +450,9 @@ class ImprovementPlanDocumentService:
             filepath = document.signed_pdf_url or document.generated_pdf_url
 
         if not filepath:
+            if format_type not in FORMAT_TEMPLATES:
+                raise ResourceNotFoundError("Documento del plan", slug)
+
             filepath = self._render_and_store(
                 plan, format_type, (current_user or {}).get("id")
             )

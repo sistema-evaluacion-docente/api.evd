@@ -167,9 +167,9 @@ Teléfono (057)(7) 5776655
 
 
 # How each verdict reads to the teacher, and what the message says after it.
-# The enum carries three values (the two the director picks plus the manual
-# close an admin can force), and a plan settled either way still deserves a
-# sentence that does not read as boilerplate.
+# A plan is settled as met or not met -- there is no third, administrative
+# close -- and either verdict deserves a sentence that does not read as
+# boilerplate.
 _CLOSE_RESULT_LABEL = {
     "CUMPLIDO": "Cumplido",
     "NO_CUMPLIDO": "No cumplido"
@@ -209,7 +209,7 @@ def render_plan_closed(
 
     url = plan_url(plan_id)
     label = close_result_label(result)
-    note = _CLOSE_RESULT_NOTE.get(result, _CLOSE_RESULT_NOTE["MANUAL"])
+    note = _CLOSE_RESULT_NOTE.get(result, "")
     subject = f"Cierre de su plan de mejoramiento: {plan_title}"
 
     html = _environment().get_template("plan_closed.html").render(
@@ -261,6 +261,7 @@ def _plan_closed_text(
 
     period = f", originado en la evaluación docente del periodo {period_code}," if period_code else ""
     observations = f"\nObservaciones: {reason}\n" if reason else ""
+    note = f"\n{closing_note}\n" if closing_note else ""
 
     return f"""Estimado(a) profesor(a) {teacher_name},
 
@@ -268,8 +269,7 @@ Le informamos que su plan de mejoramiento «{plan_title}»{period} ha sido cerra
 por la dirección del departamento.
 
 Resultado del cierre: {result_label}
-{observations}
-{closing_note}
+{observations}{note}
 
 Puede consultar el plan cerrado, con sus compromisos y seguimientos, en el
 Sistema de Evaluación Docente:

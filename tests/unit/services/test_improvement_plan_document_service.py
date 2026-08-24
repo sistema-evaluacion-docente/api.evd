@@ -13,6 +13,7 @@ from api.exceptions import ResourceNotFoundError, ValidationError
 from api.services.improvement_plan_document_service import (
     ImprovementPlanDocumentService,
     resolve_format_type,
+    resolve_renderable_format_type,
 )
 
 ADMIN = {"id": 1, "roles": ["ADMIN"], "department_id": None}
@@ -148,6 +149,20 @@ class TestResolveFormatType:
     def test_rejects_anything_else(self):
         with pytest.raises(ValidationError):
             resolve_format_type("formato-9")
+
+
+class TestResolveRenderableFormatType:
+    """Only Formatos 2 and 3 are drawn by the platform."""
+
+    def test_accepts_the_two_the_platform_draws(self):
+        assert resolve_renderable_format_type("formato-2") == "FORMATO_2"
+        assert resolve_renderable_format_type("formato-3") == "FORMATO_3"
+
+    def test_refuses_the_formato_1(self):
+        # It is written by the academic programme and reaches the director by
+        # email already filled: the platform files that PDF, it never draws it.
+        with pytest.raises(ValidationError):
+            resolve_renderable_format_type("formato-1")
 
 
 class TestBuildContext:
