@@ -404,19 +404,6 @@ class TestDownloadTeacherEvaluationReport:
         assert (teacher_id, evaluation_id) == (5, 12)
         assert current_user.uid == DOCENTE_USER["uid"]
 
-    async def test_returns_404_when_the_report_is_missing(
-        self, client, controller, auth
-    ):
-        """A None from the controller becomes a 404 with a Spanish message."""
-
-        auth.as_user(DIRECTOR_USER)
-        controller.get_evaluation_report.return_value = None
-
-        response = client.get("/teachers/5/evaluations/12/report")
-
-        assert response.status_code == 404
-        assert "no encontrado" in response.json()["error"]["message"]
-
     async def test_admin_is_forbidden(self, client, controller, auth):
         """Only DOCENTE and DIRECTOR may download a teacher report."""
 

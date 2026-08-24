@@ -2,7 +2,7 @@
 Tests for CommentService layer.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -287,6 +287,44 @@ class TestCommentService:
             actor_id=7,
             description="El director modificó la clasificación del comentario 1",
         )
+
+    @pytest.mark.asyncio
+    async def test_update_classification_reverifies_the_plans_that_quoted_it(
+        self, service, mock_comments_repo, mock_risk_levels_repo
+    ):
+        """A plan verification copies the risk level of the comments it quotes,
+        so re-tagging one has to rewrite the findings that carry that copy."""
+
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 3, "name": "Medio"}
+        mock_comments_repo.update_classification.return_value = MagicMock()
+        mock_comments_repo.get_by_id_enriched.return_value = {"id": 1}
+
+        with patch(
+            "api.services.comment_service.reverify_comment"
+        ) as reverify:
+            await service.update_classification(
+                1, CommentUpdate(risk_level=3), {"id": 7, "department_id": 1}
+            )
+
+        reverify.assert_called_once_with(mock_comments_repo.db, 1)
+
+    @pytest.mark.asyncio
+    async def test_update_classification_does_not_reverify_an_update_that_found_nothing(
+        self, service, mock_comments_repo, mock_risk_levels_repo
+    ):
+        mock_comments_repo.get_department_id.return_value = 1
+        mock_risk_levels_repo.get_by_id.return_value = {"id": 3, "name": "Medio"}
+        mock_comments_repo.update_classification.return_value = None
+
+        with patch(
+            "api.services.comment_service.reverify_comment"
+        ) as reverify:
+            await service.update_classification(
+                1, CommentUpdate(risk_level=3), {"id": 7, "department_id": 1}
+            )
+
+        reverify.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_classification_returns_none_when_update_fails(

@@ -190,7 +190,7 @@ class TestAnalyzeEvaluationCommentsHighRiskNotification:
         assert alerts[0].type == "warning"
         assert "Juan Perez" in alerts[0].message
         assert str(evaluation.id) in alerts[0].message
-        assert alerts[0].link == "/docentes/7?period=2024-1"
+        assert alerts[0].link == "/alertas/7?period=2024-1#10"
 
         channels_notified = {
             call.args[0] for call in mock_notification_manager.broadcast.call_args_list
@@ -645,7 +645,7 @@ class TestCreateHighRiskCommentNotification:
         assert notification.type == "warning"
         assert "Ana Gomez" in notification.message
         assert "Este docente no explica nada" in notification.message
-        assert notification.link == "/docentes/7"
+        assert notification.link == "/alertas/7#1"
 
         db.flush.assert_called_once()
         mock_notification_manager.broadcast.assert_called_once()
@@ -653,7 +653,7 @@ class TestCreateHighRiskCommentNotification:
         assert channel == "notifications:55"
         assert event.user_id == 55
         assert event.notification_type == "warning"
-        assert event.link == "/docentes/7"
+        assert event.link == "/alertas/7#1"
 
     @patch("api.utils.evaluation_processor.notification_manager")
     def test_link_includes_period_when_provided(self, mock_notification_manager):
@@ -671,7 +671,7 @@ class TestCreateHighRiskCommentNotification:
         )
 
         notification = db.add.call_args.args[0]
-        assert notification.link == "/docentes/9?period=2024-1"
+        assert notification.link == "/alertas/9?period=2024-1#4"
 
     @patch("api.utils.evaluation_processor.notification_manager")
     def test_link_url_encodes_period_name(self, mock_notification_manager):
@@ -689,7 +689,7 @@ class TestCreateHighRiskCommentNotification:
         )
 
         notification = db.add.call_args.args[0]
-        assert notification.link == "/docentes/9?period=2024%20Primer%20Semestre"
+        assert notification.link == "/alertas/9?period=2024%20Primer%20Semestre#5"
 
     @patch("api.utils.evaluation_processor.notification_manager")
     def test_no_link_when_comment_has_no_teacher(self, mock_notification_manager):
@@ -804,7 +804,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_notifies_the_director_once_for_the_whole_evaluation(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):
@@ -837,7 +837,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_spells_out_the_reason_when_only_one_teacher_is_suggested(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):
@@ -860,7 +860,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_stays_quiet_when_nobody_needs_a_plan(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):
@@ -875,7 +875,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_does_not_repeat_the_alert_when_the_analysis_is_re_run(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):
@@ -894,7 +894,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_skips_a_department_without_a_director(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):
@@ -909,7 +909,7 @@ class TestCreatePlanSuggestionNotification:
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.ImprovementPlansRepository")
-    @patch("api.utils.evaluation_processor._score_threshold", return_value=3.5)
+    @patch("api.utils.evaluation_processor.score_threshold", return_value=3.5)
     def test_a_failed_alert_never_undoes_a_finished_analysis(
         self, _mock_threshold, mock_repository, mock_notification_manager
     ):

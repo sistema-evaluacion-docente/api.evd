@@ -416,12 +416,13 @@ class TeacherService:
 
     async def get_evaluation_report(
         self, teacher_id: int, evaluation_id: int, current_user: TokenUser
-    ) -> bytes | None:
+    ) -> bytes:
         """Return a PDF with only the pages belonging to the teacher in the evaluation.
 
         DOCENTE may only access their own report; DIRECTOR may access any
-        teacher in their department. Returns None when teacher or evaluation
-        is not found.
+        teacher in their department. Every way of not finding the report raises
+        ``ResourceNotFoundError``, which the global handler turns into the 404 —
+        so there is no ``None`` for the route to translate.
         """
         from api.utils.evaluation_pdfs import split_pdf_urls
         from api.utils.pdf_extractor import extract_teacher_pages
