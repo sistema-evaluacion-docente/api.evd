@@ -48,6 +48,7 @@ from api.models.improvement_plan_verification_item import (
 )
 from api.models.notification import NotificationModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
+from api.models.program import ProgramModel
 from api.models.risk_level import RiskLevelModel
 from api.models.role import RoleModel
 from api.models.setting import SettingModel
@@ -85,6 +86,7 @@ __all__ = [
     "ImprovementPlanVerificationCourseModel",
     "ImprovementPlanVerificationItemModel",
     "PedagogicalCategoryModel",
+    "ProgramModel",
     "RiskLevelModel",
     "RoleModel",
     "SettingModel",

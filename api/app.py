@@ -45,6 +45,7 @@ from api.models import (
     improvement_plan_item,
     improvement_plan_item_comment,
     notification,
+    program,
     role,
     setting,
     setting_history,
@@ -67,6 +68,7 @@ from api.routes import (
     health,
     improvement_plans,
     notifications,
+    programs,
     settings,
     stats,
     teachers,
@@ -99,6 +101,7 @@ _ = (
     improvement_plan_evidence_request,
     improvement_plan_item,
     improvement_plan_item_comment,
+    program,
     role,
     teacher,
     user,
@@ -160,6 +163,7 @@ app.include_router(academic_periods.router)
 app.include_router(users.router)
 app.include_router(audits.router)
 app.include_router(faculties.router)
+app.include_router(programs.router)
 app.include_router(settings.router)
 app.include_router(stats.router)
 app.include_router(improvement_plans.router)
