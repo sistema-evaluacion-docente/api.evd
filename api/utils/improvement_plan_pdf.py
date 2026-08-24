@@ -23,17 +23,16 @@ TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates" / "improvement
 ASSETS_DIR = TEMPLATES_DIR / "assets"
 
 # Public identifiers <-> template files.
+#
+# Formato 1 is not here and has no template: the caso reportado is written by
+# the academic programme and reaches the director already filled, by email. He
+# uploads that PDF; the platform only ever renders Formatos 2 and 3.
 FORMAT_TEMPLATES = {
-    "FORMATO_1": "formato_1.html",
     "FORMATO_2": "formato_2.html",
     "FORMATO_3": "formato_3.html",
 }
 
 FORMAT_TITLES = {
-    "FORMATO_1": (
-        "Casos de docentes reportados por programas académicos "
-        "a las direcciones de departamento"
-    ),
     "FORMATO_2": "Ficha de acuerdo de mejoramiento y compromiso docente",
     "FORMATO_3": "Plan seguimiento y mejoramiento de la evaluación docente",
 }

@@ -30,6 +30,7 @@ from api.models.improvement_plan_course import ImprovementPlanCourseModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
+from api.models.program import ProgramModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -51,6 +52,7 @@ from api.utils.dimensions import (
 )
 from api.utils.improvement_suggestions import suggest_actions
 from api.utils.plan_suggestion import HIGH_RISK_LEVEL_NAME, is_plan_suggested
+from api.utils.program_codes import PROGRAM_CODE_LENGTH, program_code_of
 
 # The two formal follow-ups of the official form: week 8 and weeks 15/16.
 CHECKPOINT_STAGES = ["PRIMER_SEGUIMIENTO", "SEGUNDO_SEGUIMIENTO"]
@@ -325,10 +327,16 @@ class ImprovementPlansRepository:
         }
 
     async def get_teacher_courses(self, teacher_id: int, period_id: int) -> list[dict]:
-        """Asignaturas the teacher taught in a period.
+        """Asignaturas the teacher taught in a period, each with its carrera.
 
         Used to prefill the courses table of the official forms; the plan keeps
         its own snapshot of the rows the director actually chooses.
+
+        The program comes from the code the asignatura already carries, not from
+        the teacher's department: one teacher lectures the same subject across
+        several careers, and the department only says where he is attached.
+        Inactive programs still resolve — an old asignatura kept its carrera even
+        after the registry closed it.
         """
 
         rows = (
@@ -337,8 +345,14 @@ class ImprovementPlansRepository:
                 CourseModel.name.label("course_name"),
                 CourseModel.code.label("course_code"),
                 AcademicGroupModel.group_name,
+                ProgramModel.name.label("program_name"),
             )
             .outerjoin(CourseModel, CourseModel.id == AcademicGroupModel.course_id)
+            .outerjoin(
+                ProgramModel,
+                ProgramModel.code
+                == func.substr(CourseModel.code, 1, PROGRAM_CODE_LENGTH),
+            )
             .filter(
                 AcademicGroupModel.teacher_id == teacher_id,
                 AcademicGroupModel.academic_period_id == period_id,
@@ -353,6 +367,7 @@ class ImprovementPlansRepository:
                 "course_name": row.course_name,
                 "course_code": row.course_code,
                 "group_name": row.group_name,
+                "program_name": row.program_name,
             }
             for row in rows
         ]
@@ -569,8 +584,10 @@ class ImprovementPlansRepository:
         for index, item in enumerate(data.items):
             plan.items.append(self._build_item(item, index))
 
+        programs = self._programs_of(data.courses)
+
         for index, course in enumerate(data.courses):
-            plan.courses.append(self._build_course(course, index))
+            plan.courses.append(self._build_course(course, index, programs))
 
         # Both seguimientos are created upfront, each with its five aspect rows,
         # so the follow-up matrix of Formato 3 always renders complete.
@@ -615,18 +632,55 @@ class ImprovementPlansRepository:
 
         return model
 
-    @staticmethod
+    def _programs_of(
+        self, courses: list[ImprovementPlanCourseCreate]
+    ) -> dict[str, str]:
+        """COD_CARRERA -> program name, for every code the rows carry.
+
+        One query for the whole table instead of one per row, and the answer is
+        looked up by the prefix the course code embeds.
+        """
+
+        prefixes = {
+            prefix
+            for course in courses
+            if (prefix := program_code_of(course.course_code)) is not None
+        }
+
+        if not prefixes:
+            return {}
+
+        rows = (
+            self.db.query(ProgramModel.code, ProgramModel.name)
+            .filter(ProgramModel.code.in_(prefixes))
+            .all()
+        )
+
+        return {row.code: row.name for row in rows}
+
     def _build_course(
-        course: ImprovementPlanCourseCreate, index: int
+        self,
+        course: ImprovementPlanCourseCreate,
+        index: int,
+        programs: dict[str, str],
     ) -> ImprovementPlanCourseModel:
-        """Build one asignatura row of the official form header table."""
+        """Build one asignatura row of the official form header table.
+
+        The carrera is read off the course code rather than taken from the
+        payload: it is the registry's answer, and the client has no better one.
+        What the payload sent only survives where the code cannot answer — a row
+        typed by hand, or a code no program claims.
+        """
+
+        prefix = program_code_of(course.course_code)
+        program_name = programs.get(prefix) if prefix else None
 
         return ImprovementPlanCourseModel(
             academic_group_id=course.academic_group_id,
             course_name=course.course_name,
             course_code=course.course_code,
             group_name=course.group_name,
-            program_name=course.program_name,
+            program_name=program_name or course.program_name,
             order=course.order if course.order is not None else index,
         )
 
@@ -743,10 +797,12 @@ class ImprovementPlansRepository:
                     self.db.delete(item)
 
         if data.courses is not None:
+            programs = self._programs_of(data.courses)
+
             for course in list(plan.courses):
                 self.db.delete(course)
             plan.courses = [
-                self._build_course(course, index)
+                self._build_course(course, index, programs)
                 for index, course in enumerate(data.courses)
             ]
 
