@@ -266,17 +266,6 @@ async def close_plan(
     return await controller.close(plan_id, payload, current_user)
 
 
-@router.post("/{plan_id}/evaluate", response_model=ImprovementPlanOut)
-async def evaluate_plan(
-    plan_id: int,
-    current_user=Depends(require_roles(MANAGER_ROLES)),
-    controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
-):
-    """Verify compliance against the verification period's grades."""
-
-    return await controller.evaluate(plan_id, current_user)
-
-
 @router.post(
     "/{plan_id}/documents/{format_type}/generate", response_model=ImprovementPlanOut
 )

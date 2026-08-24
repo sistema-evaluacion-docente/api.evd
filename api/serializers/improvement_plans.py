@@ -225,6 +225,86 @@ def _compute_progress(status: str, items: list[ImprovementPlanItemModel]) -> int
     return round(100 * fulfilled / len(items))
 
 
+def improvement_plan_verification_course_to_dict(course) -> dict:
+    """One subject of the verification period, for the same indicator."""
+
+    return {
+        "id": course.id,
+        "academic_group_id": course.academic_group_id,
+        "course_name": course.course_name,
+        "course_code": course.course_code,
+        "group_name": course.group_name,
+        "result_value": _to_float(course.result_value),
+        "met": course.met,
+    }
+
+
+def improvement_plan_verification_item_to_dict(item) -> dict:
+    """One agreed target, measured again a semester later."""
+
+    return {
+        "id": item.id,
+        "item_id": item.item_id,
+        "target_type": item.target_type,
+        "target_ref": item.target_ref,
+        "target_value": _to_float(item.target_value),
+        "result_value": _to_float(item.result_value),
+        "met": item.met,
+        "courses": [
+            improvement_plan_verification_course_to_dict(c) for c in item.courses
+        ],
+    }
+
+
+def improvement_plan_verification_comment_to_dict(finding) -> dict:
+    """A student comment bringing back the complaint behind a commitment.
+
+    The text is read through the comment itself, which stays the source of
+    truth for what a student wrote.
+    """
+
+    comment = getattr(finding, "comment", None)
+
+    return {
+        "id": finding.id,
+        "item_id": finding.item_id,
+        "comment_id": finding.comment_id,
+        "original_text": comment.original_text if comment else None,
+        "pedagogical_category_id": finding.pedagogical_category_id,
+        "category_name": finding.category_name,
+        "risk_level_name": finding.risk_level_name,
+        "is_alert": finding.is_alert,
+    }
+
+
+def improvement_plan_verification_to_dict(
+    verification, *, period_code: str | None = None
+) -> dict:
+    """What the following semester said about a plan.
+
+    Written after the plan was closed, and deliberately kept apart from the
+    closing: ``result`` is what the grades say, never what the director signed.
+    """
+
+    return {
+        "id": verification.id,
+        "plan_id": verification.plan_id,
+        "period_id": verification.period_id,
+        "period_code": period_code,
+        "result": verification.result,
+        "scores_verified_at": verification.scores_verified_at,
+        "comments_verified_at": verification.comments_verified_at,
+        "items": [
+            improvement_plan_verification_item_to_dict(i) for i in verification.items
+        ],
+        "comment_findings": [
+            improvement_plan_verification_comment_to_dict(c)
+            for c in verification.comment_findings
+        ],
+        "created_at": verification.created_at,
+    }
+
+
 def improvement_plan_to_dict(
     plan: ImprovementPlanModel,
     *,
@@ -232,7 +312,6 @@ def improvement_plan_to_dict(
     teacher_avatar_url: str | None = None,
     origin_period_code: str | None = None,
     verification_period_code: str | None = None,
-    suggested_result: str | None = None,
     include_relations: bool = True,
     evidence_uploader_names: dict[int, str] | None = None,
 ) -> dict:
@@ -246,7 +325,12 @@ def improvement_plan_to_dict(
     evidences = list(plan.evidences) if include_relations else []
     courses = list(plan.courses) if include_relations else []
     documents = list(plan.documents) if include_relations else []
+    verifications = list(plan.verifications) if include_relations else []
     uploader_names = evidence_uploader_names or {}
+
+    # One per period, and only the last one is of any use: it is the answer to
+    # this plan, and re-uploading the period rewrites it in place.
+    verification = verifications[-1] if verifications else None
 
     signed_acta = next(
         (
@@ -289,7 +373,13 @@ def improvement_plan_to_dict(
         "program_director_observations": plan.program_director_observations,
         "has_acta": signed_acta is not None,
         "progress": _compute_progress(plan.status, items),
-        "suggested_result": suggested_result,
+        "verification": (
+            improvement_plan_verification_to_dict(
+                verification, period_code=verification_period_code
+            )
+            if verification
+            else None
+        ),
         "items": [improvement_plan_item_to_dict(i) for i in items],
         "checkpoints": [
             improvement_plan_checkpoint_to_dict(c) for c in checkpoints

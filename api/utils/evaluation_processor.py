@@ -37,6 +37,11 @@ from api.services.improvement_plan_service import (
 )
 from api.utils.modalities import normalize_modality
 from api.utils.plan_suggestion import suggestion_reasons
+from api.utils.plan_verification import (
+    score_threshold,
+    verify_comments_for_evaluation,
+    verify_scores_for_evaluation,
+)
 from api.utils.ai_analyzer import analyze_comment  # used by analyze_evaluation_comments
 from api.core.websockets.events import NotificationEvent
 from api.core.websockets.connection_manager import (
@@ -355,20 +360,6 @@ def _run_async(coro):
         loop.close()
 
 
-def _score_threshold(db) -> float:
-    """Institutional threshold an indicator counts as weak under."""
-
-    setting = SettingsRepository(db).get_by_key(SCORE_THRESHOLD_SETTING)
-
-    if not setting or setting.value is None:
-        return DEFAULT_SCORE_THRESHOLD
-
-    try:
-        return float(setting.value)
-    except (TypeError, ValueError):
-        return DEFAULT_SCORE_THRESHOLD
-
-
 def _plan_suggestion_message(
     suggested: list[dict], period_code: str | None, threshold: float
 ) -> str:
@@ -429,7 +420,7 @@ def _create_plan_suggestion_notification(db, evaluation) -> None:
         if not director:
             return
 
-        threshold = _score_threshold(db)
+        threshold = score_threshold(db)
 
         candidates = _run_async(
             ImprovementPlansRepository(db).get_candidates(
@@ -751,6 +742,9 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             teachers_count=len(parsed["teachers"]),
         )
 
+        if evaluation:
+            verify_scores_for_evaluation(db, evaluation)
+
         db.commit()
 
         logger.info("Evaluation %d processed successfully", evaluation_id)
@@ -1006,6 +1000,10 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
         # Only once the comments are classified: the suggestion also reads the
         # high-risk ones, which do not exist until the analysis has run.
         _create_plan_suggestion_notification(db, evaluation)
+
+        # Same reason: a qualitative commitment is verified by the complaint
+        # behind it coming back, which needs the comments classified.
+        verify_comments_for_evaluation(db, evaluation)
 
         db.commit()
 

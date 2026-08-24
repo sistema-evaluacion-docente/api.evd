@@ -375,6 +375,65 @@ class ImprovementPlanEvidenceRequestOut(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class ImprovementPlanVerificationCourseOut(BaseModel):
+    """One subject of the verification period, for the indicator verified."""
+
+    id: int
+    academic_group_id: Optional[int] = None
+    course_name: Optional[str] = None
+    course_code: Optional[str] = None
+    group_name: Optional[str] = None
+    result_value: Optional[float] = None
+    met: bool = False
+
+
+class ImprovementPlanVerificationItemOut(BaseModel):
+    """One agreed target, measured again a semester later."""
+
+    id: int
+    item_id: Optional[int] = None
+    target_type: str
+    target_ref: Optional[str] = None
+    target_value: Optional[float] = None
+    result_value: Optional[float] = None
+    met: Optional[bool] = None
+    courses: list[ImprovementPlanVerificationCourseOut] = Field(default_factory=list)
+
+
+class ImprovementPlanVerificationCommentOut(BaseModel):
+    """A student comment bringing back the complaint behind a commitment."""
+
+    id: int
+    item_id: Optional[int] = None
+    comment_id: int
+    original_text: Optional[str] = None
+    pedagogical_category_id: Optional[int] = None
+    category_name: Optional[str] = None
+    risk_level_name: Optional[str] = None
+    is_alert: bool = False
+
+
+class ImprovementPlanVerificationOut(BaseModel):
+    """What the following semester said about a plan.
+
+    ``result`` is what the grades say — MEJORO / NO_MEJORO / SIN_DATOS — and is
+    never the closing the director signed, which lives in ``status``.
+    """
+
+    id: int
+    plan_id: int
+    period_id: int
+    period_code: Optional[str] = None
+    result: str
+    scores_verified_at: Optional[datetime] = None
+    comments_verified_at: Optional[datetime] = None
+    items: list[ImprovementPlanVerificationItemOut] = Field(default_factory=list)
+    comment_findings: list[ImprovementPlanVerificationCommentOut] = Field(
+        default_factory=list
+    )
+    created_at: Optional[datetime] = None
+
+
 class ImprovementPlanOut(BaseModel):
     """Schema for outputting an improvement plan."""
 
@@ -409,7 +468,7 @@ class ImprovementPlanOut(BaseModel):
     program_director_observations: Optional[str] = None
     has_acta: bool = False
     progress: int = 0
-    suggested_result: Optional[str] = None
+    verification: Optional[ImprovementPlanVerificationOut] = None
     items: list[ImprovementPlanItemOut] = Field(default_factory=list)
     checkpoints: list[ImprovementPlanCheckpointOut] = Field(default_factory=list)
     evidences: list[ImprovementPlanEvidenceOut] = Field(default_factory=list)

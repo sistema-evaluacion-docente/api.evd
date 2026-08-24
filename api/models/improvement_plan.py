@@ -115,6 +115,14 @@ class ImprovementPlanModel(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    # What the following semester said about the plan, once its grades were
+    # uploaded. Written after the plan is closed and never alters the closing.
+    verifications: Mapped[list["ImprovementPlanVerificationModel"]] = relationship(
+        "ImprovementPlanVerificationModel",
+        back_populates="plan",
+        cascade="all, delete-orphan",
+        order_by="ImprovementPlanVerificationModel.period_id",
+    )
     # Generated / signed PDFs of the three official forms.
     documents: Mapped[list["ImprovementPlanDocumentModel"]] = relationship(
         "ImprovementPlanDocumentModel",

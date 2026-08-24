@@ -125,9 +125,7 @@ class ImprovementPlansRepository:
             .first()
         )
 
-    def _enrich(
-        self, plan: ImprovementPlanModel, suggested_result: str | None = None
-    ) -> dict:
+    def _enrich(self, plan: ImprovementPlanModel) -> dict:
         name, avatar = self._teacher_info(plan.teacher_id)
 
         uploader_ids = {e.uploaded_by for e in plan.evidences if e.uploaded_by}
@@ -146,7 +144,6 @@ class ImprovementPlansRepository:
             teacher_avatar_url=avatar,
             origin_period_code=self._period_code(plan.origin_period_id),
             verification_period_code=self._period_code(plan.verification_period_id),
-            suggested_result=suggested_result,
             evidence_uploader_names=uploader_names,
         )
 
@@ -225,6 +222,37 @@ class ImprovementPlansRepository:
             .select_from(TeacherModel)
             .join(UserModel, UserModel.id == TeacherModel.user_id)
             .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+
+        if not row:
+            return None
+
+        return {"user_id": row.user_id, "name": row.name, "email": row.email}
+
+    def get_department_director_contact(self, department_id: int | None) -> dict | None:
+        """Who to write to when something on a plan needs the director.
+
+        The twin of ``get_teacher_contact`` for the other side of the loop:
+        ``get_department_director_user_id`` above answers the bell, which only
+        needs an id, but an email needs a name and an address as well.
+        """
+
+        if department_id is None:
+            return None
+
+        row = (
+            self.db.query(
+                UserModel.id.label("user_id"),
+                UserModel.name,
+                UserModel.email,
+            )
+            .select_from(DirectorsModel)
+            .join(UserModel, UserModel.id == DirectorsModel.user_id)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active.is_(True),
+            )
             .first()
         )
 
@@ -396,7 +424,7 @@ class ImprovementPlansRepository:
     # ------------------------------------------------------------------ #
     # Indicator averages (question = one item of the evaluation form)
     # ------------------------------------------------------------------ #
-    def _question_averages(
+    def question_averages(
         self, teacher_ids: list[int], period_id: int
     ) -> dict[int, dict[str, float]]:
         """Per-teacher, per-question averages for a period, in a single query."""
@@ -443,7 +471,7 @@ class ImprovementPlansRepository:
         return averages
 
     @staticmethod
-    def _dimension_average(
+    def dimension_average(
         question_averages: dict[str, float], codes: list[str]
     ) -> float | None:
         scores = [question_averages[c] for c in codes if c in question_averages]
@@ -459,7 +487,7 @@ class ImprovementPlansRepository:
         dimensions = []
 
         for dimension, codes in DIMENSION_MAP.items():
-            average = self._dimension_average(question_averages, codes)
+            average = self.dimension_average(question_averages, codes)
             questions = []
 
             for code in codes:
@@ -949,97 +977,6 @@ class ImprovementPlansRepository:
 
         return self._enrich(plan)
 
-    # ------------------------------------------------------------------ #
-    # Compliance verification against the verification period
-    # ------------------------------------------------------------------ #
-    async def evaluate(self, plan_id: int, threshold: float) -> dict | None:
-        """Recompute item results against the verification period and suggest
-        an aggregated result. Does NOT close the plan (director confirms).
-
-        Items without an explicit ``target_value`` are verified against the
-        institutional ``threshold``."""
-
-        plan = self._load(plan_id)
-        if not plan:
-            return None
-
-        stats = StatsRepository(self.db)
-
-        # Resolve verification period (auto from origin if missing).
-        verification_period_id = plan.verification_period_id
-        if verification_period_id is None:
-            origin_code = self._period_code(plan.origin_period_id)
-            next_code = self._next_period_code(origin_code) if origin_code else None
-            next_period = self._period_by_code(next_code) if next_code else None
-            if next_period:
-                verification_period_id = next_period.id
-                plan.verification_period_id = next_period.id
-
-        if verification_period_id is None:
-            # Nothing to verify against yet.
-            return self._enrich(plan)
-
-        overall = await stats.get_teacher_average_with_previous(
-            plan.teacher_id, verification_period_id
-        )
-        overall_avg = overall.get("overall_average") if overall else None
-
-        question_avgs = self._question_averages(
-            [plan.teacher_id], verification_period_id
-        ).get(plan.teacher_id, {})
-
-        dim_by_name = {
-            dimension: self._dimension_average(question_avgs, codes)
-            for dimension, codes in DIMENSION_MAP.items()
-        }
-
-        measured = 0
-        fulfilled = 0
-
-        for item in plan.items:
-            if item.target_type not in MEASURABLE_TARGET_TYPES:
-                continue
-
-            result_value: float | None = None
-
-            if item.target_type == "OVERALL_AVERAGE":
-                result_value = overall_avg
-            elif item.target_type == "DIMENSION" and item.target_ref:
-                result_value = dim_by_name.get(item.target_ref)
-            elif item.target_type == "QUESTION" and item.target_ref:
-                result_value = question_avgs.get(item.target_ref)
-
-            item.result_value = result_value
-
-            if result_value is None:
-                # The verification period has no grades for this indicator yet:
-                # leave the item as it is instead of failing it for missing data.
-                continue
-
-            target = (
-                float(item.target_value)
-                if item.target_value is not None
-                else threshold
-            )
-
-            measured += 1
-
-            if result_value >= target:
-                item.status = "CUMPLIDO"
-                fulfilled += 1
-            else:
-                item.status = "NO_CUMPLIDO"
-
-        suggested_result = None
-        if measured > 0:
-            suggested_result = "CUMPLIDO" if fulfilled == measured else "NO_CUMPLIDO"
-            plan.status = "RESULTADO_DISPONIBLE"
-
-        self.db.commit()
-        self.db.refresh(plan)
-
-        return self._enrich(plan, suggested_result=suggested_result)
-
     async def get_evaluated_periods(self, department_id: int) -> list[dict]:
         """Periods whose grades are already loaded for the department, newest
         first.
@@ -1105,7 +1042,7 @@ class ImprovementPlansRepository:
         teachers = ranking.get("teachers", [])
         teacher_ids = [t["teacher_id"] for t in teachers]
 
-        averages_by_teacher = self._question_averages(teacher_ids, period_id)
+        averages_by_teacher = self.question_averages(teacher_ids, period_id)
         planned = self._teachers_with_plan(teacher_ids, period_id)
         risky_comments = self._high_risk_comment_counts(teacher_ids, period_id)
         # The header of the official forms, so the creation page proposes it
@@ -1251,7 +1188,7 @@ class ImprovementPlansRepository:
                 "period_name": entry["period_name"],
                 "overall_average": entry["overall_average"],
                 "dimensions": {
-                    dimension: self._dimension_average(
+                    dimension: self.dimension_average(
                         question_history.get(entry["period_code"], {}), codes
                     )
                     for dimension, codes in DIMENSION_MAP.items()

@@ -169,11 +169,6 @@ class ImprovementPlansController:
 
         return await self.service.close(plan_id, data, current_user)
 
-    async def evaluate(self, plan_id: int, current_user):
-        """Verify compliance against the verification period."""
-
-        return await self.service.evaluate(plan_id, current_user)
-
     async def get_teacher_courses(self, teacher_id: int, period_id: int, current_user):
         """Asignaturas of a teacher in a period, to prefill the forms."""
 
