@@ -1,5 +1,7 @@
 # Sistema de Evaluación Docente
 
+[![Docker Image CI for GHCR](https://github.com/sistema-evaluacion-docente/api.evd/actions/workflows/publish-ghcr.yaml/badge.svg)](https://github.com/sistema-evaluacion-docente/api.evd/actions/workflows/publish-ghcr.yaml)
+
 **API REST**
 _Sistema de Evaluación Docente — Universidad Francisco de Paula Santander (UFPS)_
 
