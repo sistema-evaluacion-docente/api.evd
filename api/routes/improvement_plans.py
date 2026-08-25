@@ -113,10 +113,14 @@ async def get_evaluated_periods(
 
 @router.get("/indicators")
 async def get_plan_indicators(
-    _=Depends(require_roles(MANAGER_ROLES)),
+    _=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Catalogue of indicators and the five aspects of the official forms."""
+    """Catalogue of indicators and the five aspects of the official forms.
+
+    Open to a DOCENTE too: it carries no plan data, and their own plan view
+    groups its compromisos by the aspects of the official form.
+    """
 
     return await controller.get_indicators()
 
