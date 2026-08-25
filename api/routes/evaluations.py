@@ -52,6 +52,7 @@ from api.utils.teacher_excel_export import (
 router = EnvelopeRouter(prefix="/evaluations", tags=["Evaluations"])
 
 _EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+_ALL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO, RoleName.DOCENTE]
 
 
 @router.post(
@@ -309,7 +310,7 @@ async def get_evaluation_dimension_detail(
 async def get_teacher_comments(
     evaluation_id: int,
     teacher_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    _=Depends(require_roles(_ALL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return comments grouped by course for a teacher within an evaluation."""
@@ -385,7 +386,7 @@ async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
     compare_previous: bool = False,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    _=Depends(require_roles(_ALL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation.
