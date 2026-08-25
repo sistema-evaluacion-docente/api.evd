@@ -60,7 +60,7 @@ async def get_all_plans(
     status: str | None = Query(default=None),
     search: str | None = Query(default=None),
     teacher_id: int | None = Query(default=None),
-    current_user=Depends(require_roles(MANAGER_ROLES)),
+    current_user=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
     """List improvement plans of a department with pagination and filters."""
