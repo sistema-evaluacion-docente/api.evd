@@ -5,7 +5,16 @@ Improvement plan model (Plan de Seguimiento Docente)
 import datetime
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -19,6 +28,18 @@ class ImprovementPlanModel(Base):
     """
 
     __tablename__ = "improvement_plans"
+    __table_args__ = (
+        # The shape ``get_all`` always has: the director's department scoping
+        # plus the newest-first ordering. One index serves the filter and the
+        # sort, because with ``department_id`` pinned by equality Postgres walks
+        # the ``created_at`` range backwards — an explicit DESC would only
+        # matter if the two columns were ordered in opposite directions.
+        Index(
+            "ix_improvement_plans_department_created",
+            "department_id",
+            "created_at",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(
         Integer, primary_key=True, index=True, autoincrement=True
@@ -29,11 +50,14 @@ class ImprovementPlanModel(Base):
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id"), nullable=True
     )
+    # Both period columns are indexed for the foreign key rather than for a
+    # query: deleting or updating an academic period has to check every plan
+    # pointing at it, and without an index that check is a full scan.
     origin_period_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("academic_periods.id"), nullable=False
+        Integer, ForeignKey("academic_periods.id"), nullable=False, index=True
     )
     verification_period_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("academic_periods.id"), nullable=True
+        Integer, ForeignKey("academic_periods.id"), nullable=True, index=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
