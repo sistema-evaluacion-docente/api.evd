@@ -1,0 +1,73 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+
+    env:
+      # `api/database.py` refuses to import without one. The suite mocks every
+      # session, so nothing ever connects — SQLAlchemy only needs a URL it can
+      # parse, and sqlite spares the runner a database service.
+      DATABASE_URL: sqlite://
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      # WeasyPrint loads Pango through ctypes at import time, and the tests
+      # import the generator of the official plan formats. Same packages as
+      # docker/Dockerfile.
+      - name: Install WeasyPrint system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libpango-1.0-0 libpangoft2-1.0-0 libharfbuzz-subset0 \
+            libffi-dev libjpeg-dev libopenjp2-7-dev fonts-liberation
+
+      - name: Install dependencies
+        # torch comes from the CPU index: PyPI serves the CUDA wheels (~2.5 GB)
+        # that a GPU-less runner downloads and never uses. Same as the image.
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install -r requirements.txt
+
+      # `api/middlewares/auth.py` calls `initialize_app()` at import time, so
+      # without a parseable service account two test modules fail to collect.
+      # Generated per run and thrown away: the suite mocks token verification,
+      # nothing here ever reaches Google.
+      - name: Generate a throwaway Firebase service account
+        run: |
+          {
+            echo 'FIREBASE_TYPE=service_account'
+            echo 'FIREBASE_PROJECT_ID=evd-ci'
+            echo 'FIREBASE_PRIVATE_KEY_ID=ci'
+            echo 'FIREBASE_CLIENT_EMAIL=ci@evd-ci.iam.gserviceaccount.com'
+            echo 'FIREBASE_CLIENT_ID=0'
+            echo 'FIREBASE_AUTH_URI=https://accounts.google.com/o/oauth2/auth'
+            echo 'FIREBASE_TOKEN_URI=https://oauth2.googleapis.com/token'
+            echo 'FIREBASE_PRIVATE_KEY<<PEM'
+            openssl genrsa 2048 2>/dev/null
+            echo 'PEM'
+          } >> "$GITHUB_ENV"
+
+      - name: Run tests
+        run: pytest --cov --cov-report=term-missing
