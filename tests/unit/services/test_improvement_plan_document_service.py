@@ -500,6 +500,19 @@ class TestTellingTheTeacherItIsSigned:
         mock_notification_service.create.assert_not_awaited()
         sent_email.assert_not_called()
 
+    async def test_the_signer_hears_about_it_when_the_plan_is_their_own(
+        self, service, mock_notification_service, sent_email
+    ):
+        # A director with a plan on themselves uploads the scan: the notice used
+        # to be dropped for being their own doing, which left the only account
+        # in the loop with nothing to look at.
+        signer = {"id": TEACHER_CONTACT["user_id"], "roles": ["DIRECTOR DE DEPARTAMENTO"]}
+
+        await self._sign(service, actor=signer)
+
+        assert mock_notification_service.create.call_args[0][0].title == "Formato 2 firmado"
+        assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
+
     async def test_a_teacher_with_no_account_is_simply_skipped(
         self, service, mock_plans_repository, mock_notification_service, sent_email
     ):

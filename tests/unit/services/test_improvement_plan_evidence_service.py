@@ -355,6 +355,23 @@ class TestNotificationLinks:
 
         assert notification.link == "/mis-planes/7"
 
+    async def test_an_account_on_both_sides_still_hears_the_bell(
+        self, service, mock_notification_service, mock_plans_repository
+    ):
+        # A director with a plan on themselves: the notice used to be dropped
+        # because the recipient was the one who acted, so the plan showed no
+        # sign of the request that had just been made on it.
+        mock_plans_repository.get_teacher_user_id.return_value = DIRECTOR_USER_ID
+
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        notification = mock_notification_service.create.call_args[0][0]
+
+        assert notification.user_id == DIRECTOR_USER_ID
+        assert notification.link == "/mis-planes/7"
+
 
 class TestEmail:
     """The inbox half of the loop.
@@ -419,11 +436,12 @@ class TestEmail:
         await service.add_comment(7, 9, comment, DIRECTOR)
         assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
 
-    async def test_nobody_is_written_to_about_their_own_doing(
+    async def test_an_account_on_both_sides_is_written_to_all_the_same(
         self, service, sent_email, mock_plans_repository
     ):
-        # The director requesting a deliverable *is* the plan's teacher — an
-        # account holding both roles. Same rule the notifications already apply.
+        # The director requesting a deliverable *is* the plan's teacher — one
+        # account holding both roles, which is how the loop gets tested end to
+        # end. Dropping the mail there is what left that plan silent.
         mock_plans_repository.get_teacher_contact.return_value = {
             **TEACHER_CONTACT,
             "user_id": DIRECTOR["id"],
@@ -433,7 +451,8 @@ class TestEmail:
             7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
         )
 
-        sent_email.assert_not_called()
+        sent_email.assert_called_once()
+        assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
 
     async def test_a_teacher_with_no_account_is_simply_skipped(
         self, service, sent_email, mock_plans_repository
