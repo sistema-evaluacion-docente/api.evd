@@ -21,9 +21,7 @@ class ImprovementPlanEvidenceCommentModel(Base):
 
     __tablename__ = "improvement_plan_evidence_comments"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     request_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plan_evidence_requests.id", ondelete="CASCADE"),

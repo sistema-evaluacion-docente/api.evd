@@ -41,9 +41,7 @@ class ImprovementPlanModel(Base):
         ),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     teacher_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("teachers.id"), nullable=False, index=True
     )

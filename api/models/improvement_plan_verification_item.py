@@ -37,9 +37,7 @@ class ImprovementPlanVerificationItemModel(Base):
 
     __tablename__ = "improvement_plan_verification_items"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     verification_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plan_verifications.id", ondelete="CASCADE"),
