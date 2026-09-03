@@ -100,9 +100,16 @@ class ImprovementPlanEvidenceService:
         The link is asked for rather than derived: the two sides of this loop
         read the plan on different screens, and the caller is the one that knows
         which side it is writing to.
+
+        Whoever acted is written to as well when they are the recipient: a
+        single account can hold both roles — a director drawing up a plan on
+        themselves — and silencing the notice there leaves that plan with no
+        trace of the loop at all, which is exactly the case the flow has to be
+        testable on. In the field the two sides are different people and this
+        never comes up.
         """
 
-        if not user_id or user_id == actor_id:
+        if not user_id:
             return
 
         await self.notification_service.create(
@@ -163,14 +170,15 @@ class ImprovementPlanEvidenceService:
     # `ImprovementPlanService._email_teacher`: the evidence is already stored
     # and audited by the time any of this runs, so a mail server that is down
     # must not turn a successful request into a 500.
-    async def _send(self, build, *, recipient: dict | None, actor_id) -> None:
-        """Renders and sends one message, unless there is nobody to send it to."""
+    async def _send(self, build, *, recipient: dict | None) -> None:
+        """Renders and sends one message, unless there is nobody to send it to.
+
+        Same rule as `_notify`: an account that is both sides of the loop gets
+        its own mail too, so the whole exchange can be walked through end to end
+        with a single user.
+        """
 
         if not recipient or not recipient.get("email"):
-            return
-
-        # Same rule as `_notify`: nobody is written to about their own doing.
-        if recipient.get("user_id") == actor_id:
             return
 
         try:
@@ -268,7 +276,6 @@ class ImprovementPlanEvidenceService:
                 department_name=self._department_name(plan),
             ),
             recipient=self._teacher_contact(plan),
-            actor_id=actor_id,
         )
 
         return request
@@ -343,7 +350,6 @@ class ImprovementPlanEvidenceService:
                     director_email=director["email"],
                 ),
                 recipient=self._director_contact(plan),
-                actor_id=actor_id,
             )
         else:
             await self._notify_teacher(
@@ -363,7 +369,6 @@ class ImprovementPlanEvidenceService:
                     department_name=self._department_name(plan),
                 ),
                 recipient=self._teacher_contact(plan),
-                actor_id=actor_id,
             )
 
         return comment
@@ -434,7 +439,6 @@ class ImprovementPlanEvidenceService:
                     director_email=director["email"],
                 ),
                 recipient=self._director_contact(plan),
-                actor_id=actor_id,
             )
 
         return evidence
@@ -515,7 +519,6 @@ class ImprovementPlanEvidenceService:
                 department_name=self._department_name(plan),
             ),
             recipient=self._teacher_contact(plan),
-            actor_id=actor_id,
         )
 
         return reviewed

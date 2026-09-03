@@ -313,8 +313,6 @@ class ImprovementPlanDocumentService:
 
         actor_id = (current_user or {}).get("id")
 
-        if contact.get("user_id") == actor_id:
-            return
 
         try:
             await self.notification_service.create(
