@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -29,6 +30,17 @@ class ImprovementPlanModel(Base):
 
     __tablename__ = "improvement_plans"
     __table_args__ = (
+        # One plan per teacher and origin period. ``ImprovementPlanService``
+        # checks this before creating, but a check in Python is not a
+        # guarantee: two requests can both pass it before either commits. It
+        # also indexes the two accesses that look a plan up by teacher —
+        # ``has_plan_for`` and ``_teachers_with_plan`` — and, being led by
+        # ``teacher_id``, it serves lookups by teacher alone as well.
+        UniqueConstraint(
+            "teacher_id",
+            "origin_period_id",
+            name="uq_improvement_plan_teacher_period",
+        ),
         # The shape ``get_all`` always has: the director's department scoping
         # plus the newest-first ordering. One index serves the filter and the
         # sort, because with ``department_id`` pinned by equality Postgres walks
@@ -42,8 +54,10 @@ class ImprovementPlanModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # No index of its own: ``uq_improvement_plan_teacher_period`` leads with
+    # this column and answers the same lookups.
     teacher_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("teachers.id"), nullable=False, index=True
+        Integer, ForeignKey("teachers.id"), nullable=False
     )
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id"), nullable=True

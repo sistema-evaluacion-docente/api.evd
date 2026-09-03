@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from api.core.pagination import PaginationParams
 from api.exceptions import (
     PermissionDeniedError,
     ResourceAlreadyExistsError,
@@ -239,6 +240,70 @@ class TestGetById:
             await service.get_by_id(7, ADMIN)
 
 
+class TestGetMyPlans:
+    """The teacher-facing listing, paginated like every other listing."""
+
+    @pytest.fixture
+    def pagination(self):
+        return PaginationParams(page=2, limit=5)
+
+    async def test_lists_the_callers_own_plans(
+        self, service, mock_repository, pagination
+    ):
+        """Test the caller's teacher id narrows the shared listing."""
+
+        teacher = MagicMock()
+        teacher.id = 55
+        mock_repository.get_teacher_by_user_id = MagicMock(return_value=teacher)
+        mock_repository.get_all = AsyncMock(
+            return_value={
+                "items": [_plan()],
+                "total": 7,
+                "page": 2,
+                "limit": 5,
+                "pages": 2,
+            }
+        )
+
+        result = await service.get_my_plans(
+            TEACHER, pagination, period_id=3, status="EN_SEGUIMIENTO", search="acta"
+        )
+
+        mock_repository.get_all.assert_awaited_once_with(
+            teacher_id=55,
+            period_id=3,
+            status="EN_SEGUIMIENTO",
+            search="acta",
+            page=2,
+            limit=5,
+        )
+        assert result["total"] == 7
+
+    async def test_answers_an_empty_page_when_the_user_is_no_teacher(
+        self, service, mock_repository, pagination
+    ):
+        """Test the shape stays paginated even with nothing to list.
+
+        The envelope middleware reads total/page/limit/pages off the dict; a
+        bare [] here would answer without the pagination block the listing
+        promises.
+        """
+
+        mock_repository.get_teacher_by_user_id = MagicMock(return_value=None)
+        mock_repository.get_all = AsyncMock()
+
+        result = await service.get_my_plans(ADMIN, pagination)
+
+        assert result == {
+            "items": [],
+            "total": 0,
+            "page": 2,
+            "limit": 5,
+            "pages": 0,
+        }
+        mock_repository.get_all.assert_not_awaited()
+
+
 class TestCreate:
     """A teacher may only have one plan per origin period."""
 
@@ -261,6 +326,26 @@ class TestCreate:
             await service.create(self._payload(), ADMIN)
 
         mock_repository.create.assert_not_awaited()
+
+    async def test_rejects_a_duplicate_the_check_could_not_see(
+        self, service, mock_repository
+    ):
+        """Test a concurrent creation is reported as a duplicate, not a crash.
+
+        Two requests can both pass ``has_plan_for`` before either commits; the
+        unique constraint stops the second one and the repository surfaces it as
+        a ValueError. The caller must get the same error as in the ordinary
+        duplicate case, not a 500.
+        """
+
+        mock_repository.has_plan_for.return_value = False
+        mock_repository.create.side_effect = ValueError(
+            "Ya existe un plan de mejoramiento para este docente "
+            "en el periodo de origen"
+        )
+
+        with pytest.raises(ResourceAlreadyExistsError):
+            await service.create(self._payload(), ADMIN)
 
 
 class TestAnnounceNewPlan:

@@ -7,6 +7,7 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import func, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from api.database import get_db
@@ -698,7 +699,20 @@ class ImprovementPlansRepository:
             plan.checkpoints.append(checkpoint)
 
         self.db.add(plan)
-        self.db.commit()
+
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            # ``uq_improvement_plan_teacher_period``: another request created the
+            # plan for the same teacher and period between the service's check
+            # and this commit. The service turns it into the same duplicate
+            # error the check raises, so the race reads like the ordinary case.
+            self.db.rollback()
+            raise ValueError(
+                "Ya existe un plan de mejoramiento para este docente "
+                "en el periodo de origen"
+            ) from exc
+
         self.db.refresh(plan)
 
         return self._enrich(plan)
@@ -1007,18 +1021,6 @@ class ImprovementPlansRepository:
         plan = self._load(plan_id)
 
         return self._enrich(plan) if plan else None
-
-    async def get_by_teacher(self, teacher_id: int) -> list[dict]:
-        """All plans of a teacher, newest first (for the teacher-facing view)."""
-
-        plans = (
-            self.db.query(ImprovementPlanModel)
-            .options(*PLAN_RELATIONS)
-            .filter(ImprovementPlanModel.teacher_id == teacher_id)
-            .order_by(ImprovementPlanModel.created_at.desc())
-            .all()
-        )
-        return self._enrich_many(plans)
 
     # ------------------------------------------------------------------ #
     # Acta de compromiso & evidences
