@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
@@ -30,6 +30,10 @@ from api.models.improvement_plan_course import ImprovementPlanCourseModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
+from api.models.improvement_plan_verification import ImprovementPlanVerificationModel
+from api.models.improvement_plan_verification_item import (
+    ImprovementPlanVerificationItemModel,
+)
 from api.models.program import ProgramModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
@@ -63,6 +67,30 @@ CLOSE_RESULT_TO_STATUS = {
     "CUMPLIDO": "CERRADO_CUMPLIDO",
     "NO_CUMPLIDO": "CERRADO_NO_CUMPLIDO",
 }
+
+# Every relationship ``improvement_plan_to_dict`` walks, loaded one batch per
+# level instead of one query per plan. Lazy loading buys nothing here: the
+# serializer always touches all of them, so the only thing deferring them adds
+# is a round trip per plan and per relation — 91 queries to render a page of
+# ten. ``selectinload`` and not ``joinedload`` because the listing is paginated
+# and a joined collection would multiply the rows LIMIT counts.
+# ``items.comment_links`` and ``checkpoints.aspect_notes`` are missing on
+# purpose: both declare ``lazy="selectin"`` on the model, so they already come
+# batched once their parent is loaded in one go.
+PLAN_RELATIONS = (
+    selectinload(ImprovementPlanModel.items),
+    selectinload(ImprovementPlanModel.checkpoints),
+    selectinload(ImprovementPlanModel.courses),
+    selectinload(ImprovementPlanModel.documents),
+    selectinload(ImprovementPlanModel.evidences),
+    selectinload(ImprovementPlanModel.case_report),
+    selectinload(ImprovementPlanModel.verifications)
+    .selectinload(ImprovementPlanVerificationModel.items)
+    .selectinload(ImprovementPlanVerificationItemModel.courses),
+    selectinload(ImprovementPlanModel.verifications).selectinload(
+        ImprovementPlanVerificationModel.comment_findings
+    ),
+)
 
 
 class ImprovementPlansRepository:
@@ -122,6 +150,7 @@ class ImprovementPlansRepository:
     def _load(self, plan_id: int) -> ImprovementPlanModel | None:
         return (
             self.db.query(ImprovementPlanModel)
+            .options(*PLAN_RELATIONS)
             .filter(ImprovementPlanModel.id == plan_id)
             .first()
         )
@@ -729,7 +758,8 @@ class ImprovementPlansRepository:
         offset = (page - 1) * limit
 
         plans = (
-            query.order_by(ImprovementPlanModel.created_at.desc())
+            query.options(*PLAN_RELATIONS)
+            .order_by(ImprovementPlanModel.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
@@ -914,6 +944,7 @@ class ImprovementPlansRepository:
 
         plans = (
             self.db.query(ImprovementPlanModel)
+            .options(*PLAN_RELATIONS)
             .filter(ImprovementPlanModel.teacher_id == teacher_id)
             .order_by(ImprovementPlanModel.created_at.desc())
             .all()
@@ -1257,6 +1288,7 @@ class ImprovementPlansRepository:
 
         plans = (
             self.db.query(ImprovementPlanModel)
+            .options(*PLAN_RELATIONS)
             .filter(ImprovementPlanModel.teacher_id == teacher_id)
             .order_by(ImprovementPlanModel.created_at.asc())
             .all()
