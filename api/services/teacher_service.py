@@ -431,7 +431,7 @@ class TeacherService:
         teacher = self.teachers_repository.get_by_id(teacher_id)
 
         if not user or not teacher:
-            raise ResourceNotFoundError("Docente no encontrado")
+            raise ResourceNotFoundError("Docente", teacher_id)
 
         roles = self.users_repository.get_user_role_names(user.id)
 
@@ -454,22 +454,22 @@ class TeacherService:
 
         evaluation = self.evaluations_repository.get_by_id(evaluation_id)
         if not evaluation:
-            raise ResourceNotFoundError("Evaluación no encontrada")
+            raise ResourceNotFoundError("Evaluación", evaluation_id)
 
         pdf_paths = split_pdf_urls(evaluation.pdf_url)
         if not pdf_paths:
-            raise ResourceNotFoundError("Esta evaluación no tiene un PDF asociado")
+            raise ResourceNotFoundError("PDF de la evaluación", evaluation_id)
 
         if not teacher.user or not teacher.user.institutional_code:
             raise ResourceNotFoundError(
-                "El docente no tiene código institucional registrado"
+                "Código institucional del docente", teacher_id
             )
 
         pdf_bytes = extract_teacher_pages(pdf_paths, teacher.user.institutional_code)
 
         if pdf_bytes is None:
             raise ResourceNotFoundError(
-                "El docente no aparece en el PDF de esta evaluación"
+                "Docente en el PDF de la evaluación", teacher_id
             )
 
         return pdf_bytes
