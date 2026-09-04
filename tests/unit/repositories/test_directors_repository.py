@@ -226,3 +226,30 @@ class TestDirectorsRepository:
 
         mock_db.delete.assert_called_once_with(mock_director_model)
         mock_db.commit.assert_called_once()
+
+    def test_unassign_director_deactivates_the_active_director(
+        self, repo, mock_db, mock_director_model
+    ):
+        """Test unassign_director marks the department's active director inactive."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_director_model
+        )
+
+        result = repo.unassign_director(1)
+
+        assert mock_director_model.active is False
+        mock_db.commit.assert_called_once()
+        assert result == mock_director_model
+
+    def test_unassign_director_returns_none_without_an_active_director(
+        self, repo, mock_db
+    ):
+        """Test unassign_director is a no-op when the department has no director."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = repo.unassign_director(999)
+
+        assert result is None
+        mock_db.commit.assert_not_called()

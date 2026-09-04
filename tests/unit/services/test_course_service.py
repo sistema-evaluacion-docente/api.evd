@@ -5,7 +5,11 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import (
+    PermissionDeniedError,
+    ResourceAlreadyExistsError,
+    ValidationError,
+)
 from api.models.course import CourseModel
 from api.models.department import DepartmentModel
 from api.schemas.course import CourseCreate, CourseFilters, CourseUpdate
@@ -284,3 +288,45 @@ class TestCourseService:
             await service.delete(1, {"id": 99})
 
         mock_courses_repo.delete_course.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_name_success(
+        self, service, mock_courses_repo, mock_audit_service, mock_course, current_user
+    ):
+        """Test update_name updates the course when it belongs to the department."""
+
+        mock_courses_repo.get_by_id.return_value = mock_course
+        mock_courses_repo.update_course.return_value = mock_course
+
+        result = await service.update_name(1, "Álgebra Lineal", 5, current_user)
+
+        assert result is not None
+        mock_courses_repo.update_course.assert_called_once_with(
+            mock_course, {"name": "Álgebra Lineal"}
+        )
+        mock_audit_service.log.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_update_name_not_found(
+        self, service, mock_courses_repo, current_user
+    ):
+        """Test update_name returns None when the course does not exist."""
+
+        mock_courses_repo.get_by_id.return_value = None
+
+        result = await service.update_name(999, "Álgebra Lineal", 5, current_user)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_update_name_rejects_another_departments_course(
+        self, service, mock_courses_repo, mock_course, current_user
+    ):
+        """Test a director cannot rename a course outside their department."""
+
+        mock_courses_repo.get_by_id.return_value = mock_course
+
+        with pytest.raises(PermissionDeniedError):
+            await service.update_name(1, "Álgebra Lineal", 99, current_user)
+
+        mock_courses_repo.update_course.assert_not_called()

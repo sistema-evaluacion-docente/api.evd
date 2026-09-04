@@ -340,3 +340,167 @@ class TestDirectorService:
         result = await service.delete(999, current_user)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_update_director_department_already_assigned(
+        self, service, mock_directors_repo, mock_director, current_user
+    ):
+        """Test moving a director to a department that already has one fails."""
+        mock_directors_repo.get.return_value = mock_director
+        mock_directors_repo.get_by_department_id.return_value = MagicMock(id=99)
+
+        data = DirectorUpdate(department_id=2)
+
+        with pytest.raises(ResourceAlreadyExistsError):
+            await service.update(1, data, current_user)
+
+    @pytest.mark.asyncio
+    async def test_update_director_institutional_code_taken(
+        self, service, mock_directors_repo, mock_director, current_user
+    ):
+        """Test reusing another director's institutional code fails."""
+        mock_directors_repo.get.return_value = mock_director
+        mock_directors_repo.get_by_institutional_code.return_value = MagicMock(id=99)
+
+        data = DirectorUpdate(institutional_code="99999")
+
+        with pytest.raises(ResourceAlreadyExistsError):
+            await service.update(1, data, current_user)
+
+    @pytest.mark.asyncio
+    async def test_update_director_user_already_director_elsewhere(
+        self, service, mock_directors_repo, mock_director, current_user
+    ):
+        """Test reassigning a user who directs a different department fails."""
+        mock_directors_repo.get.return_value = mock_director
+        mock_directors_repo.get_by_department_id.return_value = None
+        other_directorship = MagicMock(department_id=55)
+        mock_directors_repo.get_by_user_id.return_value = other_directorship
+
+        data = DirectorUpdate(user_id=20)
+
+        with pytest.raises(ValueError):
+            await service.update(1, data, current_user)
+
+    @pytest.mark.asyncio
+    async def test_assign_director_department_not_found(
+        self, service, mock_departments_repo, current_user
+    ):
+        """Test assigning to a missing department raises."""
+        mock_departments_repo.get.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.assign_director(999, 10, current_user)
+
+    @pytest.mark.asyncio
+    async def test_assign_director_user_not_found(
+        self, service, mock_departments_repo, mock_users_repo, current_user
+    ):
+        """Test assigning a missing user raises."""
+        mock_departments_repo.get.return_value = MagicMock(id=1, name="Sistemas")
+        mock_users_repo.get.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.assign_director(1, 999, current_user)
+
+    @pytest.mark.asyncio
+    async def test_assign_director_grants_the_role_when_missing(
+        self,
+        service,
+        mock_departments_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_user_service,
+        mock_director,
+        current_user,
+    ):
+        """Test a user without the director role gets it added before assigning."""
+        department = MagicMock(id=1, code="SIS")
+        department.name = "Sistemas"
+        mock_departments_repo.get.return_value = department
+        user = MagicMock(
+            id=10, uid="uid-10", email="ana@ufps.edu.co", avatar_url=None
+        )
+        user.name = "Ana"
+        mock_users_repo.get.return_value = user
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_user_service.update_user = AsyncMock()
+        mock_directors_repo.assign_director.return_value = mock_director
+        mock_directors_repo.get.return_value = mock_director
+
+        result = await service.assign_director(1, 10, current_user)
+
+        assert result is not None
+        mock_user_service.update_user.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_assign_director_keeps_the_role_when_already_present(
+        self,
+        service,
+        mock_departments_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_user_service,
+        mock_director,
+        current_user,
+    ):
+        """Test a user who already has the role is not updated again."""
+        department = MagicMock(id=1, code="SIS")
+        department.name = "Sistemas"
+        mock_departments_repo.get.return_value = department
+        user = MagicMock(
+            id=10, uid="uid-10", email="ana@ufps.edu.co", avatar_url=None
+        )
+        user.name = "Ana"
+        mock_users_repo.get.return_value = user
+        mock_users_repo.get_user_role_names.return_value = [
+            "DIRECTOR DE DEPARTAMENTO"
+        ]
+        mock_user_service.update_user = AsyncMock()
+        mock_directors_repo.assign_director.return_value = mock_director
+        mock_directors_repo.get.return_value = mock_director
+
+        await service.assign_director(1, 10, current_user)
+
+        mock_user_service.update_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unassign_director_department_not_found(
+        self, service, mock_departments_repo, current_user
+    ):
+        """Test unassigning from a missing department raises."""
+        mock_departments_repo.get.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.unassign_director(999, current_user)
+
+    @pytest.mark.asyncio
+    async def test_unassign_director_without_a_current_director(
+        self, service, mock_departments_repo, mock_directors_repo, current_user
+    ):
+        """Test unassigning a department with no director returns None."""
+        mock_departments_repo.get.return_value = MagicMock(id=1, name="Sistemas")
+        mock_directors_repo.unassign_director.return_value = None
+
+        result = await service.unassign_director(1, current_user)
+
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_unassign_director_success(
+        self,
+        service,
+        mock_departments_repo,
+        mock_directors_repo,
+        mock_audit_service,
+        mock_director,
+        current_user,
+    ):
+        """Test a successful unassignment logs the audit and returns the director."""
+        mock_departments_repo.get.return_value = MagicMock(id=1, name="Sistemas")
+        mock_directors_repo.unassign_director.return_value = mock_director
+
+        result = await service.unassign_director(1, current_user)
+
+        assert result is not None
+        mock_audit_service.log.assert_called_once()

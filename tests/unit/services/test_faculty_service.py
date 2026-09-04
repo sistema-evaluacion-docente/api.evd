@@ -222,6 +222,42 @@ class TestFacultyService:
             await service.update(1, data, current_user)
 
     @pytest.mark.asyncio
+    async def test_update_faculty_describes_a_code_and_active_change(
+        self, service, mock_faculties_repo, mock_audit_service, mock_faculty, current_user
+    ):
+        """Test the audit description names every field that actually changed."""
+
+        mock_faculties_repo.get.return_value = mock_faculty
+        mock_faculties_repo.get_by_code.return_value = None
+        mock_faculties_repo.update_faculty.return_value = mock_faculty
+        mock_faculties_repo.get_department_counts.return_value = {}
+
+        data = FacultyUpdate(code="ENG2", active=False)
+
+        await service.update(1, data, current_user)
+
+        description = mock_audit_service.log.call_args.kwargs["description"]
+        assert "code cambió" in description
+        assert "active cambió" in description
+
+    @pytest.mark.asyncio
+    async def test_update_faculty_with_no_actual_changes(
+        self, service, mock_faculties_repo, mock_audit_service, mock_faculty, current_user
+    ):
+        """Test the audit description says so when nothing actually changed."""
+
+        mock_faculties_repo.get.return_value = mock_faculty
+        mock_faculties_repo.update_faculty.return_value = mock_faculty
+        mock_faculties_repo.get_department_counts.return_value = {}
+
+        data = FacultyUpdate(name="Engineering")
+
+        await service.update(1, data, current_user)
+
+        description = mock_audit_service.log.call_args.kwargs["description"]
+        assert description.endswith("No se realizaron cambios")
+
+    @pytest.mark.asyncio
     async def test_delete_faculty_success(
         self,
         service,

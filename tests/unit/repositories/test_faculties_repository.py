@@ -10,7 +10,7 @@ from api.core.pagination import PaginationParams
 from api.models.faculty import FacultyModel
 from api.repositories.base import BaseRepository
 from api.repositories.faculties import FacultiesRepository
-from api.schemas.faculty import FacultyFilters
+from api.schemas.faculty import FacultyCreate, FacultyFilters, FacultyUpdate
 
 
 class TestFacultiesRepository:
@@ -175,3 +175,35 @@ class TestFacultiesRepository:
         result = repo.get_department_counts([1, 2])
 
         assert result == {1: 5, 2: 3}
+
+    def test_create_faculty(self, repo, mock_db):
+        """Test create_faculty persists and returns the new faculty."""
+
+        data = FacultyCreate(name="Ingenierías", code="ING")
+
+        result = repo.create_faculty(data)
+
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        assert result.name == "Ingenierías"
+
+    def test_update_faculty_applies_only_set_fields(
+        self, repo, mock_db, mock_faculty_model
+    ):
+        """Test update_faculty only overwrites fields present in the payload."""
+
+        data = FacultyUpdate(name="Ciencias")
+
+        result = repo.update_faculty(mock_faculty_model, data)
+
+        assert mock_faculty_model.name == "Ciencias"
+        mock_db.commit.assert_called_once()
+        assert result == mock_faculty_model
+
+    def test_delete_faculty(self, repo, mock_db, mock_faculty_model):
+        """Test delete_faculty deletes and commits."""
+
+        repo.delete_faculty(mock_faculty_model)
+
+        mock_db.delete.assert_called_once_with(mock_faculty_model)
+        mock_db.commit.assert_called_once()

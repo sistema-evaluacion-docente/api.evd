@@ -16,6 +16,10 @@ from api.exceptions import (
     ValidationError,
 )
 from api.schemas.improvement_plan import (
+    CloseResult,
+    ImprovementPlanCaseReportUpsert,
+    ImprovementPlanCheckpointUpdate,
+    ImprovementPlanClose,
     ImprovementPlanCreate,
     ImprovementPlanUpdate,
 )
@@ -529,3 +533,334 @@ class TestActaLock:
 
         assert result["acta_status"] == "BORRADOR"
         mock_repository.set_acta_status.assert_awaited_once_with(7, "BORRADOR")
+
+
+class TestGetAll:
+    """Listing resolves the caller's department scope before delegating."""
+
+    async def test_lists_with_the_resolved_department(self, service, mock_repository):
+        from api.core.pagination import PaginationParams
+
+        mock_repository.get_all = AsyncMock(return_value={"items": [], "total": 0})
+        pagination = PaginationParams(page=1, limit=10)
+
+        result = await service.get_all(DIRECTOR, pagination, teacher_id=55)
+
+        assert result == {"items": [], "total": 0}
+        mock_repository.get_all.assert_awaited_once_with(
+            department_id=10,
+            period_id=None,
+            status=None,
+            search=None,
+            teacher_id=55,
+            page=1,
+            limit=10,
+        )
+
+
+class TestGetMyPlans:
+    """A teacher's own plans, keyed off their linked teacher row."""
+
+    async def test_returns_empty_without_a_linked_teacher(
+        self, service, mock_repository
+    ):
+        mock_repository.get_teacher_by_user_id = MagicMock(return_value=None)
+
+        result = await service.get_my_plans(TEACHER)
+
+        assert result == []
+
+    async def test_returns_the_teachers_plans(self, service, mock_repository):
+        mock_repository.get_teacher_by_user_id = MagicMock(
+            return_value=MagicMock(id=55)
+        )
+        mock_repository.get_by_teacher = AsyncMock(return_value=[_plan()])
+
+        result = await service.get_my_plans(TEACHER)
+
+        assert result == [_plan()]
+        mock_repository.get_by_teacher.assert_awaited_once_with(55)
+
+
+class TestGetCandidatesAndAtRisk:
+    """Both require a resolved department and use the institutional threshold."""
+
+    async def test_get_candidates_uses_the_resolved_department_and_threshold(
+        self, service, mock_repository
+    ):
+        mock_repository.get_candidates = AsyncMock(return_value=[{"teacher_id": 1}])
+
+        result = await service.get_candidates(DIRECTOR, 3)
+
+        assert result == [{"teacher_id": 1}]
+        mock_repository.get_candidates.assert_awaited_once_with(
+            department_id=10, period_id=3, threshold=3.5
+        )
+
+    async def test_get_at_risk_uses_the_resolved_department_and_threshold(
+        self, service, mock_repository
+    ):
+        mock_repository.get_at_risk = AsyncMock(return_value=[{"teacher_id": 1}])
+
+        result = await service.get_at_risk(DIRECTOR, 3)
+
+        assert result == [{"teacher_id": 1}]
+        mock_repository.get_at_risk.assert_awaited_once_with(
+            department_id=10, period_id=3, threshold=3.5
+        )
+
+    async def test_get_candidates_requires_a_department_for_admin(
+        self, service, mock_repository
+    ):
+        with pytest.raises(ValidationError):
+            await service.get_candidates(ADMIN, 3)
+
+
+class TestGetEvaluatedPeriods:
+    async def test_uses_the_resolved_department(self, service, mock_repository):
+        mock_repository.get_evaluated_periods = AsyncMock(
+            return_value=[{"id": 1}]
+        )
+
+        result = await service.get_evaluated_periods(DIRECTOR)
+
+        assert result == [{"id": 1}]
+        mock_repository.get_evaluated_periods.assert_awaited_once_with(10)
+
+
+class TestGetTeacherCourses:
+    """A director may only prefill forms for their own department's teachers."""
+
+    async def test_admin_may_query_any_teacher(self, service, mock_repository):
+        mock_repository.get_teacher_courses = AsyncMock(
+            return_value=[{"course_code": "BD101"}]
+        )
+
+        result = await service.get_teacher_courses(55, 3, ADMIN)
+
+        assert result == [{"course_code": "BD101"}]
+
+    async def test_director_of_the_teachers_department_may_query(
+        self, service, mock_repository
+    ):
+        mock_repository.get_teacher_department_id = MagicMock(return_value=10)
+        mock_repository.get_teacher_courses = AsyncMock(return_value=[])
+
+        await service.get_teacher_courses(55, 3, DIRECTOR)
+
+        mock_repository.get_teacher_courses.assert_awaited_once_with(55, 3)
+
+    async def test_director_of_another_department_is_forbidden(
+        self, service, mock_repository
+    ):
+        mock_repository.get_teacher_department_id = MagicMock(return_value=99)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_teacher_courses(55, 3, DIRECTOR)
+
+
+class TestGetHistory:
+    """Cross-period history is scoped the same way a single plan is."""
+
+    async def test_raises_when_the_teacher_has_no_history(
+        self, service, mock_repository
+    ):
+        mock_repository.get_history = AsyncMock(return_value=None)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_history(55, ADMIN)
+
+    async def test_admin_may_see_any_teacher(self, service, mock_repository):
+        mock_repository.get_history = AsyncMock(
+            return_value={"department_id": 10, "plans": []}
+        )
+
+        result = await service.get_history(55, ADMIN)
+
+        assert result["plans"] == []
+
+    async def test_director_of_another_department_is_forbidden(
+        self, service, mock_repository
+    ):
+        mock_repository.get_history = AsyncMock(
+            return_value={"department_id": 99, "plans": []}
+        )
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_history(55, DIRECTOR)
+
+
+class TestUpsertCaseReport:
+    async def test_updates_and_audits(
+        self, service, mock_repository, mock_audit_service
+    ):
+        mock_repository.upsert_case_report = AsyncMock(
+            return_value=_plan(complaint="Queja del programa")
+        )
+
+        result = await service.upsert_case_report(
+            7, ImprovementPlanCaseReportUpsert(complaint="Queja del programa"), DIRECTOR
+        )
+
+        assert result["complaint"] == "Queja del programa"
+        mock_repository.upsert_case_report.assert_awaited_once_with(
+            7, ImprovementPlanCaseReportUpsert(complaint="Queja del programa"),
+            reported_by=DIRECTOR["id"],
+        )
+        mock_audit_service.log.assert_awaited_once()
+
+    async def test_a_teacher_cannot_report_a_case(self, service, mock_repository):
+        with pytest.raises(PermissionDeniedError):
+            await service.upsert_case_report(
+                7, ImprovementPlanCaseReportUpsert(complaint="Queja"), TEACHER
+            )
+
+
+class TestUpdateCheckpoint:
+    async def test_updates_and_audits(
+        self, service, mock_repository, mock_audit_service
+    ):
+        mock_repository.update_checkpoint = AsyncMock(
+            return_value=_plan(status="EN_SEGUIMIENTO")
+        )
+
+        result = await service.update_checkpoint(
+            7, 3, ImprovementPlanCheckpointUpdate(notes="Avance"), DIRECTOR
+        )
+
+        assert result["status"] == "EN_SEGUIMIENTO"
+        mock_audit_service.log.assert_awaited_once()
+
+    async def test_raises_when_checkpoint_missing(self, service, mock_repository):
+        mock_repository.update_checkpoint = AsyncMock(return_value=None)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.update_checkpoint(
+                7, 999, ImprovementPlanCheckpointUpdate(notes="Avance"), DIRECTOR
+            )
+
+    async def test_a_teacher_cannot_fill_a_checkpoint(self, service, mock_repository):
+        with pytest.raises(PermissionDeniedError):
+            await service.update_checkpoint(
+                7, 3, ImprovementPlanCheckpointUpdate(notes="Avance"), TEACHER
+            )
+
+
+class TestClosePlan:
+    """Closing a plan records the verdict and best-effort announces it."""
+
+    async def test_closes_and_audits(self, service, mock_repository, mock_audit_service):
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="CUMPLIDO")
+        )
+
+        with patch("api.services.improvement_plan_service.send_email"):
+            result = await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), DIRECTOR
+            )
+
+        assert result["result"] == "CUMPLIDO"
+        mock_repository.close.assert_awaited_once_with(7, "CUMPLIDO", None)
+        mock_audit_service.log.assert_awaited_once()
+
+    async def test_a_teacher_cannot_close_their_own_plan(self, service, mock_repository):
+        with pytest.raises(PermissionDeniedError):
+            await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), TEACHER
+            )
+
+    async def test_emails_and_notifies_the_teacher_of_the_result(
+        self, service, mock_repository, mock_notification_service
+    ):
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="NO_CUMPLIDO")
+        )
+
+        with patch(
+            "api.services.improvement_plan_service.send_email"
+        ) as send:
+            await service.close(
+                7,
+                ImprovementPlanClose(
+                    result=CloseResult.NO_CUMPLIDO, reason="No alcanzó la meta"
+                ),
+                DIRECTOR,
+            )
+
+        send.assert_called_once()
+        mock_notification_service.create.assert_awaited_once()
+        notification = mock_notification_service.create.await_args.args[0]
+        assert notification.user_id == TEACHER["id"]
+
+    async def test_a_dead_mail_server_does_not_lose_the_closing(
+        self, service, mock_repository
+    ):
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="CUMPLIDO")
+        )
+
+        with patch(
+            "api.services.improvement_plan_service.send_email",
+            side_effect=OSError("connection refused"),
+        ):
+            result = await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), DIRECTOR
+            )
+
+        assert result["status"] == "CERRADO"
+
+    async def test_says_nothing_when_the_teacher_has_no_account(
+        self, service, mock_repository, mock_notification_service
+    ):
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="CUMPLIDO")
+        )
+        mock_repository.get_teacher_contact.return_value = None
+
+        with patch("api.services.improvement_plan_service.send_email") as send:
+            await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), DIRECTOR
+            )
+
+        send.assert_not_called()
+        mock_notification_service.create.assert_not_awaited()
+
+    async def test_says_nothing_when_the_notification_fails(
+        self, service, mock_repository, mock_notification_service
+    ):
+        """Test a failed in-app notification doesn't stop the email either."""
+
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="CUMPLIDO")
+        )
+        mock_notification_service.create.side_effect = RuntimeError("down")
+
+        with patch(
+            "api.services.improvement_plan_service.send_email"
+        ) as send:
+            result = await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), DIRECTOR
+            )
+
+        assert result["status"] == "CERRADO"
+        send.assert_called_once()
+
+    async def test_no_email_without_an_address(
+        self, service, mock_repository, mock_notification_service
+    ):
+        mock_repository.close = AsyncMock(
+            return_value=_plan(status="CERRADO", result="CUMPLIDO")
+        )
+        mock_repository.get_teacher_contact.return_value = {
+            "user_id": TEACHER["id"],
+            "name": "Ada",
+            "email": None,
+        }
+
+        with patch("api.services.improvement_plan_service.send_email") as send:
+            await service.close(
+                7, ImprovementPlanClose(result=CloseResult.CUMPLIDO), DIRECTOR
+            )
+
+        send.assert_not_called()
+        mock_notification_service.create.assert_awaited_once()

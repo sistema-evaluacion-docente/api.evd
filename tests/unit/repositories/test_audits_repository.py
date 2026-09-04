@@ -153,6 +153,70 @@ class TestAuditsRepository:
         assert total == 1
         assert mock_query.filter.called
 
+    def test_search_with_a_same_day_date_range(self, repo, mock_db, mock_audit_model):
+        """Test a same-day range filters within that single Bogotá day."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_audit_model
+        ]
+
+        same_day = datetime(2024, 6, 1)
+        filters = AuditFilters(date_from=same_day, date_to=same_day)
+        pagination = PaginationParams(page=1, limit=10)
+
+        audits, total = repo.search(filters, pagination)
+
+        assert total == 1
+        assert mock_query.filter.called
+
+    def test_search_with_only_date_from(self, repo, mock_db, mock_audit_model):
+        """Test filtering with only a lower bound date."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_audit_model
+        ]
+
+        filters = AuditFilters(date_from=datetime(2024, 1, 1))
+        pagination = PaginationParams(page=1, limit=10)
+
+        audits, total = repo.search(filters, pagination)
+
+        assert total == 1
+        assert mock_query.filter.called
+
+    def test_search_with_only_date_to(self, repo, mock_db, mock_audit_model):
+        """Test filtering with only an upper bound date."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_audit_model
+        ]
+
+        filters = AuditFilters(date_to=datetime(2024, 12, 31))
+        pagination = PaginationParams(page=1, limit=10)
+
+        audits, total = repo.search(filters, pagination)
+
+        assert total == 1
+        assert mock_query.filter.called
+
     def test_search_with_search_filter(self, repo, mock_db, mock_audit_model):
         """Test search filters by search term in element and description."""
 

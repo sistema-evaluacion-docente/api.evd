@@ -2,12 +2,18 @@
 Tests for TeacherService layer.
 """
 
-from unittest.mock import AsyncMock, MagicMock
+import io
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import (
+    PermissionDeniedError,
+    ResourceAlreadyExistsError,
+    ResourceNotFoundError,
+    ValidationError,
+)
 from api.models.teacher import TeacherModel
 from api.schemas.teacher import (
     TeacherCreate,
@@ -438,3 +444,362 @@ class TestTeacherService:
         mock_teachers_repo.get_history.assert_called_once_with(
             1, pagination, "overall_average_desc"
         )
+
+    # ------------------------------------------------------------------ #
+    # get_evaluation_report
+    # ------------------------------------------------------------------ #
+    @pytest.fixture
+    def mock_evaluations_repo(self):
+        """Mock EvaluationsRepository."""
+
+        return MagicMock()
+
+    @pytest.fixture
+    def service_with_evaluations(
+        self,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_audit_service,
+        mock_periods_repo,
+        mock_user_service,
+        mock_evaluations_repo,
+    ):
+        """A TeacherService wired with an EvaluationsRepository."""
+
+        return TeacherService(
+            mock_teachers_repo,
+            mock_users_repo,
+            mock_audit_service,
+            mock_periods_repo,
+            mock_user_service,
+            evaluations_repository=mock_evaluations_repo,
+        )
+
+    @pytest.fixture
+    def report_current_user(self):
+        """TokenUser-like object for the report endpoint."""
+
+        user = MagicMock()
+        user.uid = "docente-uid"
+        return user
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_user_or_teacher_missing(
+        self, service, mock_teachers_repo, mock_users_repo, report_current_user
+    ):
+        """Test a missing user or teacher raises ResourceNotFoundError."""
+
+        mock_users_repo.get_by_uid.return_value = None
+        mock_teachers_repo.get_by_id.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evaluation_report(1, 1, report_current_user)
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_forbidden_for_another_teacher(
+        self,
+        service,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test a DOCENTE cannot fetch another teacher's report."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 999  # not the caller
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_evaluation_report(1, 1, report_current_user)
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_forbidden_for_a_director_of_another_department(
+        self,
+        service,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test a director outside the teacher's department is forbidden."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.department_id = 1
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = [
+            "DIRECTOR DE DEPARTAMENTO"
+        ]
+        mock_users_repo.get_director_by_user_id.return_value = MagicMock(
+            department_id=2
+        )
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_evaluation_report(1, 1, report_current_user)
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_without_evaluations_repository(
+        self,
+        service,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test the report raises when no EvaluationsRepository was wired."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+
+        with pytest.raises(ValidationError):
+            await service.get_evaluation_report(1, 1, report_current_user)
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_evaluation_not_found(
+        self,
+        service_with_evaluations,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_evaluations_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test a missing evaluation raises ResourceNotFoundError."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_evaluations_repo.get_by_id.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service_with_evaluations.get_evaluation_report(
+                1, 1, report_current_user
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_without_a_pdf(
+        self,
+        service_with_evaluations,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_evaluations_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test an evaluation without a PDF raises ResourceNotFoundError."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(pdf_url=None)
+
+        with patch(
+            "api.utils.evaluation_pdfs.split_pdf_urls", return_value=[]
+        ):
+            with pytest.raises(ResourceNotFoundError):
+                await service_with_evaluations.get_evaluation_report(
+                    1, 1, report_current_user
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_without_institutional_code(
+        self,
+        service_with_evaluations,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_evaluations_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test a teacher without an institutional code raises ResourceNotFoundError."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teacher.user.institutional_code = None
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(pdf_url="a.pdf")
+
+        with patch(
+            "api.utils.evaluation_pdfs.split_pdf_urls", return_value=["a.pdf"]
+        ):
+            with pytest.raises(ResourceNotFoundError):
+                await service_with_evaluations.get_evaluation_report(
+                    1, 1, report_current_user
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_teacher_missing_from_pdf(
+        self,
+        service_with_evaluations,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_evaluations_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test extract_teacher_pages returning None becomes a 404."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(pdf_url="a.pdf")
+
+        with patch(
+            "api.utils.evaluation_pdfs.split_pdf_urls", return_value=["a.pdf"]
+        ), patch(
+            "api.utils.pdf_extractor.extract_teacher_pages", return_value=None
+        ):
+            with pytest.raises(ResourceNotFoundError):
+                await service_with_evaluations.get_evaluation_report(
+                    1, 1, report_current_user
+                )
+
+    @pytest.mark.asyncio
+    async def test_get_evaluation_report_success(
+        self,
+        service_with_evaluations,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_evaluations_repo,
+        mock_teacher,
+        report_current_user,
+    ):
+        """Test the happy path returns the extracted PDF bytes."""
+
+        user = MagicMock(id=5)
+        mock_users_repo.get_by_uid.return_value = user
+        mock_teacher.user_id = 5
+        mock_teachers_repo.get_by_id.return_value = mock_teacher
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(pdf_url="a.pdf")
+
+        with patch(
+            "api.utils.evaluation_pdfs.split_pdf_urls", return_value=["a.pdf"]
+        ), patch(
+            "api.utils.pdf_extractor.extract_teacher_pages", return_value=b"%PDF-1.4"
+        ):
+            result = await service_with_evaluations.get_evaluation_report(
+                1, 1, report_current_user
+            )
+
+        assert result == b"%PDF-1.4"
+
+    # ------------------------------------------------------------------ #
+    # _parse_csv / _parse_excel
+    # ------------------------------------------------------------------ #
+    def test_parse_csv_returns_rows_as_tuples(self):
+        """Test _parse_csv turns raw bytes into a list of row tuples."""
+
+        content = "nombre,email,codigo,contrato\nAna,ana@x.com,101,TC\n".encode(
+            "utf-8-sig"
+        )
+
+        rows = TeacherService._parse_csv(content)
+
+        assert rows[0] == ("nombre", "email", "codigo", "contrato")
+        assert rows[1] == ("Ana", "ana@x.com", "101", "TC")
+
+    def test_parse_excel_returns_rows_as_tuples(self):
+        """Test _parse_excel reads a real workbook's rows."""
+
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(["nombre", "email", "codigo", "contrato"])
+        ws.append(["Ana", "ana@x.com", "101", "TC"])
+        buffer = io.BytesIO()
+        wb.save(buffer)
+
+        rows = TeacherService._parse_excel(buffer.getvalue())
+
+        assert rows[0] == ("nombre", "email", "codigo", "contrato")
+        assert rows[1] == ("Ana", "ana@x.com", "101", "TC")
+
+    # ------------------------------------------------------------------ #
+    # upload_excel
+    # ------------------------------------------------------------------ #
+    @pytest.mark.asyncio
+    async def test_upload_excel_too_few_rows_raises(self, service, current_user):
+        """Test a file with only a header raises ValidationError."""
+
+        content = "nombre,email,codigo,contrato\n".encode("utf-8-sig")
+
+        with pytest.raises(ValidationError):
+            await service.upload_excel(content, "teachers.csv", 1, current_user)
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_missing_columns_raises(self, service, current_user):
+        """Test a file missing a required column raises ValidationError."""
+
+        content = "nombre,email,codigo\nAna,ana@x.com,101\n".encode("utf-8-sig")
+
+        with pytest.raises(ValidationError):
+            await service.upload_excel(content, "teachers.csv", 1, current_user)
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_creates_skips_and_reports_errors(
+        self,
+        service,
+        mock_teachers_repo,
+        mock_users_repo,
+        mock_user_service,
+        mock_audit_service,
+        current_user,
+    ):
+        """Test the full import pipeline: created/skipped/error rows and the audit log."""
+
+        csv_text = (
+            "nombre,email,codigo,contrato\n"
+            "Ana Perez,ana@x.com,101,TC\n"
+            "Dora Lopez,dora@x.com,111,TC\n"
+            "\n"
+            "Emi Cruz,existing@x.com,106,TC\n"
+            ",falta@x.com,105,TC\n"
+            "Bea Ruiz,bea@x.com,102,TC\n"
+            "Caro Diaz,caro@x.com,103,TC\n"
+        )
+        content = csv_text.encode("utf-8-sig")
+
+        existing_teacher = MagicMock()
+        existing_teacher.user = MagicMock(institutional_code="111")
+        mock_teachers_repo.get_by_institutional_codes.return_value = [
+            existing_teacher
+        ]
+
+        def _get_by_email(email):
+            return MagicMock(id=1) if email == "existing@x.com" else None
+
+        mock_users_repo.get_by_email.side_effect = _get_by_email
+
+        mock_user_service.create_user_with_roles = AsyncMock(
+            side_effect=[
+                {"id": 10},
+                ValueError("Rol inválido"),
+                Exception("boom"),
+            ]
+        )
+
+        result = await service.upload_excel(
+            content, "teachers.csv", 7, current_user
+        )
+
+        assert len(result["created"]) == 1
+        assert result["created"][0]["email"] == "ana@x.com"
+        assert len(result["skipped"]) == 3
+        assert len(result["errors"]) == 2
+        mock_audit_service.log.assert_awaited_once()

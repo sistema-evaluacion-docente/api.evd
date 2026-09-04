@@ -293,3 +293,35 @@ class TestDepartmentsRepository:
         result = repo.count_teachers_by_department_ids([])
 
         assert result == {}
+
+    def test_get_directors_by_department_ids(self, repo, mock_db):
+        """Test get_directors_by_department_ids maps each department to its director."""
+
+        row = MagicMock(id=10, avatar_url=None, department_id=1)
+        row.name = "Ana"
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.select_from.return_value = mock_query
+        mock_query.join.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.all.return_value = [row]
+
+        result = repo.get_directors_by_department_ids([1, 2])
+
+        assert result == {1: {"id": 10, "name": "Ana", "avatar_url": None}}
+
+    def test_count_teachers_by_department_ids(self, repo, mock_db):
+        """Test count_teachers_by_department_ids maps each department to its count."""
+
+        from collections import namedtuple
+
+        Row = namedtuple("Row", ["department_id", "count"])
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.group_by.return_value = mock_query
+        mock_query.all.return_value = [Row(1, 5), Row(2, 3)]
+
+        result = repo.count_teachers_by_department_ids([1, 2])
+
+        assert result == {1: 5, 2: 3}

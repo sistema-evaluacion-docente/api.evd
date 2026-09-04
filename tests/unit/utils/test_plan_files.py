@@ -5,7 +5,15 @@ import os
 import pytest
 
 from api.utils import plan_files
-from api.utils.plan_files import PLANS_SUBDIR, delete_plan_files
+from api.utils.plan_files import (
+    PLANS_SUBDIR,
+    delete_plan_file,
+    delete_plan_files,
+    plan_documents_dir,
+    plan_evidences_dir,
+    save_plan_document,
+    save_plan_evidence,
+)
 
 
 @pytest.fixture
@@ -61,3 +69,61 @@ class TestDeletePlanFiles:
         delete_plan_files(f"..{os.sep}..{os.sep}no-tocar")
 
         assert (outsider / "importante.txt").exists()
+
+
+class TestSaveAndLocateFiles:
+    """Saving a document/evidence and finding its directory back."""
+
+    def test_plan_documents_dir(self, uploads):
+        directory = plan_documents_dir(7)
+
+        assert directory == str(uploads / PLANS_SUBDIR / "7" / "documents")
+
+    def test_plan_evidences_dir(self, uploads):
+        directory = plan_evidences_dir(7)
+
+        assert directory == str(uploads / PLANS_SUBDIR / "7" / "evidences")
+
+    def test_save_plan_document_writes_the_file_under_documents(self, uploads):
+        filepath = save_plan_document(7, b"%PDF-1.4 acta", "formato-2")
+
+        assert filepath.startswith(str(uploads / PLANS_SUBDIR / "7" / "documents"))
+        assert os.path.basename(filepath).startswith("formato-2_")
+        assert open(filepath, "rb").read() == b"%PDF-1.4 acta"
+
+    def test_save_plan_evidence_writes_the_file_under_evidences(self, uploads):
+        filepath = save_plan_evidence(7, b"%PDF-1.4 rubrica")
+
+        assert filepath.startswith(str(uploads / PLANS_SUBDIR / "7" / "evidences"))
+        assert os.path.basename(filepath).startswith("evidencia_")
+        assert open(filepath, "rb").read() == b"%PDF-1.4 rubrica"
+
+
+class TestDeletePlanFile:
+    """Replacing a document/evidence drops the stale file, defensively."""
+
+    def test_does_nothing_without_a_path(self, uploads):
+        delete_plan_file(None)  # must not raise
+
+    def test_removes_a_file_inside_the_uploads_directory(self, uploads):
+        filepath = save_plan_document(7, b"%PDF-", "formato-1")
+
+        delete_plan_file(filepath)
+
+        assert not os.path.isfile(filepath)
+
+    def test_does_nothing_for_a_missing_file(self, uploads):
+        missing = str(uploads / PLANS_SUBDIR / "7" / "documents" / "gone.pdf")
+
+        delete_plan_file(missing)  # must not raise
+
+    def test_never_removes_a_file_outside_the_uploads_directory(
+        self, uploads, tmp_path_factory
+    ):
+        outsider_dir = tmp_path_factory.mktemp("outside")
+        outsider = outsider_dir / "importante.txt"
+        outsider.write_text("no")
+
+        delete_plan_file(str(outsider))
+
+        assert outsider.exists()
