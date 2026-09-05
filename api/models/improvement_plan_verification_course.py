@@ -44,7 +44,10 @@ class ImprovementPlanVerificationCourseModel(Base):
         index=True,
     )
     academic_group_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("academic_groups.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("academic_groups.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     course_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     course_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

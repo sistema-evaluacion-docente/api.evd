@@ -29,10 +29,13 @@ class ImprovementPlanEvidenceModel(Base):
         nullable=False,
         index=True,
     )
+    # Editing a plan replaces its item list, so items are deleted routinely
+    # and each deletion has to null out the evidences that pointed at them.
     item_id: Mapped[Optional[int]] = mapped_column(
         Integer,
         ForeignKey("improvement_plan_items.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     # Set when the evidence answers a specific request from the director;
     # null for evidence the teacher attaches on their own initiative.

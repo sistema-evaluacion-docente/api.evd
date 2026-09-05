@@ -511,7 +511,11 @@ class ImprovementPlansRepository:
         A teacher can keep every score above the threshold and still be the
         subject of a comment the AI classified as ALTO, which on its own is a
         reason to suggest a plan. Comments the analysis has not reached yet
-        simply do not count."""
+        simply do not count.
+
+        ``func.upper`` on the level name cannot use an index, and deliberately
+        so: ``risk_levels`` holds three rows, so Postgres scans it either way
+        and the case-insensitive match is worth more than the index would be."""
 
         if not teacher_ids:
             return {}

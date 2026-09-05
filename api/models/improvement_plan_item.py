@@ -48,7 +48,10 @@ class ImprovementPlanItemModel(Base):
     commitment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # Which of the five "aspectos en seguimiento" this item is printed under
     # (1-5, see api/utils/dimensions.py ASPECTS). Null = not placed on the form.
-    aspect: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
+    # Not indexed: no query filters by it. The items of a plan are grouped under
+    # their aspect in Python, once they are already loaded — see
+    # ``ImprovementPlanDocumentService.build_context``.
+    aspect: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     target_type: Mapped[str] = mapped_column(
         String(50), nullable=False, default="QUALITATIVE"
     )

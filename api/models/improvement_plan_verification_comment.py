@@ -52,8 +52,14 @@ class ImprovementPlanVerificationCommentModel(Base):
         nullable=True,
         index=True,
     )
+    # Indexed for the cascade, not for a query: deleting an evaluation bulk
+    # deletes all its comments, and every one of them makes Postgres look for
+    # the rows pointing here. Without an index that is a full scan per comment.
     comment_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("comments.id", ondelete="CASCADE"), nullable=False
+        Integer,
+        ForeignKey("comments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     pedagogical_category_id: Mapped[Optional[int]] = mapped_column(
         Integer,

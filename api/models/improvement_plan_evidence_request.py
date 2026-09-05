@@ -34,6 +34,7 @@ class ImprovementPlanEvidenceRequestModel(Base):
         Integer,
         ForeignKey("improvement_plan_items.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     requested_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True

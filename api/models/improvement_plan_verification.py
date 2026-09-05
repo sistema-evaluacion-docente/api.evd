@@ -45,7 +45,10 @@ class ImprovementPlanVerificationModel(Base):
     )
     # The evaluation that fed the last pass — traceability only.
     evaluation_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("evaluations.id", ondelete="SET NULL"), nullable=True
+        Integer,
+        ForeignKey("evaluations.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
     )
     # Verdict of the numeric pass: MEJORO / NO_MEJORO / SIN_DATOS.
     result: Mapped[str] = mapped_column(
