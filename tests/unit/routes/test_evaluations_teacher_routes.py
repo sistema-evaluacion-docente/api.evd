@@ -121,17 +121,17 @@ class TestGetTeacherEvaluationDetail:
 
         assert response.status_code == 200
 
-    async def test_docente_is_forbidden(self, client, controller, auth):
-        """Only ADMIN and DIRECTOR may read the evaluation detail."""
+    async def test_docente_may_read_their_own_detail(self, client, controller, auth):
+        """DOCENTE is among the allowed roles too — a teacher reads their own report."""
 
         auth.as_user(DOCENTE_USER)
+        controller.get_teacher_detail.return_value = TEACHER_DETAIL
 
         response = client.get(
             "/evaluations/teachers/5/detail", params={"period_name": "2025-1"}
         )
 
-        assert response.status_code == 403
-        controller.get_teacher_detail.assert_not_called()
+        assert response.status_code == 200
 
     async def test_requires_authentication(self, client, controller, auth):
         """Without a token the request is rejected."""
@@ -186,12 +186,12 @@ class TestGetTeacherComments:
         assert response.status_code == 422
         controller.get_teacher_comments.assert_not_called()
 
-    async def test_docente_is_forbidden(self, client, controller, auth):
-        """Only ADMIN and DIRECTOR may read the comments of an evaluation."""
+    async def test_docente_may_read_their_own_comments(self, client, controller, auth):
+        """DOCENTE is among the allowed roles too — a teacher reads their own comments."""
 
         auth.as_user(DOCENTE_USER)
+        controller.get_teacher_comments.return_value = TEACHER_COMMENTS
 
         response = client.get("/evaluations/12/teachers/5/comments")
 
-        assert response.status_code == 403
-        controller.get_teacher_comments.assert_not_called()
+        assert response.status_code == 200

@@ -32,8 +32,16 @@ def controller():
     mock = MagicMock()
     mock.get_all = AsyncMock()
     mock.get_all_with_averages = AsyncMock()
+    mock.create = AsyncMock()
+    mock.create_with_user = AsyncMock()
+    mock.upload_excel = AsyncMock()
+    mock.count_by_department = AsyncMock()
+    mock.get_course_history = AsyncMock()
+    mock.get_by_id = AsyncMock()
     mock.update = AsyncMock()
+    mock.delete = AsyncMock()
     mock.get_history = AsyncMock()
+    mock.get_dashboard = AsyncMock()
     mock.get_evaluation_report = AsyncMock()
     return mock
 
@@ -413,3 +421,203 @@ class TestDownloadTeacherEvaluationReport:
 
         assert response.status_code == 403
         controller.get_evaluation_report.assert_not_called()
+
+
+class TestCreateTeacher:
+    """POST /teachers/"""
+
+    async def test_creates_and_returns_the_teacher(self, client, controller):
+        controller.create.return_value = TEACHER
+
+        response = client.post(
+            "/teachers/", json={"institutional_code": "1234"}
+        )
+
+        assert response.status_code == 201
+
+    async def test_docente_is_forbidden(self, client, controller, auth):
+        auth.as_user(DOCENTE_USER)
+
+        response = client.post(
+            "/teachers/", json={"institutional_code": "1234"}
+        )
+
+        assert response.status_code == 403
+        controller.create.assert_not_called()
+
+
+class TestCreateTeacherWithUser:
+    """POST /teachers/with-user"""
+
+    async def test_creates_and_returns_the_teacher(self, client, controller):
+        controller.create_with_user.return_value = TEACHER
+
+        response = client.post(
+            "/teachers/with-user",
+            json={
+                "email": "ana@ufps.edu.co",
+                "name": "Ana",
+                "institutional_code": "1234",
+            },
+        )
+
+        assert response.status_code == 201
+
+
+class TestUploadTeachersExcel:
+    """POST /teachers/upload"""
+
+    async def test_with_a_valid_file_for_the_directors_department(
+        self, client, controller, auth
+    ):
+        auth.as_user(DIRECTOR_USER)
+        controller.upload_excel.return_value = {
+            "created": [], "skipped": [], "errors": []
+        }
+
+        response = client.post(
+            "/teachers/upload",
+            files={
+                "file": (
+                    "teachers.csv",
+                    b"nombre,email,codigo,contrato\n",
+                    "text/csv",
+                )
+            },
+        )
+
+        assert response.status_code == 201
+        controller.upload_excel.assert_awaited_once()
+
+    async def test_rejects_an_unsupported_extension(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        response = client.post(
+            "/teachers/upload",
+            files={"file": ("teachers.txt", b"data", "text/plain")},
+        )
+
+        assert response.status_code == 400
+        controller.upload_excel.assert_not_called()
+
+    async def test_rejects_an_empty_file(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        response = client.post(
+            "/teachers/upload",
+            files={"file": ("teachers.csv", b"", "text/csv")},
+        )
+
+        assert response.status_code == 400
+        controller.upload_excel.assert_not_called()
+
+    async def test_rejects_a_director_without_a_department(
+        self, client, controller, auth
+    ):
+        auth.as_user({**DIRECTOR_USER, "department_id": None})
+
+        response = client.post(
+            "/teachers/upload",
+            files={"file": ("teachers.csv", b"data", "text/csv")},
+        )
+
+        assert response.status_code == 400
+        controller.upload_excel.assert_not_called()
+
+
+class TestCountTeachers:
+    """GET /teachers/count"""
+
+    async def test_returns_the_count(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+        controller.count_by_department.return_value = {"current": 5, "previous": 4}
+
+        response = client.get("/teachers/count?academic_period_id=1")
+
+        assert response.status_code == 200
+
+    async def test_rejects_a_director_without_a_department(
+        self, client, controller, auth
+    ):
+        auth.as_user({**DIRECTOR_USER, "department_id": None})
+
+        response = client.get("/teachers/count?academic_period_id=1")
+
+        assert response.status_code == 400
+        controller.count_by_department.assert_not_called()
+
+
+class TestGetTeacherCourseHistory:
+    """GET /teachers/{teacher_id}/courses/{course_code}/history"""
+
+    async def test_returns_the_history(self, client, controller):
+        controller.get_course_history.return_value = {"course_code": "BD101"}
+
+        response = client.get("/teachers/5/courses/BD101/history")
+
+        assert response.status_code == 200
+
+    async def test_returns_404_when_missing(self, client, controller):
+        controller.get_course_history.return_value = None
+
+        response = client.get("/teachers/5/courses/BD101/history")
+
+        assert response.status_code == 404
+
+
+class TestGetTeacherDashboard:
+    """GET /teachers/{teacher_id}/dashboard"""
+
+    async def test_returns_the_dashboard(self, client, controller):
+        controller.get_dashboard.return_value = {"teacher_id": 5}
+
+        response = client.get(
+            "/teachers/5/dashboard?period_name=2026-1&department_id=7"
+        )
+
+        assert response.status_code == 200
+
+    async def test_returns_404_when_missing(self, client, controller):
+        controller.get_dashboard.return_value = None
+
+        response = client.get(
+            "/teachers/5/dashboard?period_name=2026-1&department_id=7"
+        )
+
+        assert response.status_code == 404
+
+
+class TestGetTeacherById:
+    """GET /teachers/{teacher_id}"""
+
+    async def test_returns_the_teacher(self, client, controller):
+        controller.get_by_id.return_value = TEACHER
+
+        response = client.get("/teachers/5")
+
+        assert response.status_code == 200
+
+    async def test_returns_404_when_missing(self, client, controller):
+        controller.get_by_id.return_value = None
+
+        response = client.get("/teachers/999")
+
+        assert response.status_code == 404
+
+
+class TestDeleteTeacher:
+    """DELETE /teachers/{teacher_id}"""
+
+    async def test_deletes_and_returns_the_teacher(self, client, controller):
+        controller.delete.return_value = TEACHER
+
+        response = client.delete("/teachers/5")
+
+        assert response.status_code == 200
+
+    async def test_returns_404_when_missing(self, client, controller):
+        controller.delete.return_value = None
+
+        response = client.delete("/teachers/999")
+
+        assert response.status_code == 404

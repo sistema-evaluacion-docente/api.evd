@@ -339,9 +339,7 @@ async def export_teacher_evaluation(
     teacher_id: int,
     period_name: str,
     department_id: int,
-    include_comments: bool = Depends(
-        lambda x: x.query_params.get("include_comments", "false").lower() == "true"
-    ),
+    include_comments: bool = Query(default=False),
     _=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
     db: Session = Depends(get_db),
