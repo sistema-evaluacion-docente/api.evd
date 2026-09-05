@@ -87,9 +87,16 @@ _ = (
 
 target_metadata = Base.metadata
 
-# Use application database URL for Alembic.
+# Migrations go through the direct connection when there is one, and only fall
+# back to the application URL when there is not. Behind a transaction-mode
+# pooler (Neon puts PgBouncer on the ``-pooler`` hostname) a session cannot keep
+# state between transactions, which rules out the autocommit block that
+# ``CREATE INDEX CONCURRENTLY`` needs — the way to add an index to a table with
+# data without locking it against writes.
 # Note: ConfigParser requires escaping '%' characters as '%%'.
-database_url = app_config.SQLALCHEMY_DATABASE_URI
+database_url = (
+    app_config.SQLALCHEMY_DATABASE_URI_UNPOOLED or app_config.SQLALCHEMY_DATABASE_URI
+)
 if not database_url:
     raise RuntimeError("DATABASE_URL is not configured")
 
