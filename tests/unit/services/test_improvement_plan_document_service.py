@@ -532,3 +532,71 @@ class TestTellingTheTeacherItIsSigned:
 
         # The scan is already stored and audited by the time the notice goes.
         mock_documents_repository.set_signed.assert_called_once()
+
+
+class TestRenderWord:
+    """The editable copy, rendered on the fly and never stored."""
+
+    async def test_renders_the_requested_format_from_the_current_plan(self, service):
+        """Test the Word copy always reflects the plan as it stands now."""
+
+        with patch(
+            "api.services.improvement_plan_document_service.render_formato_word",
+            return_value=b"<html></html>",
+        ) as render:
+            content, filename = await service.render_word(7, "formato-2", ADMIN)
+
+        assert content == b"<html></html>"
+        assert filename == "formato-2_plan_7.doc"
+        assert render.call_args[0][0] == "FORMATO_2"
+
+    async def test_is_not_stored_nor_tracked(
+        self, service, mock_documents_repository, mock_audit_service
+    ):
+        """Test the PDF stays the document of record.
+
+        Registering this copy would put a document nobody signed next to the
+        one that was, and the plan would carry two versions of the same form.
+        """
+
+        with patch(
+            "api.services.improvement_plan_document_service.render_formato_word",
+            return_value=b"<html></html>",
+        ):
+            await service.render_word(7, "formato-3", ADMIN)
+
+        mock_documents_repository.set_generated.assert_not_called()
+        mock_audit_service.log.assert_not_awaited()
+
+    async def test_requires_permission_to_manage_the_plan(
+        self, service, mock_plan_service
+    ):
+        """Test a teacher cannot pull the editable form of their own plan.
+
+        The Word copy is the draft the director corrects before signature; it is
+        not the plan the teacher is entitled to read.
+        """
+
+        mock_plan_service.ensure_can_manage.side_effect = ValidationError("no")
+
+        with patch(
+            "api.services.improvement_plan_document_service.render_formato_word"
+        ) as render:
+            with pytest.raises(ValidationError):
+                await service.render_word(7, "formato-2", DIRECTOR)
+
+        render.assert_not_called()
+
+    async def test_formato_1_cannot_be_rendered(self, service):
+        """Test asking for the case report is named as the mistake it is.
+
+        Formato 1 arrives already filled from the academic programme; there is
+        nothing for the platform to draw.
+        """
+
+        with pytest.raises(ValidationError):
+            await service.render_word(7, "formato-1", ADMIN)
+
+    async def test_an_unknown_slug_is_rejected(self, service):
+        with pytest.raises(ValidationError):
+            await service.render_word(7, "formato-9", ADMIN)

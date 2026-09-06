@@ -14,6 +14,7 @@ from api.utils.plan_email import (
     render_evidence_comment_for_teacher,
     render_evidence_requested,
     render_evidence_reviewed,
+    render_document_signed,
     render_evidence_submitted,
     render_plan_closed,
     render_plan_created,
@@ -482,3 +483,68 @@ class TestMessagesToTheDirector:
         assert message.to == "ada@ufps.edu.co"
         assert plan_url(42) in message.text
         assert "Director Departamento Química" in message.html
+
+
+@pytest.fixture
+def signed():
+    """The mail a teacher gets once a form of their plan carries signatures."""
+
+    return render_document_signed(
+        plan_id=42,
+        plan_title="Plan de mejoramiento 2026-1",
+        format_name="Formato 2",
+        format_label="Ficha de acuerdo de mejoramiento y compromiso docente",
+        teacher_name="Ada Lovelace",
+        teacher_email="ada@ufps.edu.co",
+        director_name="Marco Antonio Adarme Jaimes",
+        department_name="Departamento de Sistemas e Informática",
+    )
+
+
+class TestDocumentSigned:
+    """The signed scan is what the plan actually is, so the teacher is told."""
+
+    def test_is_addressed_to_the_teacher(self, signed):
+        assert signed.to == "ada@ufps.edu.co"
+        assert "profesor(a) Ada Lovelace" in signed.text
+
+    def test_names_the_format_in_the_subject(self, signed):
+        # The teacher may have three formats on the same plan; the subject has
+        # to say which one just got signed without opening the message.
+        assert "Formato 2" in signed.subject
+        assert "Plan de mejoramiento 2026-1" in signed.subject
+
+    def test_spells_the_format_out_in_the_body(self, signed):
+        assert "Formato 2" in signed.text
+        assert "Ficha de acuerdo de mejoramiento" in signed.text
+
+    def test_carries_the_link_to_the_plan(self, signed):
+        assert plan_url(42) in signed.text
+        assert plan_url(42) in signed.html
+
+    def test_signs_off_as_the_director(self, signed):
+        assert "Marco Antonio Adarme Jaimes" in signed.html
+        assert "Director Departamento de Sistemas e Informática" in signed.html
+
+    def test_ships_the_letterhead_like_every_other_message(self, signed):
+        assert len(signed.inline_images) == 1
+        assert f"cid:{signed.inline_images[0].cid}" in signed.html
+
+    def test_always_carries_a_plain_text_twin(self, signed):
+        assert signed.text
+        assert "<" not in signed.text
+
+    def test_escapes_a_title_that_looks_like_markup(self):
+        message = render_document_signed(
+            plan_id=1,
+            plan_title="<script>alert(1)</script>",
+            format_name="Formato 3",
+            format_label="Plan seguimiento",
+            teacher_name="Ada",
+            teacher_email="ada@ufps.edu.co",
+            director_name="Marco",
+            department_name=None,
+        )
+
+        assert "<script>" not in message.html
+        assert "&lt;script&gt;" in message.html

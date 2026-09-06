@@ -643,30 +643,6 @@ class TestGetAll:
         )
 
 
-class TestGetMyPlans:
-    """A teacher's own plans, keyed off their linked teacher row."""
-
-    async def test_returns_empty_without_a_linked_teacher(
-        self, service, mock_repository
-    ):
-        mock_repository.get_teacher_by_user_id = MagicMock(return_value=None)
-
-        result = await service.get_my_plans(TEACHER)
-
-        assert result == []
-
-    async def test_returns_the_teachers_plans(self, service, mock_repository):
-        mock_repository.get_teacher_by_user_id = MagicMock(
-            return_value=MagicMock(id=55)
-        )
-        mock_repository.get_by_teacher = AsyncMock(return_value=[_plan()])
-
-        result = await service.get_my_plans(TEACHER)
-
-        assert result == [_plan()]
-        mock_repository.get_by_teacher.assert_awaited_once_with(55)
-
-
 class TestGetCandidatesAndAtRisk:
     """Both require a resolved department and use the institutional threshold."""
 

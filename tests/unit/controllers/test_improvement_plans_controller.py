@@ -106,11 +106,23 @@ class TestImprovementPlansController:
 
     @pytest.mark.asyncio
     async def test_get_my_plans_delegates_to_service(self, controller, mock_service):
-        mock_service.get_my_plans.return_value = [{"id": 1}]
+        """Test the pagination and the filters reach the service untouched."""
 
-        result = await controller.get_my_plans(USER)
+        mock_service.get_my_plans.return_value = {"items": [{"id": 1}]}
+        pagination = MagicMock()
 
-        assert result == [{"id": 1}]
+        result = await controller.get_my_plans(
+            USER, pagination, period_id=3, status="EN_SEGUIMIENTO", search="acta"
+        )
+
+        assert result == {"items": [{"id": 1}]}
+        mock_service.get_my_plans.assert_awaited_once_with(
+            USER,
+            pagination,
+            period_id=3,
+            status="EN_SEGUIMIENTO",
+            search="acta",
+        )
 
     @pytest.mark.asyncio
     async def test_get_candidates_delegates_to_service(self, controller, mock_service):

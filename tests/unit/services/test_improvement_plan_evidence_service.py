@@ -493,3 +493,88 @@ class TestEmail:
         # The evidence is already stored and audited by the time the mail goes.
         assert request == {"id": 9, "title": "Listas"}
         mock_evidences_repository.create_request.assert_awaited_once()
+
+
+class TestListRequests:
+    """The read side of the loop, open to both parties of the plan."""
+
+    async def test_authorizes_through_the_plan_before_listing(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test the plan's own access check is what guards the listing.
+
+        The requests carry the director's wording and the teacher's replies, so
+        reaching them without loading the plan first would hand a plan of
+        another department to anyone who guessed its id.
+        """
+
+        mock_evidences_repository.list_requests = AsyncMock(return_value=[{"id": 9}])
+
+        result = await service.list_requests(7, TEACHER)
+
+        assert result == [{"id": 9}]
+        mock_plan_service.get_by_id.assert_awaited_once_with(7, TEACHER)
+
+    async def test_a_plan_the_caller_cannot_see_stops_the_listing(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test the authorization error is not swallowed into an empty list."""
+
+        mock_evidences_repository.list_requests = AsyncMock()
+        mock_plan_service.get_by_id.side_effect = ResourceNotFoundError("Plan", 7)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.list_requests(7, TEACHER)
+
+        mock_evidences_repository.list_requests.assert_not_awaited()
+
+
+class TestGetEvidenceFile:
+    """Evidences are served by endpoint, never as static files."""
+
+    async def test_returns_the_path_and_a_download_name(
+        self, service, mock_plan_service
+    ):
+        """Test the caller gets both the path and the name to save it under."""
+
+        path, filename = await service.get_evidence_file(7, 5, TEACHER)
+
+        assert path == "/uploads/e.pdf"
+        assert filename == "evidencia_5.pdf"
+        mock_plan_service.get_by_id.assert_awaited_once_with(7, TEACHER)
+
+    async def test_an_evidence_of_another_plan_is_not_found(
+        self, service, mock_evidences_repository
+    ):
+        """Test the plan id scopes the lookup, so a foreign id 404s."""
+
+        mock_evidences_repository.get_evidence.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+    async def test_a_row_without_a_file_is_not_found(
+        self, service, mock_evidences_repository
+    ):
+        """Test a row whose upload never landed 404s instead of streaming None.
+
+        Handing an empty ``file_url`` to the response would fail deeper down,
+        where it no longer reads as "that evidence is not there".
+        """
+
+        mock_evidences_repository.get_evidence.return_value = MagicMock(file_url=None)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+    async def test_authorization_runs_before_the_lookup(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test a caller with no access never learns whether the file exists."""
+
+        mock_plan_service.get_by_id.side_effect = ResourceNotFoundError("Plan", 7)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+        mock_evidences_repository.get_evidence.assert_not_called()
