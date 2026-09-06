@@ -22,9 +22,7 @@ class ImprovementPlanCheckpointNoteModel(Base):
 
     __tablename__ = "improvement_plan_checkpoint_notes"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     checkpoint_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plan_checkpoints.id", ondelete="CASCADE"),

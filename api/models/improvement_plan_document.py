@@ -27,9 +27,7 @@ class ImprovementPlanDocumentModel(Base):
         UniqueConstraint("plan_id", "format_type", name="uq_plan_document_format"),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plans.id", ondelete="CASCADE"),

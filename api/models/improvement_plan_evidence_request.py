@@ -23,9 +23,7 @@ class ImprovementPlanEvidenceRequestModel(Base):
 
     __tablename__ = "improvement_plan_evidence_requests"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plans.id", ondelete="CASCADE"),
@@ -36,6 +34,7 @@ class ImprovementPlanEvidenceRequestModel(Base):
         Integer,
         ForeignKey("improvement_plan_items.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     requested_by: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("users.id"), nullable=True

@@ -88,7 +88,9 @@ class TestImprovementPlanEvidencesRepository:
         """Test list_requests enriches every request with author names."""
 
         request = _make_request(evidences=[_make_evidence()])
-        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = [
+        # ``evidences`` is eager-loaded, so the listing query carries an
+        # ``.options(...)`` step the name lookup below does not.
+        mock_db.query.return_value.options.return_value.filter.return_value.order_by.return_value.all.return_value = [
             request
         ]
         mock_db.query.return_value.filter.return_value.all.return_value = [(3, "Ana")]

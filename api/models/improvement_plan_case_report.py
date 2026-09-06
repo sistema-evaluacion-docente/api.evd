@@ -23,9 +23,7 @@ class ImprovementPlanCaseReportModel(Base):
 
     __tablename__ = "improvement_plan_case_reports"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plans.id", ondelete="CASCADE"),

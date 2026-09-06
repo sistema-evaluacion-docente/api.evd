@@ -7,7 +7,8 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session, selectinload
 
 from api.database import get_db
 from api.models.academic_group import AcademicGroupModel
@@ -30,6 +31,10 @@ from api.models.improvement_plan_course import ImprovementPlanCourseModel
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
 from api.models.improvement_plan_item import ImprovementPlanItemModel
 from api.models.improvement_plan_item_comment import ImprovementPlanItemCommentModel
+from api.models.improvement_plan_verification import ImprovementPlanVerificationModel
+from api.models.improvement_plan_verification_item import (
+    ImprovementPlanVerificationItemModel,
+)
 from api.models.program import ProgramModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
@@ -64,6 +69,30 @@ CLOSE_RESULT_TO_STATUS = {
     "NO_CUMPLIDO": "CERRADO_NO_CUMPLIDO",
 }
 
+# Every relationship ``improvement_plan_to_dict`` walks, loaded one batch per
+# level instead of one query per plan. Lazy loading buys nothing here: the
+# serializer always touches all of them, so the only thing deferring them adds
+# is a round trip per plan and per relation — 91 queries to render a page of
+# ten. ``selectinload`` and not ``joinedload`` because the listing is paginated
+# and a joined collection would multiply the rows LIMIT counts.
+# ``items.comment_links`` and ``checkpoints.aspect_notes`` are missing on
+# purpose: both declare ``lazy="selectin"`` on the model, so they already come
+# batched once their parent is loaded in one go.
+PLAN_RELATIONS = (
+    selectinload(ImprovementPlanModel.items),
+    selectinload(ImprovementPlanModel.checkpoints),
+    selectinload(ImprovementPlanModel.courses),
+    selectinload(ImprovementPlanModel.documents),
+    selectinload(ImprovementPlanModel.evidences),
+    selectinload(ImprovementPlanModel.case_report),
+    selectinload(ImprovementPlanModel.verifications)
+    .selectinload(ImprovementPlanVerificationModel.items)
+    .selectinload(ImprovementPlanVerificationItemModel.courses),
+    selectinload(ImprovementPlanModel.verifications).selectinload(
+        ImprovementPlanVerificationModel.comment_findings
+    ),
+)
+
 
 class ImprovementPlansRepository:
     """Improvement plans repository"""
@@ -90,13 +119,14 @@ class ImprovementPlansRepository:
         return f"{year + 1}-1"
 
     def _period_code(self, period_id: int | None) -> str | None:
+        # ``Session.get`` is the lookup by primary key, and unlike a filtered
+        # query it *can* answer from the identity map. Do not count on that to
+        # save a round trip, though: the identity map holds instances weakly, so
+        # it only hits while something else keeps the row alive. Anything that
+        # resolves several codes at once must use ``_period_codes`` instead.
         if not period_id:
             return None
-        period = (
-            self.db.query(AcademicPeriodModel)
-            .filter(AcademicPeriodModel.id == period_id)
-            .first()
-        )
+        period = self.db.get(AcademicPeriodModel, period_id)
         return period.code if period else None
 
     def _period_by_code(self, code: str) -> AcademicPeriodModel | None:
@@ -119,34 +149,103 @@ class ImprovementPlansRepository:
             return None, None
         return row[0], row[1]
 
+    def _teacher_infos(
+        self, teacher_ids: set[int]
+    ) -> dict[int, tuple[str | None, str | None]]:
+        """``_teacher_info`` for a whole batch of teachers, in one query."""
+
+        if not teacher_ids:
+            return {}
+
+        rows = (
+            self.db.query(TeacherModel.id, UserModel.name, UserModel.avatar_url)
+            .join(UserModel, UserModel.id == TeacherModel.user_id)
+            .filter(TeacherModel.id.in_(teacher_ids))
+            .all()
+        )
+
+        return {row[0]: (row[1], row[2]) for row in rows}
+
+    def _period_codes(self, period_ids: set[int]) -> dict[int, str]:
+        """``_period_code`` for a whole batch of periods, in one query."""
+
+        if not period_ids:
+            return {}
+
+        rows = (
+            self.db.query(AcademicPeriodModel.id, AcademicPeriodModel.code)
+            .filter(AcademicPeriodModel.id.in_(period_ids))
+            .all()
+        )
+
+        return {row[0]: row[1] for row in rows}
+
+    def _user_names(self, user_ids: set[int]) -> dict[int, str]:
+        """Display names for a batch of users, in one query."""
+
+        if not user_ids:
+            return {}
+
+        rows = (
+            self.db.query(UserModel.id, UserModel.name)
+            .filter(UserModel.id.in_(user_ids))
+            .all()
+        )
+
+        return {row[0]: row[1] for row in rows}
+
     def _load(self, plan_id: int) -> ImprovementPlanModel | None:
         return (
             self.db.query(ImprovementPlanModel)
+            .options(*PLAN_RELATIONS)
             .filter(ImprovementPlanModel.id == plan_id)
             .first()
         )
 
-    def _enrich(self, plan: ImprovementPlanModel) -> dict:
-        name, avatar = self._teacher_info(plan.teacher_id)
+    def _enrich_many(self, plans: list[ImprovementPlanModel]) -> list[dict]:
+        """Serialize a batch of plans resolving each lookup once for all of them.
 
-        uploader_ids = {e.uploaded_by for e in plan.evidences if e.uploaded_by}
-        uploader_names: dict[int, str] = {}
-        if uploader_ids:
-            rows = (
-                self.db.query(UserModel.id, UserModel.name)
-                .filter(UserModel.id.in_(uploader_ids))
-                .all()
-            )
-            uploader_names = {row[0]: row[1] for row in rows}
+        The three names the serializer needs — teacher, academic period and
+        evidence uploader — are the same handful of rows across a whole page, so
+        they are resolved per batch instead of per plan. Doing it per plan is
+        what turned a listing into one query per name and per plan.
+        """
 
-        return improvement_plan_to_dict(
-            plan,
-            teacher_name=name,
-            teacher_avatar_url=avatar,
-            origin_period_code=self._period_code(plan.origin_period_id),
-            verification_period_code=self._period_code(plan.verification_period_id),
-            evidence_uploader_names=uploader_names,
+        if not plans:
+            return []
+
+        teachers = self._teacher_infos({plan.teacher_id for plan in plans})
+        periods = self._period_codes(
+            {
+                period_id
+                for plan in plans
+                for period_id in (plan.origin_period_id, plan.verification_period_id)
+                if period_id
+            }
         )
+        uploader_names = self._user_names(
+            {
+                evidence.uploaded_by
+                for plan in plans
+                for evidence in plan.evidences
+                if evidence.uploaded_by
+            }
+        )
+
+        return [
+            improvement_plan_to_dict(
+                plan,
+                teacher_name=teachers.get(plan.teacher_id, (None, None))[0],
+                teacher_avatar_url=teachers.get(plan.teacher_id, (None, None))[1],
+                origin_period_code=periods.get(plan.origin_period_id),
+                verification_period_code=periods.get(plan.verification_period_id),
+                evidence_uploader_names=uploader_names,
+            )
+            for plan in plans
+        ]
+
+    def _enrich(self, plan: ImprovementPlanModel) -> dict:
+        return self._enrich_many([plan])[0]
 
     def get_teacher_user_id(self, teacher_id: int) -> int | None:
         """User id linked to a teacher (to check a DOCENTE owns the plan)."""
@@ -412,7 +511,11 @@ class ImprovementPlansRepository:
         A teacher can keep every score above the threshold and still be the
         subject of a comment the AI classified as ALTO, which on its own is a
         reason to suggest a plan. Comments the analysis has not reached yet
-        simply do not count."""
+        simply do not count.
+
+        ``func.upper`` on the level name cannot use an index, and deliberately
+        so: ``risk_levels`` holds three rows, so Postgres scans it either way
+        and the case-insensitive match is worth more than the index would be."""
 
         if not teacher_ids:
             return {}
@@ -600,7 +703,20 @@ class ImprovementPlansRepository:
             plan.checkpoints.append(checkpoint)
 
         self.db.add(plan)
-        self.db.commit()
+
+        try:
+            self.db.commit()
+        except IntegrityError as exc:
+            # ``uq_improvement_plan_teacher_period``: another request created the
+            # plan for the same teacher and period between the service's check
+            # and this commit. The service turns it into the same duplicate
+            # error the check raises, so the race reads like the ordinary case.
+            self.db.rollback()
+            raise ValueError(
+                "Ya existe un plan de mejoramiento para este docente "
+                "en el periodo de origen"
+            ) from exc
+
         self.db.refresh(plan)
 
         return self._enrich(plan)
@@ -729,14 +845,15 @@ class ImprovementPlansRepository:
         offset = (page - 1) * limit
 
         plans = (
-            query.order_by(ImprovementPlanModel.created_at.desc())
+            query.options(*PLAN_RELATIONS)
+            .order_by(ImprovementPlanModel.created_at.desc())
             .offset(offset)
             .limit(limit)
             .all()
         )
 
         return {
-            "items": [self._enrich(plan) for plan in plans],
+            "items": self._enrich_many(plans),
             "total": total,
             "page": page,
             "limit": limit,
@@ -908,17 +1025,6 @@ class ImprovementPlansRepository:
         plan = self._load(plan_id)
 
         return self._enrich(plan) if plan else None
-
-    async def get_by_teacher(self, teacher_id: int) -> list[dict]:
-        """All plans of a teacher, newest first (for the teacher-facing view)."""
-
-        plans = (
-            self.db.query(ImprovementPlanModel)
-            .filter(ImprovementPlanModel.teacher_id == teacher_id)
-            .order_by(ImprovementPlanModel.created_at.desc())
-            .all()
-        )
-        return [self._enrich(plan) for plan in plans]
 
     # ------------------------------------------------------------------ #
     # Acta de compromiso & evidences
@@ -1257,14 +1363,19 @@ class ImprovementPlansRepository:
 
         plans = (
             self.db.query(ImprovementPlanModel)
+            .options(*PLAN_RELATIONS)
             .filter(ImprovementPlanModel.teacher_id == teacher_id)
             .order_by(ImprovementPlanModel.created_at.asc())
             .all()
         )
 
+        origin_codes = self._period_codes(
+            {plan.origin_period_id for plan in plans if plan.origin_period_id}
+        )
+
         groups: dict[tuple[str, str | None], dict] = {}
         for plan in plans:
-            origin_code = self._period_code(plan.origin_period_id)
+            origin_code = origin_codes.get(plan.origin_period_id)
             for item in plan.items:
                 if item.target_type == "QUALITATIVE":
                     continue
@@ -1298,7 +1409,7 @@ class ImprovementPlansRepository:
             "teacher_avatar_url": avatar,
             "department_id": teacher.department_id,
             "periods": periods,
-            "plans": [self._enrich(plan) for plan in plans],
+            "plans": self._enrich_many(plans),
             "recurrences": recurrences,
         }
 

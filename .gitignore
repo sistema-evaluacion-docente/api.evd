@@ -21,6 +21,9 @@ venv/
 
 .firebase/
 firebase.json
+.claude
+skills-lock.json
+docs/database.dbml.md
 
 # Coverage artifacts
 .coverage

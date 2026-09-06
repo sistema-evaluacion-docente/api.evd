@@ -131,12 +131,51 @@ class TestGetPlanIndicators:
 
 class TestGetMyPlans:
     def test_for_a_teacher_returns_200(self, client, controller, auth):
+        """The paginated dict is split into `data` and `pagination`."""
+
         auth.as_user(DOCENTE_USER)
-        controller.get_my_plans.return_value = [PLAN]
+        controller.get_my_plans.return_value = paginated([PLAN])
 
         response = client.get("/improvement-plans/my")
 
         assert response.status_code == 200
+        body = response.json()
+        assert body["data"] == [PLAN]
+        assert body["pagination"] == {"total": 1, "page": 1, "limit": 10, "pages": 1}
+
+    def test_forwards_the_pagination_and_filters(self, client, controller, auth):
+        """Query parameters reach the controller as pagination and filters."""
+
+        auth.as_user(DOCENTE_USER)
+        controller.get_my_plans.return_value = paginated([], page=2, limit=25)
+
+        response = client.get(
+            "/improvement-plans/my",
+            params={
+                "page": 2,
+                "limit": 25,
+                "period_id": 3,
+                "status": "EN_SEGUIMIENTO",
+                "search": "acta",
+            },
+        )
+
+        assert response.status_code == 200
+        _, pagination = controller.get_my_plans.call_args.args
+        assert (pagination.page, pagination.limit) == (2, 25)
+        kwargs = controller.get_my_plans.call_args.kwargs
+        assert kwargs["period_id"] == 3
+        assert kwargs["status"] == "EN_SEGUIMIENTO"
+        assert kwargs["search"] == "acta"
+
+    def test_caps_the_page_size(self, client, controller, auth):
+        """The pagination dependency caps limit at 100."""
+
+        auth.as_user(DOCENTE_USER)
+
+        response = client.get("/improvement-plans/my", params={"limit": 500})
+
+        assert response.status_code == 422
 
     def test_for_a_director_returns_403(self, client, controller):
         response = client.get("/improvement-plans/my")

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from api.database import get_db
 from api.models.improvement_plan_evidence import ImprovementPlanEvidenceModel
@@ -41,11 +41,23 @@ class ImprovementPlanEvidencesRepository(
     # ------------------------------------------------------------------ #
     # Helpers
     # ------------------------------------------------------------------ #
-    def _author_names(self, request) -> dict[int, str]:
-        """Display names for everyone appearing in a request thread."""
+    def _author_names(self, requests) -> dict[int, str]:
+        """Display names for everyone appearing in the given request threads.
 
-        ids = {c.author_id for c in request.comments if c.author_id}
-        ids |= {e.uploaded_by for e in request.evidences if e.uploaded_by}
+        Resolved for the whole batch: the director and the teacher are the same
+        two people on every thread of a plan, so asking per request meant the
+        same handful of rows fetched once for each one.
+        """
+
+        ids = {
+            author_id
+            for request in requests
+            for author_id in (
+                *(c.author_id for c in request.comments),
+                *(e.uploaded_by for e in request.evidences),
+            )
+            if author_id
+        }
 
         if not ids:
             return {}
@@ -58,10 +70,20 @@ class ImprovementPlanEvidencesRepository(
 
         return {row[0]: row[1] for row in rows}
 
+    def _enrich_many(self, requests) -> list[dict]:
+        """Serialize requests resolving the author names once for all of them."""
+
+        author_names = self._author_names(requests)
+
+        return [
+            improvement_plan_evidence_request_to_dict(
+                request, author_names=author_names
+            )
+            for request in requests
+        ]
+
     def _enrich(self, request) -> dict:
-        return improvement_plan_evidence_request_to_dict(
-            request, author_names=self._author_names(request)
-        )
+        return self._enrich_many([request])[0]
 
     # ------------------------------------------------------------------ #
     # Requests
@@ -85,12 +107,18 @@ class ImprovementPlanEvidencesRepository(
 
         requests = (
             self.db.query(ImprovementPlanEvidenceRequestModel)
+            # ``comments`` already declares ``lazy="selectin"`` on the model, so
+            # it comes batched on its own; ``evidences`` does not, and without
+            # this it was one query per request.
+            .options(
+                selectinload(ImprovementPlanEvidenceRequestModel.evidences)
+            )
             .filter(ImprovementPlanEvidenceRequestModel.plan_id == plan_id)
             .order_by(ImprovementPlanEvidenceRequestModel.created_at)
             .all()
         )
 
-        return [self._enrich(r) for r in requests]
+        return self._enrich_many(requests)
 
     async def get_request_detail(self, plan_id: int, request_id: int) -> dict | None:
         """One request with its submissions and thread."""

@@ -6,6 +6,18 @@
       "sourceType": "github",
       "skillPath": "skills/boost-prompt/SKILL.md",
       "computedHash": "2621a44fbd9fc2636953d1e6e39e5faeed995f7fb958ec12cc98a2f0576f6fa7"
+    },
+    "database-optimizer": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "github",
+      "skillPath": "skills/database-optimizer/SKILL.md",
+      "computedHash": "2feb5b0765151417dab90bf014df41514386e4bdb25aad9ab38498c0bd18a1d8"
+    },
+    "neon-postgres": {
+      "source": "neondatabase/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/neon-postgres/SKILL.md",
+      "computedHash": "769cfcce95e65c1c26e1c87a838a18917d8dedc0d4075ff44936e2ccec5ca35a"
     }
   }
 }

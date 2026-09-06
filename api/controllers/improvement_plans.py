@@ -72,10 +72,23 @@ class ImprovementPlansController:
 
         return await self.service.get_by_id(plan_id, current_user)
 
-    async def get_my_plans(self, current_user):
+    async def get_my_plans(
+        self,
+        current_user,
+        pagination: PaginationParams,
+        period_id: int | None = None,
+        status: str | None = None,
+        search: str | None = None,
+    ):
         """Plans belonging to the calling teacher."""
 
-        return await self.service.get_my_plans(current_user)
+        return await self.service.get_my_plans(
+            current_user,
+            pagination,
+            period_id=period_id,
+            status=status,
+            search=search,
+        )
 
     async def get_candidates(
         self, current_user, period_id: int, department_id: int | None = None

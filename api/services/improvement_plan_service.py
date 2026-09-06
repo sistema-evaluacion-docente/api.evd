@@ -25,6 +25,7 @@ from api.schemas.improvement_plan import (
     ImprovementPlanUpdate,
 )
 from api.schemas.notification import NotificationCreate, NotificationType
+from api.schemas.pagination import build_paginated_response
 from api.schemas.user import RoleName
 from api.services.audit_service import AuditService
 from api.services.notification_service import NotificationService
@@ -214,7 +215,14 @@ class ImprovementPlanService:
 
         return plan
 
-    async def get_my_plans(self, current_user) -> list[dict]:
+    async def get_my_plans(
+        self,
+        current_user,
+        pagination: PaginationParams,
+        period_id: int | None = None,
+        status: str | None = None,
+        search: str | None = None,
+    ) -> dict:
         """Plans of the teacher linked to the calling user."""
 
         teacher = self.improvement_plans_repository.get_teacher_by_user_id(
@@ -222,9 +230,19 @@ class ImprovementPlanService:
         )
 
         if not teacher:
-            return []
+            return build_paginated_response([], 0, pagination)
 
-        return await self.improvement_plans_repository.get_by_teacher(teacher.id)
+        # The same listing ``get_all`` serves, narrowed to the caller. A teacher
+        # sees their own plans whatever department they belong to, so this goes
+        # to the repository directly instead of through ``department_filter``.
+        return await self.improvement_plans_repository.get_all(
+            teacher_id=teacher.id,
+            period_id=period_id,
+            status=status,
+            search=search,
+            page=pagination.page,
+            limit=pagination.limit,
+        )
 
     async def get_candidates(
         self, current_user, period_id: int, department_id: int | None = None
@@ -304,18 +322,25 @@ class ImprovementPlanService:
     async def create(self, data: ImprovementPlanCreate, current_user) -> dict:
         """Create a plan, rejecting a duplicate for the same teacher/period."""
 
+        duplicate = ResourceAlreadyExistsError(
+            "plan de mejoramiento",
+            "docente y periodo de origen",
+            f"{data.teacher_id}/{data.origin_period_id}",
+        )
+
         if await self.improvement_plans_repository.has_plan_for(
             data.teacher_id, data.origin_period_id
         ):
-            raise ResourceAlreadyExistsError(
-                "plan de mejoramiento",
-                "docente y periodo de origen",
-                f"{data.teacher_id}/{data.origin_period_id}",
-            )
+            raise duplicate
 
-        plan = await self.improvement_plans_repository.create(
-            data, created_by=(current_user or {}).get("id")
-        )
+        try:
+            plan = await self.improvement_plans_repository.create(
+                data, created_by=(current_user or {}).get("id")
+            )
+        except ValueError as exc:
+            # The unique constraint caught what the check above could not: a
+            # concurrent request that also passed it. Same answer either way.
+            raise duplicate from exc
 
         self.ensure_can_manage(current_user, plan)
 

@@ -5,7 +5,17 @@ Improvement plan model (Plan de Seguimiento Docente)
 import datetime
 from typing import Optional
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from api.database import Base
@@ -19,21 +29,47 @@ class ImprovementPlanModel(Base):
     """
 
     __tablename__ = "improvement_plans"
-
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
+    __table_args__ = (
+        # One plan per teacher and origin period. ``ImprovementPlanService``
+        # checks this before creating, but a check in Python is not a
+        # guarantee: two requests can both pass it before either commits. It
+        # also indexes the two accesses that look a plan up by teacher —
+        # ``has_plan_for`` and ``_teachers_with_plan`` — and, being led by
+        # ``teacher_id``, it serves lookups by teacher alone as well.
+        UniqueConstraint(
+            "teacher_id",
+            "origin_period_id",
+            name="uq_improvement_plan_teacher_period",
+        ),
+        # The shape ``get_all`` always has: the director's department scoping
+        # plus the newest-first ordering. One index serves the filter and the
+        # sort, because with ``department_id`` pinned by equality Postgres walks
+        # the ``created_at`` range backwards — an explicit DESC would only
+        # matter if the two columns were ordered in opposite directions.
+        Index(
+            "ix_improvement_plans_department_created",
+            "department_id",
+            "created_at",
+        ),
     )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    # No index of its own: ``uq_improvement_plan_teacher_period`` leads with
+    # this column and answers the same lookups.
     teacher_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("teachers.id"), nullable=False, index=True
+        Integer, ForeignKey("teachers.id"), nullable=False
     )
     department_id: Mapped[Optional[int]] = mapped_column(
         Integer, ForeignKey("departments.id"), nullable=True
     )
+    # Both period columns are indexed for the foreign key rather than for a
+    # query: deleting or updating an academic period has to check every plan
+    # pointing at it, and without an index that check is a full scan.
     origin_period_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("academic_periods.id"), nullable=False
+        Integer, ForeignKey("academic_periods.id"), nullable=False, index=True
     )
     verification_period_id: Mapped[Optional[int]] = mapped_column(
-        Integer, ForeignKey("academic_periods.id"), nullable=True
+        Integer, ForeignKey("academic_periods.id"), nullable=True, index=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

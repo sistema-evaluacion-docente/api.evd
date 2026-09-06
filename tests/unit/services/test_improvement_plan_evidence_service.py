@@ -355,6 +355,23 @@ class TestNotificationLinks:
 
         assert notification.link == "/mis-planes/7"
 
+    async def test_an_account_on_both_sides_still_hears_the_bell(
+        self, service, mock_notification_service, mock_plans_repository
+    ):
+        # A director with a plan on themselves: the notice used to be dropped
+        # because the recipient was the one who acted, so the plan showed no
+        # sign of the request that had just been made on it.
+        mock_plans_repository.get_teacher_user_id.return_value = DIRECTOR_USER_ID
+
+        await service.create_request(
+            7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
+        )
+
+        notification = mock_notification_service.create.call_args[0][0]
+
+        assert notification.user_id == DIRECTOR_USER_ID
+        assert notification.link == "/mis-planes/7"
+
 
 class TestEmail:
     """The inbox half of the loop.
@@ -419,11 +436,12 @@ class TestEmail:
         await service.add_comment(7, 9, comment, DIRECTOR)
         assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
 
-    async def test_nobody_is_written_to_about_their_own_doing(
+    async def test_an_account_on_both_sides_is_written_to_all_the_same(
         self, service, sent_email, mock_plans_repository
     ):
-        # The director requesting a deliverable *is* the plan's teacher — an
-        # account holding both roles. Same rule the notifications already apply.
+        # The director requesting a deliverable *is* the plan's teacher — one
+        # account holding both roles, which is how the loop gets tested end to
+        # end. Dropping the mail there is what left that plan silent.
         mock_plans_repository.get_teacher_contact.return_value = {
             **TEACHER_CONTACT,
             "user_id": DIRECTOR["id"],
@@ -433,7 +451,8 @@ class TestEmail:
             7, ImprovementPlanEvidenceRequestCreate(title="Listas"), DIRECTOR
         )
 
-        sent_email.assert_not_called()
+        sent_email.assert_called_once()
+        assert sent_email.call_args[0][0].to == TEACHER_CONTACT["email"]
 
     async def test_a_teacher_with_no_account_is_simply_skipped(
         self, service, sent_email, mock_plans_repository
@@ -474,3 +493,88 @@ class TestEmail:
         # The evidence is already stored and audited by the time the mail goes.
         assert request == {"id": 9, "title": "Listas"}
         mock_evidences_repository.create_request.assert_awaited_once()
+
+
+class TestListRequests:
+    """The read side of the loop, open to both parties of the plan."""
+
+    async def test_authorizes_through_the_plan_before_listing(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test the plan's own access check is what guards the listing.
+
+        The requests carry the director's wording and the teacher's replies, so
+        reaching them without loading the plan first would hand a plan of
+        another department to anyone who guessed its id.
+        """
+
+        mock_evidences_repository.list_requests = AsyncMock(return_value=[{"id": 9}])
+
+        result = await service.list_requests(7, TEACHER)
+
+        assert result == [{"id": 9}]
+        mock_plan_service.get_by_id.assert_awaited_once_with(7, TEACHER)
+
+    async def test_a_plan_the_caller_cannot_see_stops_the_listing(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test the authorization error is not swallowed into an empty list."""
+
+        mock_evidences_repository.list_requests = AsyncMock()
+        mock_plan_service.get_by_id.side_effect = ResourceNotFoundError("Plan", 7)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.list_requests(7, TEACHER)
+
+        mock_evidences_repository.list_requests.assert_not_awaited()
+
+
+class TestGetEvidenceFile:
+    """Evidences are served by endpoint, never as static files."""
+
+    async def test_returns_the_path_and_a_download_name(
+        self, service, mock_plan_service
+    ):
+        """Test the caller gets both the path and the name to save it under."""
+
+        path, filename = await service.get_evidence_file(7, 5, TEACHER)
+
+        assert path == "/uploads/e.pdf"
+        assert filename == "evidencia_5.pdf"
+        mock_plan_service.get_by_id.assert_awaited_once_with(7, TEACHER)
+
+    async def test_an_evidence_of_another_plan_is_not_found(
+        self, service, mock_evidences_repository
+    ):
+        """Test the plan id scopes the lookup, so a foreign id 404s."""
+
+        mock_evidences_repository.get_evidence.return_value = None
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+    async def test_a_row_without_a_file_is_not_found(
+        self, service, mock_evidences_repository
+    ):
+        """Test a row whose upload never landed 404s instead of streaming None.
+
+        Handing an empty ``file_url`` to the response would fail deeper down,
+        where it no longer reads as "that evidence is not there".
+        """
+
+        mock_evidences_repository.get_evidence.return_value = MagicMock(file_url=None)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+    async def test_authorization_runs_before_the_lookup(
+        self, service, mock_plan_service, mock_evidences_repository
+    ):
+        """Test a caller with no access never learns whether the file exists."""
+
+        mock_plan_service.get_by_id.side_effect = ResourceNotFoundError("Plan", 7)
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.get_evidence_file(7, 5, TEACHER)
+
+        mock_evidences_repository.get_evidence.assert_not_called()

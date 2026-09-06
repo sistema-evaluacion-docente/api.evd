@@ -8,6 +8,12 @@ load_dotenv()
 
 PORT = os.getenv("PORT", "5000")
 DATABASE_URL = os.getenv("DATABASE_URL")
+# Connection that bypasses the pooler, for the operations transaction-mode
+# pooling cannot serve: migrations, dumps and logical replication. On Neon it is
+# the same URL without the ``-pooler`` suffix in the hostname. Optional — when
+# it is missing, alembic falls back to DATABASE_URL, which is also the right
+# value for a plain Postgres with no pooler in front of it.
+DATABASE_URL_UNPOOLED = os.getenv("DATABASE_URL_UNPOOLED")
 DEBUG = os.getenv("DEBUG", "false").lower() in ("true", "1", "yes")
 # Comma-separated list of allowed CORS origins. Defaults to the local dev
 # frontends. A literal "*" is supported but is handled specially in app.py
@@ -85,6 +91,7 @@ class Config:
     FIREBASE_CREDENTIALS = FIREBASE_CREDENTIALS
 
     SQLALCHEMY_DATABASE_URI = DATABASE_URL
+    SQLALCHEMY_DATABASE_URI_UNPOOLED = DATABASE_URL_UNPOOLED
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     UPLOAD_DIR = UPLOAD_DIR

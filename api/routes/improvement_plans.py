@@ -103,10 +103,17 @@ async def get_plan_candidates(
 @router.get("/periods")
 async def get_evaluated_periods(
     department_id: int | None = Query(default=None),
-    current_user=Depends(require_roles(MANAGER_ROLES)),
+    current_user=Depends(require_roles(ANY_ROLE)),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Academic periods with evaluations loaded, selectable as plan origin."""
+    """Academic periods with evaluations loaded, selectable as plan origin.
+
+    Open to a DOCENTE too, like ``/indicators``: it carries no plan data, only
+    the codes of the periods their own department has evaluations for, and the
+    filter of their plan list needs a period id to send to the API. The scope
+    is not theirs to choose — ``department_filter`` pins a non-admin to their
+    own department whatever ``department_id`` says.
+    """
 
     return await controller.get_evaluated_periods(current_user, department_id)
 
@@ -127,12 +134,26 @@ async def get_plan_indicators(
 
 @router.get("/my", response_model=list[ImprovementPlanOut])
 async def get_my_plans(
+    pagination: PaginationDep,
+    period_id: int | None = Query(default=None),
+    status: str | None = Query(default=None),
+    search: str | None = Query(default=None),
     current_user=Depends(require_roles([RoleName.DOCENTE])),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Plans belonging to the calling teacher."""
+    """Plans belonging to the calling teacher, paginated and filtered.
 
-    return await controller.get_my_plans(current_user)
+    Same filters the director's directory has, minus the department: the
+    teacher is the scope here.
+    """
+
+    return await controller.get_my_plans(
+        current_user,
+        pagination,
+        period_id=period_id,
+        status=status,
+        search=search,
+    )
 
 
 @router.get("/teacher/{teacher_id}/courses")

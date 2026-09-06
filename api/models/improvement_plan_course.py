@@ -24,9 +24,7 @@ class ImprovementPlanCourseModel(Base):
 
     __tablename__ = "improvement_plan_courses"
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     plan_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plans.id", ondelete="CASCADE"),
@@ -37,6 +35,7 @@ class ImprovementPlanCourseModel(Base):
         Integer,
         ForeignKey("academic_groups.id", ondelete="SET NULL"),
         nullable=True,
+        index=True,
     )
     course_name: Mapped[str] = mapped_column(String(255), nullable=False)
     course_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)

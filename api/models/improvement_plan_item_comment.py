@@ -25,9 +25,7 @@ class ImprovementPlanItemCommentModel(Base):
         UniqueConstraint("item_id", "comment_id", name="uq_plan_item_comment"),
     )
 
-    id: Mapped[int] = mapped_column(
-        Integer, primary_key=True, index=True, autoincrement=True
-    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     item_id: Mapped[int] = mapped_column(
         Integer,
         ForeignKey("improvement_plan_items.id", ondelete="CASCADE"),
