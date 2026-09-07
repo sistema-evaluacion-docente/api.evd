@@ -1,0 +1,59 @@
+@startuml cu-32-director-consulta-de-evaluaciones
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Director — Consulta y descarga de evaluaciones\nRequisitos RF-3.5, RF-3.6 y RF-5.9
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Consulta y descarga de evaluaciones" {
+  usecase "CU-DIR-14 Consultar las\nevaluaciones por identificador,\npor periodo y en listado paginado\n<size:10><color:#607D8B>RF-3.5</color></size>" as D14
+  usecase "CU-DIR-15 Consultar el resumen y los\npromedios por dimensión de una evaluación\n<size:10><color:#607D8B>RF-3.5</color></size>" as D15
+  usecase "CU-DIR-16 Consultar el\ndetalle por dimensión\n<size:10><color:#607D8B>RF-3.5</color></size>" as D16
+  usecase "CU-DIR-17 Descargar el PDF\noriginal de la evaluación\n<size:10><color:#607D8B>RF-3.6</color></size>" as D17
+  usecase "CU-DIR-18 Descargar el\nreporte PDF de un docente\n<size:10><color:#607D8B>RF-3.6 · RF-5.9</color></size>" as D18
+  usecase "CU-DIR-19 Exportar a Excel\nel resumen de la evaluación" as D19
+}
+
+DIR --> D14
+DIR --> D15
+DIR --> D16
+DIR --> D17
+DIR --> D18
+DIR --> D19
+
+@enduml

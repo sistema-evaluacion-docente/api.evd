@@ -1,0 +1,55 @@
+@startuml cu-39-director-configuracion-departamental
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Director — Configuración departamental\nTabla 36 (ámbito del actor) y RF-8.1
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Configuración del departamento" {
+  usecase "CU-DIR-57 Consultar las\nconfiguraciones vigentes de su\ndepartamento y las heredadas" as D57
+  usecase "CU-DIR-58 Crear una configuración propia\npara sobreescribir el valor institucional" as D58
+  usecase "CU-DIR-59 Actualizar o eliminar una\nconfiguración de su departamento" as D59
+  usecase "CU-DIR-60 Consultar el historial\nde cambios de una configuración" as D60
+}
+
+DIR --> D57
+DIR --> D58
+DIR --> D59
+DIR --> D60
+
+@enduml

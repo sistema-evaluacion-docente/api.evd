@@ -1,0 +1,65 @@
+@startuml cu-20-admin-estructura-institucional
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Administrador — Estructura institucional\nRequisitos RF-2.1 a RF-2.6
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Administrador" as ADM
+
+rectangle "Estructura institucional" {
+  usecase "CU-ADM-01 Gestionar facultades\n<size:10><color:#607D8B>RF-2.1</color></size>" as A1
+  usecase "CU-ADM-02 Gestionar departamentos\n<size:10><color:#607D8B>RF-2.2</color></size>" as A2
+  usecase "CU-ADM-03 Asignar o retirar el\ndirector de un departamento\n<size:10><color:#607D8B>RF-2.2 · RF-2.6</color></size>" as A3
+  usecase "CU-ADM-04 Gestionar programas académicos\n<size:10><color:#607D8B>RF-2.3</color></size>" as A4
+  usecase "CU-ADM-05 Gestionar el\ncatálogo de directores\n<size:10><color:#607D8B>RF-2.6</color></size>" as A5
+  usecase "CU-ADM-06 Gestionar periodos académicos" as A6
+  usecase "CU-ADM-07 Activar o cerrar\nun periodo académico" as A7
+  usecase "CU-ADM-08 Gestionar cursos\ny grupos académicos\n<size:10><color:#607D8B>RF-2.4</color></size>" as A8
+}
+
+ADM --> A1
+ADM --> A2
+ADM --> A3
+ADM --> A4
+ADM --> A5
+ADM --> A6
+ADM --> A7
+ADM --> A8
+
+A7 .> A6 : <<extend>>
+
+@enduml

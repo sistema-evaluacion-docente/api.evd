@@ -1,0 +1,57 @@
+@startuml cu-34-director-reportes-del-departamento
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Director — Reportes del departamento\nRequisitos RF-5.1, RF-5.2, RF-5.6 y RF-5.7
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Reportes y estadísticas del departamento" {
+  usecase "CU-DIR-24 Consultar el panel de resumen" as D24
+  usecase "CU-DIR-25 Consultar los promedios\ndel departamento y compararlos\ncon el periodo anterior\n<size:10><color:#607D8B>RF-5.1</color></size>" as D25
+  usecase "CU-DIR-26 Generar el reporte del\ndepartamento por rango de periodos\n<size:10><color:#607D8B>RF-5.2</color></size>" as D26
+  usecase "CU-DIR-27 Consultar el ranking\nde desempeño y la distribución\nde calificaciones\n<size:10><color:#607D8B>RF-5.6</color></size>" as D27
+  usecase "CU-DIR-28 Listar las materias y comparar\na los docentes que dictan la misma\n<size:10><color:#607D8B>RF-5.7</color></size>" as D28
+}
+
+DIR --> D24
+DIR --> D25
+DIR --> D26
+DIR --> D27
+DIR --> D28
+
+@enduml

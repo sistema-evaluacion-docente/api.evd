@@ -1,0 +1,72 @@
+@startuml cu-54-sistema-seguridad-y-auditoria
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Sistema — Seguridad, ámbito y auditoría\nRequisitos RF-1.1, RF-1.4, RF-1.5, RF-3.6 y RF-8.1
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Sistema" as SYS <<automático>> #FFF8E1
+actor "Firebase Auth" as FBA <<externo>> #FFF3E0
+
+rectangle "Seguridad, ámbito y auditoría" {
+  usecase "CU-SIS-34 Validar el token de\nidentidad en cada petición\n<size:10><color:#607D8B>RF-1.1</color></size>" as S34 #FFFDE7
+  usecase "CU-SIS-35 Autorizar el endpoint y\nla ruta según el rol del usuario\n<size:10><color:#607D8B>RF-1.4</color></size>" as S35 #FFFDE7
+  usecase "CU-SIS-36 Ocultar del menú\nlo que el rol no puede abrir\n<size:10><color:#607D8B>RF-1.4</color></size>" as S36 #FFFDE7
+  usecase "CU-SIS-37 Confinar al director\na su departamento y al docente\na sus propios datos (403)\n<size:10><color:#607D8B>RF-1.5</color></size>" as S37 #FFFDE7
+  usecase "CU-SIS-38 Verificar el permiso antes\nde entregar un archivo cargado\n<size:10><color:#607D8B>RF-3.6</color></size>" as S38 #FFFDE7
+  usecase "CU-SIS-39 Derivar el ámbito de\nla configuración de quien\npregunta, nunca de un parámetro\n<size:10><color:#607D8B>RF-1.5</color></size>" as S39 #FFFDE7
+  usecase "CU-SIS-40 Resolver el valor\nefectivo: el del departamento gana\ny el institucional es el respaldo" as S40 #FFFDE7
+  usecase "CU-SIS-41 Rechazar con 403\nel acceso a un ámbito ajeno\n<size:10><color:#607D8B>RF-1.5</color></size>" as S41 #FFFDE7
+  usecase "CU-SIS-42 Registrar el evento\nde auditoría de cada mutación,\ncon responsable y descripción\n<size:10><color:#607D8B>RF-8.1</color></size>" as S42 #FFFDE7
+}
+
+SYS --> S34
+SYS --> S35
+SYS --> S36
+SYS --> S37
+SYS --> S38
+SYS --> S39
+SYS --> S40
+SYS --> S41
+SYS --> S42
+
+S34 --> FBA
+
+S35 ..> S34 : <<include>>
+S37 ..> S35 : <<include>>
+S41 .> S39 : <<extend>>\n(se pide un ámbito\ndistinto al propio)
+
+@enduml

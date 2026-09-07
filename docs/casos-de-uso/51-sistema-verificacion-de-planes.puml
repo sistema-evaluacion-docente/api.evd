@@ -1,0 +1,71 @@
+@startuml cu-51-sistema-verificacion-de-planes
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Sistema — Verificación automática de los planes\nRequisito RF-6.13
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Sistema" as SYS <<automático>> #FFF8E1
+
+rectangle "Verificación del plan con los resultados del periodo siguiente" {
+  usecase "CU-SIS-11 Verificar los indicadores del\nplan al terminar el procesamiento del PDF\n<size:10><color:#607D8B>RF-6.13</color></size>" as S11 #FFFDE7
+  usecase "CU-SIS-12 Promediar al docente\nsobre todos sus grupos del\nperiodo para dictar el veredicto\n<size:10><color:#607D8B>RF-6.13</color></size>" as S12 #FFFDE7
+  usecase "CU-SIS-13 Guardar aparte el desglose\npor asignatura del mismo indicador\n<size:10><color:#607D8B>RF-6.13</color></size>" as S13 #FFFDE7
+  usecase "CU-SIS-14 Verificar los compromisos\ncualitativos al terminar el análisis de IA\n<size:10><color:#607D8B>RF-6.13 · RF-4.1</color></size>" as S14 #FFFDE7
+  usecase "CU-SIS-15 Levantar alerta solo con riesgo\nALTO en la misma categoría pedagógica\n<size:10><color:#607D8B>RF-6.13</color></size>" as S15 #FFFDE7
+  usecase "CU-SIS-16 Guardar los hallazgos de\nriesgo MEDIO como contexto, sin alerta\n<size:10><color:#607D8B>RF-6.13</color></size>" as S16 #FFFDE7
+  usecase "CU-SIS-17 Dictar el veredicto\npor reincidencia cuando todos\nlos compromisos son cualitativos\n<size:10><color:#607D8B>RF-6.13</color></size>" as S17 #FFFDE7
+  usecase "CU-SIS-18 Registrar la verificación\nconservando el riesgo y la\ncategoría que tenía el comentario\n<size:10><color:#607D8B>RF-6.13</color></size>" as S18 #FFFDE7
+  usecase "CU-SIS-19 Re-verificar el plan cuando se\nreclasifica a mano un comentario citado\n<size:10><color:#607D8B>RF-6.13 · RF-4.3</color></size>" as S19 #FFFDE7
+  usecase "CU-SIS-20 Dejar intacto el\ncierre firmado por el director\n<size:10><color:#607D8B>RF-6.4 · RF-6.13</color></size>" as S20 #FFFDE7
+}
+
+SYS --> S11
+SYS --> S12
+SYS --> S13
+SYS --> S14
+SYS --> S15
+SYS --> S16
+SYS --> S17
+SYS --> S18
+SYS --> S19
+SYS --> S20
+
+S11 ..> S12 : <<include>>
+S14 ..> S15 : <<include>>
+S16 .> S15 : <<extend>>\n(el comentario reaparece\nen riesgo MEDIO)
+
+@enduml

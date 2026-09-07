@@ -1,0 +1,59 @@
+@startuml cu-31-director-carga-de-evaluaciones
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Director — Carga y procesamiento de evaluaciones\nRequisitos RF-3.1 a RF-3.5
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Carga y procesamiento de evaluaciones" {
+  usecase "CU-DIR-08 Cargar los PDF oficiales\nde evaluación del periodo\n<size:10><color:#607D8B>RF-3.1 · RF-3.2</color></size>" as D8
+  usecase "CU-DIR-09 Seguir el progreso del\nprocesamiento en tiempo real\n<size:10><color:#607D8B>RF-3.4</color></size>" as D9
+  usecase "CU-DIR-10 Reprocesar el análisis\nde IA de una evaluación" as D10
+  usecase "CU-DIR-11 Activar o\ndesactivar una evaluación" as D11
+  usecase "CU-DIR-12 Eliminar una\nevaluación y sus datos derivados" as D12
+  usecase "CU-DIR-13 Consultar el catálogo de\nlas 22 preguntas de la encuesta" as D13
+}
+
+DIR --> D8
+DIR --> D9
+DIR --> D10
+DIR --> D11
+DIR --> D12
+DIR --> D13
+
+@enduml

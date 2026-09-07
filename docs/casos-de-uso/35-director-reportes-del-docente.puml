@@ -1,0 +1,59 @@
+@startuml cu-35-director-reportes-del-docente
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Director — Reportes del docente\nRequisitos RF-5.3 a RF-5.5, RF-5.8 y RF-5.9
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Reportes y estadísticas del docente" {
+  usecase "CU-DIR-29 Consultar el historial del\ndocente en los periodos evaluados\n<size:10><color:#607D8B>RF-5.3</color></size>" as D29
+  usecase "CU-DIR-30 Comparar al docente con el\nperiodo anterior y con su departamento\n<size:10><color:#607D8B>RF-5.3</color></size>" as D30
+  usecase "CU-DIR-31 Consultar los\npromedios por dimensión y la\nmatriz de resultados del docente\n<size:10><color:#607D8B>RF-5.4</color></size>" as D31
+  usecase "CU-DIR-32 Consultar los cursos del\ndocente y sus comentarios por materia\n<size:10><color:#607D8B>RF-5.5</color></size>" as D32
+  usecase "CU-DIR-33 Comparar el desempeño de un\ndocente entre dos periodos académicos\n<size:10><color:#607D8B>RF-5.8</color></size>" as D33
+  usecase "CU-DIR-34 Descargar el reporte de\nevaluación del docente en Excel\n<size:10><color:#607D8B>RF-5.9</color></size>" as D34
+}
+
+DIR --> D29
+DIR --> D30
+DIR --> D31
+DIR --> D32
+DIR --> D33
+DIR --> D34
+
+@enduml

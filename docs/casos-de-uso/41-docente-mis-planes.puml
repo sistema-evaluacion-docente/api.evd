@@ -1,0 +1,65 @@
+@startuml cu-41-docente-mis-planes
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Docente — Mis planes de mejoramiento\nRequisitos RF-6.2, RF-6.10 a RF-6.13
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Docente" as DOC
+
+rectangle "Planes de mejoramiento del docente" {
+  usecase "CU-DOC-08 Consultar los planes\nde mejoramiento propios\n<size:10><color:#607D8B>RF-6.2</color></size>" as C8
+  usecase "CU-DOC-09 Consultar el resultado\nde la verificación del plan\n<size:10><color:#607D8B>RF-6.13</color></size>" as C9
+  usecase "CU-DOC-10 Descargar el\nformato oficial del plan\n<size:10><color:#607D8B>RF-6.10</color></size>" as C10
+  usecase "CU-DOC-11 Consultar las\nsolicitudes de evidencia\n<size:10><color:#607D8B>RF-6.11</color></size>" as C11
+  usecase "CU-DOC-12 Cargar el archivo\nde la evidencia solicitada\n<size:10><color:#607D8B>RF-6.11 · RF-6.12</color></size>" as C12
+  usecase "CU-DOC-13 Eliminar una evidencia cargada" as C13
+  usecase "CU-DOC-14 Comentar en el\nhilo de la solicitud\n<size:10><color:#607D8B>RF-6.11</color></size>" as C14
+  usecase "CU-DOC-15 Descargar el\narchivo de una evidencia\n<size:10><color:#607D8B>RF-6.11</color></size>" as C15
+}
+
+DOC --> C8
+DOC --> C9
+DOC --> C10
+DOC --> C11
+DOC --> C12
+DOC --> C13
+DOC --> C14
+DOC --> C15
+
+C12 ..> C11 : <<include>>
+
+@enduml

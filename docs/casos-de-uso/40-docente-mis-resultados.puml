@@ -1,0 +1,61 @@
+@startuml cu-40-docente-mis-resultados
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' Especificación de cada caso de uso: docs/casos-de-uso/README.md
+' =============================================================================
+title Casos de uso del Docente — Mis resultados\nRequisitos RF-5.1 a RF-5.5, RF-5.9 y RF-3.6
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
+' skinparam linetype ortho
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Docente" as DOC
+
+rectangle "Resultados propios del docente" {
+  usecase "CU-DOC-01 Consultar el\npanel de resumen propio" as C1
+  usecase "CU-DOC-02 Consultar los\nperiodos y las materias propias\n<size:10><color:#607D8B>RF-5.5</color></size>" as C2
+  usecase "CU-DOC-03 Consultar el historial\npropio en los periodos evaluados\n<size:10><color:#607D8B>RF-5.3</color></size>" as C3
+  usecase "CU-DOC-04 Compararse con el periodo\nanterior y con el departamento\n<size:10><color:#607D8B>RF-5.3</color></size>" as C4
+  usecase "CU-DOC-05 Consultar los promedios\npor dimensión y la matriz propia\n<size:10><color:#607D8B>RF-5.4</color></size>" as C5
+  usecase "CU-DOC-06 Consultar los\ncomentarios recibidos por materia\n<size:10><color:#607D8B>RF-5.5</color></size>" as C6
+  usecase "CU-DOC-07 Descargar el reporte\nPDF de la propia evaluación\n<size:10><color:#607D8B>RF-3.6 · RF-5.9</color></size>" as C7
+}
+
+DOC --> C1
+DOC --> C2
+DOC --> C3
+DOC --> C4
+DOC --> C5
+DOC --> C6
+DOC --> C7
+
+@enduml
