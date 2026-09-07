@@ -319,12 +319,14 @@ class TestDirectorService:
         self,
         service,
         mock_directors_repo,
+        mock_users_repo,
         mock_audit_service,
         mock_director,
         current_user,
     ):
         """Test delete succeeds when director exists."""
         mock_directors_repo.get.return_value = mock_director
+        mock_users_repo.get.return_value = None
 
         result = await service.delete(1, current_user)
 
@@ -342,6 +344,54 @@ class TestDirectorService:
         result = await service.delete(999, current_user)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete_director_removes_the_director_role(
+        self,
+        service,
+        mock_directors_repo,
+        mock_users_repo,
+        mock_user_service,
+        mock_director,
+        current_user,
+    ):
+        """Deleting a director drops DIRECTOR_DE_DEPARTAMENTO too — that row
+        was the only thing making the user a director (regression: this used
+        to be `unassign_director`-only, leaving a deleted director's role
+        stuck forever)."""
+        mock_directors_repo.get.return_value = mock_director
+        mock_users_repo.get.return_value = MagicMock(id=10, uid="uid-10")
+        mock_users_repo.get_user_role_names.return_value = [
+            "DOCENTE",
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value,
+        ]
+
+        await service.delete(1, current_user)
+
+        mock_user_service.update_user.assert_awaited_once_with(
+            "uid-10", UserUpdate(roles=["DOCENTE"])
+        )
+
+    @pytest.mark.asyncio
+    async def test_delete_director_keeps_the_role_if_it_is_the_users_only_one(
+        self,
+        service,
+        mock_directors_repo,
+        mock_users_repo,
+        mock_user_service,
+        mock_director,
+        current_user,
+    ):
+        """A user can't be left with zero roles, so the last one stays put."""
+        mock_directors_repo.get.return_value = mock_director
+        mock_users_repo.get.return_value = MagicMock(id=10, uid="uid-10")
+        mock_users_repo.get_user_role_names.return_value = [
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value
+        ]
+
+        await service.delete(1, current_user)
+
+        mock_user_service.update_user.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_update_director_department_already_assigned(
