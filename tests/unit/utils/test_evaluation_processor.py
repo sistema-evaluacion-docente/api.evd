@@ -39,10 +39,16 @@ def _risk_level(level_id: int, name: str) -> MagicMock:
     return risk_level
 
 
-def _category(category_id: int, name: str) -> MagicMock:
+def _category(category_id: int, label: str) -> MagicMock:
+    """A pedagogical category as the AI model actually sees it: matched by
+    ``description`` (the readable label the model's id2label outputs, e.g.
+    "CLARIDAD"), not ``name`` (the catalogue's internal code, e.g. "LABEL_0")
+    — see evaluation_processor.py's category_description_to_id."""
+
     category = MagicMock()
     category.id = category_id
-    category.name = name
+    category.name = f"LABEL_{category_id}"
+    category.description = label
     return category
 
 
