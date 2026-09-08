@@ -11,3 +11,6 @@ script:
 
 seed:
 	$(DEV) exec api_evd sh -c 'for f in seed_roles_admin seed_faculties seed_departments seed_programs seed_risk_categories seed_settings; do python scripts/$$f.py || exit 1; done'
+
+db-reset:
+	$(DEV) exec db psql -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-evd} -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
