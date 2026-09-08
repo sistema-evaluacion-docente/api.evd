@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException, Query
 from api.controllers.comments import CommentsController, get_comments_controller
 from api.core.pagination import PaginationDep
 from api.core.router import EnvelopeRouter
-from api.middlewares.auth import get_current_user, require_roles
+from api.middlewares.auth import require_roles
 from api.models.teacher import TeacherModel
 from api.schemas.comment import (
     CommentFiltersDep,
@@ -95,11 +95,14 @@ async def count_comments_by_department_and_period(
 async def count_comments_by_teacher_and_period(
     teacher_id: int = Query(..., description="Teacher ID"),
     academic_period_id: int = Query(..., description="Academic period ID"),
-    current_user=Depends(get_current_user),
+    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
     controller: CommentsController = Depends(get_comments_controller),
     db: Session = Depends(get_db),
 ):
-    """Get the count of comments for a specific teacher in an academic period."""
+    """Get the count of comments for a specific teacher in an academic period.
+
+    Only the director of the teacher's own department may consult this.
+    """
 
     teacher = db.query(TeacherModel).filter(TeacherModel.id == teacher_id).first()
 
@@ -115,6 +118,12 @@ async def count_comments_by_teacher_and_period(
         raise HTTPException(
             status_code=400,
             detail="El docente no tiene un departamento asignado",
+        )
+
+    if department_id != current_user.get("department_id"):
+        raise HTTPException(
+            status_code=403,
+            detail="Solo el director del departamento del docente puede consultar este conteo",
         )
 
     count = await controller.count_by_department_and_period(
