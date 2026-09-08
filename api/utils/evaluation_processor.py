@@ -811,14 +811,6 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
     """
     db = SessionLocal()
 
-    # CATEGORIES_LABEL = {
-    #     "DESARROLLO DEL CONOCIMIENTO": "LABEL_0",
-    #     "DESEMPEÑO DOCENTE": "LABEL_1",
-    #     "PROCESOS DE EVALUACIÓN": "LABEL_2",
-    #     "INTEGRACIÓN INTERPERSONAL": "LABEL_3",
-    #     "SIN CATEGORIA": "LABEL_4",
-    # }
-
     _broadcast_log(
         evaluation_id,
         level="info",
@@ -873,9 +865,13 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             r.name.lower(): r.id for r in all_risk_levels
         }
 
+        # The category model's id2label outputs the readable category name
+        # ("DESEMPEÑO DOCENTE"), not the catalogue's internal code
+        # ("LABEL_1") — that code only lives in `name`, matched against
+        # `description` instead, is what the AI actually returns.
         all_categories = db.query(PedagogicalCategoryModel).all()
-        category_name_to_id: dict[str, int] = {
-            c.name.lower(): c.id for c in all_categories
+        category_description_to_id: dict[str, int] = {
+            (c.description or "").lower(): c.id for c in all_categories
         }
 
         director = (
@@ -946,7 +942,7 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                     category_label = category["label"]
 
                     if category_label not in category_cache:
-                        category_cache[category_label] = category_name_to_id.get(
+                        category_cache[category_label] = category_description_to_id.get(
                             category_label.lower()
                         )
 
