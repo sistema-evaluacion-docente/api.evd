@@ -1,0 +1,40 @@
+# Stack de prueba de estrés — SOLO local, separado de docker-compose.yaml y
+# docker-compose.dev.yaml (los que usan tus compañeros). No trae un servicio
+# `db`: la base de datos es el branch "stress-test" de Neon (DATABASE_URL en
+# .env.stress.local), no un Postgres local.
+#
+# Corre siempre con un project-name propio para que sus volúmenes/red no se
+# mezclen con los de dev/prod aunque compartan carpeta:
+#
+#   docker compose -p evd-stress -f docker-compose.stress.yaml --env-file .env.stress.local up --build
+#
+# El puerto host es 8090 (no 8000) para poder tener `make dev` corriendo al
+# mismo tiempo sin choque de puertos.
+services:
+  api_evd_stress:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8090:8000"
+    env_file:
+      - .env.stress.local
+    environment:
+      - HF_HOME=/app/hf_cache
+    volumes:
+      - hf_cache_stress:/app/hf_cache
+    # docker-entrypoint.sh siempre corre "fastapi run api/app.py", sin forma
+    # de pasarle otro comando. Lo reemplazamos por completo para levantar
+    # loadtest/asgi_stress.py (el ASGI app con el bypass de Firebase) en vez
+    # del entrypoint real.
+    entrypoint: ["sh", "-c"]
+    command:
+      - "alembic upgrade head && exec uvicorn loadtest.asgi_stress:app --host 0.0.0.0 --port 8000"
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1g
+
+volumes:
+  hf_cache_stress:

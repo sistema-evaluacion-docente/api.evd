@@ -28,3 +28,10 @@ docs/database.dbml.md
 # Coverage artifacts
 .coverage
 htmlcov/
+
+# loadtest: real uids/emails pulled from the db, and one-off run results —
+# regenerate with list_stress_users.py / locust, never commit them
+loadtest/stress_users.json
+loadtest/docente_teacher_ids.json
+loadtest/reporte_*.html
+loadtest/resultados_*
