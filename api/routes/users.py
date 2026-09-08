@@ -13,6 +13,7 @@ from api.schemas.user import (
     UserFiltersDep,
     UserOut,
     UserRolesUpdate,
+    UserSelfUpdate,
     UserStatusUpdate,
     UserUpdate,
 )
@@ -107,17 +108,45 @@ async def get_user_by_uid(
     response_model=UserOut,
 )
 async def update_user(
-    payload: UserUpdate,
+    payload: UserSelfUpdate,
     current_user=Depends(get_current_user),
     controller: UsersController = Depends(get_users_controller),
 ):
     """
-    Update the authenticated user's profile.
+    Update the authenticated user's own account.
+
+    Only the descriptive fields. Roles and active status are an administrator's
+    call and go through their own endpoints, so that holding a valid token is
+    never enough to widen what the account may do.
 
     Response: ResponseEnvelope[UserOut]
     """
 
     return await controller.update(payload, current_user)
+
+
+@router.put(
+    "/{uid}",
+    response_model=UserOut,
+)
+async def update_user_by_uid(
+    uid: str,
+    payload: UserUpdate,
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """
+    Update any user's name, avatar, roles and active status. ADMIN only.
+
+    Response: ResponseEnvelope[UserOut]
+    """
+
+    user = await controller.update_by_uid(uid, payload)
+
+    if not user:
+        raise UserNotFoundError(uid)
+
+    return user
 
 
 @router.put(
