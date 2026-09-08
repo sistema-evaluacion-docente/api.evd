@@ -107,14 +107,14 @@ class TestGetEvaluationById:
         response = client.get("/evaluations/1")
 
         assert response.status_code == 200
-        controller.get_by_id.assert_awaited_once_with(1, None)
+        controller.get_by_id.assert_awaited_once_with(1, ADMIN_USER, None)
 
     def test_forwards_the_modality(self, client, controller):
         controller.get_by_id.return_value = EVALUATION
 
         client.get("/evaluations/1?modality=DISTANCIA")
 
-        controller.get_by_id.assert_awaited_once_with(1, "DISTANCIA")
+        controller.get_by_id.assert_awaited_once_with(1, ADMIN_USER, "DISTANCIA")
 
     def test_when_missing_returns_404(self, client, controller):
         controller.get_by_id.return_value = None

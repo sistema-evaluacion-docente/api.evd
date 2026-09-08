@@ -66,11 +66,12 @@ class TestEvaluationsController:
     async def test_get_by_id_delegates_to_service(self, controller, mock_service):
         """Test get_by_id delegates to service."""
 
+        current_user = {"roles": ["ADMIN"]}
         mock_service.get_by_id.return_value = {"id": 1, "status": "COMPLETED"}
 
-        result = await controller.get_by_id(1)
+        result = await controller.get_by_id(1, current_user)
 
-        mock_service.get_by_id.assert_called_once_with(1, None)
+        mock_service.get_by_id.assert_called_once_with(1, current_user, None)
         assert result["id"] == 1
 
     @pytest.mark.asyncio
@@ -79,35 +80,38 @@ class TestEvaluationsController:
     ):
         """Test get_by_id forwards the modality the figures are restricted to."""
 
+        current_user = {"roles": ["ADMIN"]}
         mock_service.get_by_id.return_value = {"id": 1, "modality": "DISTANCIA"}
 
-        await controller.get_by_id(1, "DISTANCIA")
+        await controller.get_by_id(1, current_user, "DISTANCIA")
 
-        mock_service.get_by_id.assert_called_once_with(1, "DISTANCIA")
+        mock_service.get_by_id.assert_called_once_with(1, current_user, "DISTANCIA")
 
     @pytest.mark.asyncio
     async def test_get_by_period_delegates_to_service(self, controller, mock_service):
         """Test get_by_period delegates to service."""
 
+        current_user = {"roles": ["ADMIN"]}
         mock_service.get_by_period.return_value = {"id": 1, "academic_period_id": 5}
 
-        result = await controller.get_by_period(5)
+        result = await controller.get_by_period(5, current_user)
 
-        mock_service.get_by_period.assert_called_once_with(5)
+        mock_service.get_by_period.assert_called_once_with(5, current_user)
         assert result["academic_period_id"] == 5
 
     @pytest.mark.asyncio
     async def test_get_summary_delegates_to_service(self, controller, mock_service):
         """Test get_summary delegates to service."""
 
+        current_user = {"roles": ["ADMIN"]}
         mock_service.get_summary.return_value = {
             "evaluation_id": 1,
             "department_average": 4.5,
         }
 
-        result = await controller.get_summary(1)
+        result = await controller.get_summary(1, current_user)
 
-        mock_service.get_summary.assert_called_once_with(1)
+        mock_service.get_summary.assert_called_once_with(1, current_user)
         assert result["department_average"] == 4.5
 
     @pytest.mark.asyncio
@@ -116,13 +120,14 @@ class TestEvaluationsController:
     ):
         """Test get_dimension_averages delegates to service."""
 
+        current_user = {"roles": ["ADMIN"]}
         mock_service.get_dimension_averages.return_value = [
             {"dimension": "A", "average": 4.0}
         ]
 
-        result = await controller.get_dimension_averages(1)
+        result = await controller.get_dimension_averages(1, current_user)
 
-        mock_service.get_dimension_averages.assert_called_once_with(1)
+        mock_service.get_dimension_averages.assert_called_once_with(1, current_user)
         assert len(result) == 1
 
     @pytest.mark.asyncio
