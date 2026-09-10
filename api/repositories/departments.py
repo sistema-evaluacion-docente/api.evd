@@ -166,11 +166,14 @@ class DepartmentsRepository(BaseRepository[DepartmentModel]):
         return count > 0
 
     def has_active_director(self, department_id: int) -> bool:
-        """Check if a department has any director assigned (active or not)."""
+        """Check if a department has an active director assigned."""
 
         count = (
             self.db.query(DirectorsModel)
-            .filter(DirectorsModel.department_id == department_id)
+            .filter(
+                DirectorsModel.department_id == department_id,
+                DirectorsModel.active == True,
+            )
             .count()
         )
 
@@ -191,12 +194,23 @@ class DepartmentsRepository(BaseRepository[DepartmentModel]):
         return department
 
     def delete_department(self, department_id: int) -> DepartmentModel | None:
-        """Delete a department by ID."""
+        """Delete a department by ID.
+
+        The service already rejects the delete if the department has an
+        *active* director, but an unassigned one is only soft-deactivated
+        (`active=False`), never removed — and `directors.department_id` is a
+        hard foreign key. Left in place, that stale row would make the
+        `DELETE` fail with a FK violation, so it's cleared here first.
+        """
 
         department = self.get_by_id(department_id)
 
         if not department:
             return None
+
+        self.db.query(DirectorsModel).filter(
+            DirectorsModel.department_id == department_id
+        ).delete()
 
         self.db.delete(department)
         self.db.commit()

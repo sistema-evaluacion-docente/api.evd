@@ -368,7 +368,7 @@ class TeacherService:
             )
 
         if not (is_admin or is_own_teacher or is_department_director):
-            raise PermissionError("No tiene permiso para acceder a este historial")
+            raise PermissionDeniedError("No tiene permiso para acceder a este historial")
 
         items, total, teacher_info = self.teachers_repository.get_history(
             teacher_id, pagination, sort_by
@@ -408,7 +408,7 @@ class TeacherService:
             )
 
         if not (is_admin or is_own_teacher or is_department_director):
-            raise PermissionError("No tiene permiso para ver el historial de este docente")
+            raise PermissionDeniedError("No tiene permiso para ver el historial de este docente")
 
         return self.stats_repository.get_course_history(
             teacher_id, course_code, teacher.department_id, limit

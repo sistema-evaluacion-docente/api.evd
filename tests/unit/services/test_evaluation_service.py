@@ -129,7 +129,7 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_evaluation_with_dimension_averages(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test get_by_id merges dimension averages into the evaluation dict."""
 
@@ -144,7 +144,7 @@ class TestEvaluationService:
         ]
         mock_evaluations_repo.get_dimension_averages.return_value = dimension_averages
 
-        result = await service.get_by_id(1)
+        result = await service.get_by_id(1, current_user)
 
         assert result["id"] == 1
         assert result["dimension_averages"] == dimension_averages
@@ -153,7 +153,7 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_by_id_restricts_every_figure_to_the_requested_modality(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test the average, dimensions and counts come from one kind of program.
 
@@ -163,7 +163,7 @@ class TestEvaluationService:
         mock_evaluations_repo.get_by_id_as_dict.return_value = {"id": 1}
         mock_evaluations_repo.get_dimension_averages.return_value = []
 
-        result = await service.get_by_id(1, "DISTANCIA")
+        result = await service.get_by_id(1, current_user, "DISTANCIA")
 
         assert result["modality"] == "DISTANCIA"
         mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1, "DISTANCIA")
@@ -173,31 +173,31 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_by_id_normalizes_the_modality(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test a lowercase modality reaches the repository in canonical form."""
 
         mock_evaluations_repo.get_by_id_as_dict.return_value = {"id": 1}
         mock_evaluations_repo.get_dimension_averages.return_value = []
 
-        await service.get_by_id(1, "presencial")
+        await service.get_by_id(1, current_user, "presencial")
 
         mock_evaluations_repo.get_by_id_as_dict.assert_called_once_with(1, "PRESENCIAL")
 
     @pytest.mark.asyncio
     async def test_get_by_id_rejects_an_unknown_modality(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test a modality outside the catalog never reaches the repository."""
 
         with pytest.raises(ValidationError):
-            await service.get_by_id(1, "VIRTUAL")
+            await service.get_by_id(1, current_user, "VIRTUAL")
 
         mock_evaluations_repo.get_by_id_as_dict.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_id_compares_the_previous_period_within_the_modality(
-        self, service, mock_evaluations_repo, mock_academic_periods_repo
+        self, service, mock_evaluations_repo, mock_academic_periods_repo, current_user
     ):
         """Test presencial is never compared against a distancia average."""
 
@@ -217,7 +217,7 @@ class TestEvaluationService:
         mock_academic_periods_repo.get_by_code.return_value = prev_period
         mock_evaluations_repo.get_by_period_and_department.return_value = {"id": 7}
 
-        await service.get_by_id(1, "PRESENCIAL")
+        await service.get_by_id(1, current_user, "PRESENCIAL")
 
         assert mock_evaluations_repo.get_by_id_as_dict.call_args_list[-1][0] == (
             7,
@@ -230,7 +230,7 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_by_id_includes_previous_period_comparison(
-        self, service, mock_evaluations_repo, mock_academic_periods_repo
+        self, service, mock_evaluations_repo, mock_academic_periods_repo, current_user
     ):
         """Test get_by_id attaches a dimension/question growth comparison against
         the department's evaluation in the previous academic period."""
@@ -275,7 +275,7 @@ class TestEvaluationService:
             prev_evaluation_ref
         )
 
-        result = await service.get_by_id(1)
+        result = await service.get_by_id(1, current_user)
 
         comparison = result["comparison"]
         assert comparison["previous_period_code"] == "2025-1"
@@ -288,7 +288,7 @@ class TestEvaluationService:
 
     @pytest.mark.asyncio
     async def test_get_by_id_comparison_is_none_without_previous_evaluation(
-        self, service, mock_evaluations_repo, mock_academic_periods_repo
+        self, service, mock_evaluations_repo, mock_academic_periods_repo, current_user
     ):
         """Test get_by_id's comparison is None when there is no previous period
         evaluation for the department."""
@@ -303,38 +303,40 @@ class TestEvaluationService:
         mock_academic_periods_repo.get_by_code.return_value = MagicMock(id=9)
         mock_evaluations_repo.get_by_period_and_department.return_value = None
 
-        result = await service.get_by_id(1)
+        result = await service.get_by_id(1, current_user)
 
         assert result["comparison"] is None
 
     @pytest.mark.asyncio
     async def test_get_by_id_returns_none_when_not_found(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test get_by_id returns None when evaluation not found."""
 
         mock_evaluations_repo.get_by_id_as_dict.return_value = None
 
-        result = await service.get_by_id(999)
+        result = await service.get_by_id(999, current_user)
 
         assert result is None
         mock_evaluations_repo.get_dimension_averages.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_get_by_period_returns_evaluation(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test get_by_period returns evaluation dict."""
 
-        mock_evaluations_repo.get_by_period_id.return_value = {"id": 1}
+        mock_evaluations_repo.get_by_period_id.return_value = {"id": 1, "department_id": 1}
 
-        result = await service.get_by_period(1)
+        result = await service.get_by_period(1, current_user)
 
-        assert result == {"id": 1}
+        assert result == {"id": 1, "department_id": 1}
         mock_evaluations_repo.get_by_period_id.assert_called_once_with(1)
 
     @pytest.mark.asyncio
-    async def test_get_summary_returns_statistics(self, service, mock_evaluations_repo):
+    async def test_get_summary_returns_statistics(
+        self, service, mock_evaluations_repo, current_user
+    ):
         """Test get_summary returns aggregated statistics."""
 
         summary = {
@@ -344,21 +346,21 @@ class TestEvaluationService:
         }
         mock_evaluations_repo.get_summary.return_value = summary
 
-        result = await service.get_summary(1)
+        result = await service.get_summary(1, current_user)
 
         assert result == summary
         mock_evaluations_repo.get_summary.assert_called_once_with(1)
 
     @pytest.mark.asyncio
     async def test_get_dimension_averages_returns_list(
-        self, service, mock_evaluations_repo
+        self, service, mock_evaluations_repo, current_user
     ):
         """Test get_dimension_averages returns dimension averages."""
 
         averages = [{"dimension": "A", "average": 4.0}]
         mock_evaluations_repo.get_dimension_averages.return_value = averages
 
-        result = await service.get_dimension_averages(1)
+        result = await service.get_dimension_averages(1, current_user)
 
         assert result == averages
         mock_evaluations_repo.get_dimension_averages.assert_called_once_with(1)

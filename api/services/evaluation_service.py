@@ -80,8 +80,28 @@ class EvaluationService:
 
         return build_paginated_response(items, total, pagination)
 
+    @staticmethod
+    def _assert_can_view_department(
+        current_user: dict, department_id: int | None
+    ) -> None:
+        """Only ADMIN, or the DIRECTOR of the department an evaluation belongs
+        to, may view it — mirrors the check `get_pdf_path` already enforces."""
+
+        roles = set(current_user.get("roles", []))
+        is_admin = RoleName.ADMIN.value in roles
+        is_department_director = (
+            RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
+            and department_id is not None
+            and department_id == current_user.get("department_id")
+        )
+
+        if not (is_admin or is_department_director):
+            raise PermissionDeniedError(
+                "Solo el director del departamento asociado puede consultar esta evaluación"
+            )
+
     async def get_by_id(
-        self, evaluation_id: int, modality: str | None = None
+        self, evaluation_id: int, current_user: dict, modality: str | None = None
     ) -> dict | None:
         """Retrieve an evaluation by ID, including its pedagogical dimension averages
         and a comparison against the department's evaluation in the previous period.
@@ -89,7 +109,10 @@ class EvaluationService:
         With a `modality`, every figure — average, dimensions, risk counts,
         teacher count and the previous-period comparison — is computed over
         the groups of that kind of program only. Without it they cover the
-        whole evaluation, presencial and a distancia together."""
+        whole evaluation, presencial and a distancia together.
+
+        Only ADMIN or the director of the evaluation's own department may
+        access it."""
 
         modality = validated_modality(modality)
 
@@ -99,6 +122,8 @@ class EvaluationService:
 
         if not evaluation:
             return None
+
+        self._assert_can_view_department(current_user, evaluation.get("department_id"))
 
         evaluation["modality"] = modality
         evaluation["dimension_averages"] = (
@@ -220,10 +245,18 @@ class EvaluationService:
 
         return comparison
 
-    async def get_by_period(self, period_id: int) -> dict | None:
-        """Retrieve an evaluation by academic period ID."""
+    async def get_by_period(self, period_id: int, current_user: dict) -> dict | None:
+        """Retrieve an evaluation by academic period ID. Only ADMIN or the
+        director of its department may access it."""
 
-        return self.evaluations_repository.get_by_period_id(period_id)
+        evaluation = self.evaluations_repository.get_by_period_id(period_id)
+
+        if not evaluation:
+            return None
+
+        self._assert_can_view_department(current_user, evaluation.get("department_id"))
+
+        return evaluation
 
     async def get_pdf_path(
         self,
@@ -268,13 +301,31 @@ class EvaluationService:
 
         return pdf_path
 
-    async def get_summary(self, evaluation_id: int) -> dict | None:
-        """Get aggregated statistics for an evaluation."""
+    async def get_summary(self, evaluation_id: int, current_user: dict) -> dict | None:
+        """Get aggregated statistics for an evaluation. Only ADMIN or the
+        director of its department may access it."""
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        self._assert_can_view_department(current_user, evaluation.department_id)
 
         return self.evaluations_repository.get_summary(evaluation_id)
 
-    async def get_dimension_averages(self, evaluation_id: int) -> list[dict] | None:
-        """Get dimension-level averages for an evaluation."""
+    async def get_dimension_averages(
+        self, evaluation_id: int, current_user: dict
+    ) -> list[dict] | None:
+        """Get dimension-level averages for an evaluation. Only ADMIN or the
+        director of its department may access it."""
+
+        evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+
+        if not evaluation:
+            return None
+
+        self._assert_can_view_department(current_user, evaluation.department_id)
 
         return self.evaluations_repository.get_dimension_averages(evaluation_id)
 
@@ -533,9 +584,7 @@ class EvaluationService:
         director_department_id = current_user.get("department_id")
 
         if not director_department_id:
-            raise PermissionDeniedError(
-                "El director no tiene un departamento asignado"
-            )
+            raise PermissionDeniedError("El director no tiene un departamento asignado")
 
         if director_department_id != department.id:
             raise PermissionDeniedError(

@@ -116,15 +116,17 @@ async def get_all_evaluations(
 @router.get(
     "/by-period/{period_id}",
     response_model=EvaluationOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_by_period(
     period_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by academic period ID."""
+    """Endpoint to get an evaluation by academic period ID. Only ADMIN or the
+    director of its department may access it."""
 
-    evaluation = await controller.get_by_period(period_id)
+    evaluation = await controller.get_by_period(period_id, current_user)
 
     if not evaluation:
         raise HTTPException(
@@ -137,6 +139,7 @@ async def get_evaluation_by_period(
 @router.get(
     "/{evaluation_id}",
     response_model=EvaluationOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_by_id(
     evaluation_id: int,
@@ -148,12 +151,13 @@ async def get_evaluation_by_id(
             "la evaluación completa."
         ),
     ),
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by ID, optionally restricted to one modality."""
+    """Endpoint to get an evaluation by ID, optionally restricted to one
+    modality. Only ADMIN or the director of its department may access it."""
 
-    evaluation = await controller.get_by_id(evaluation_id, modality)
+    evaluation = await controller.get_by_id(evaluation_id, current_user, modality)
 
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -229,15 +233,17 @@ async def get_teachers_by_period(
 @router.get(
     "/{evaluation_id}/summary",
     response_model=EvaluationSummaryOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_summary(
     evaluation_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return aggregated department statistics for an evaluation."""
+    """Return aggregated department statistics for an evaluation. Only ADMIN
+    or the director of its department may access it."""
 
-    summary = await controller.get_summary(evaluation_id)
+    summary = await controller.get_summary(evaluation_id, current_user)
 
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -248,15 +254,17 @@ async def get_evaluation_summary(
 @router.get(
     "/{evaluation_id}/dimension-averages",
     response_model=list[DimensionAverageItem],
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_dimension_averages(
     evaluation_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return dimension-level averages aggregated across all groups for an evaluation."""
+    """Return dimension-level averages aggregated across all groups for an
+    evaluation. Only ADMIN or the director of its department may access it."""
 
-    dimensions = await controller.get_dimension_averages(evaluation_id)
+    dimensions = await controller.get_dimension_averages(evaluation_id, current_user)
 
     if dimensions is None:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -419,12 +427,13 @@ async def get_teacher_evaluation_detail(
 )
 async def export_evaluation(
     evaluation_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Download an Excel file with the department evaluation summary."""
+    """Download an Excel file with the department evaluation summary. Only
+    ADMIN or the director of its department may access it."""
 
-    summary = await controller.get_summary(evaluation_id)
+    summary = await controller.get_summary(evaluation_id, current_user)
 
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")

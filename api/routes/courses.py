@@ -27,7 +27,7 @@ _DIRECTOR_ROLES = [RoleName.DIRECTOR_DE_DEPARTAMENTO]
 async def get_all_courses(
     filters: CourseFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_ROLES)),
+    _=Depends(require_roles(_DIRECTOR_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
     """List all courses with pagination and filters."""
