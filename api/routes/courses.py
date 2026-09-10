@@ -19,20 +19,27 @@ from api.schemas.user import RoleName
 
 router = EnvelopeRouter(prefix="/courses", tags=["Courses"])
 
-_ROLES = [RoleName.ADMIN]
-_DIRECTOR_ROLES = [RoleName.DIRECTOR_DE_DEPARTAMENTO]
+_ROLES = [RoleName.DIRECTOR_DE_DEPARTAMENTO]
 
 
 @router.get("/", response_model=list[CourseOut])
 async def get_all_courses(
     filters: CourseFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_DIRECTOR_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
-    """List all courses with pagination and filters."""
+    """List the courses of the director's own department, with filters and pagination."""
 
-    return await controller.get_all(filters, pagination)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    return await controller.get_all(filters, pagination, department_id)
 
 
 @router.post("/", response_model=CourseOut, status_code=201)
@@ -41,20 +48,36 @@ async def create_course(
     current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
-    """Create a new course."""
+    """Create a new course in the director's own department."""
 
-    return await controller.create(payload, current_user)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    return await controller.create(payload, department_id, current_user)
 
 
 @router.get("/{course_id}", response_model=CourseOut)
 async def get_course_by_id(
     course_id: int,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
-    """Get a course by ID."""
+    """Get a course by ID. Restricted to the director's own department."""
 
-    course = await controller.get_by_id(course_id)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    course = await controller.get_by_id(course_id, department_id)
 
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -66,7 +89,7 @@ async def get_course_by_id(
 async def patch_course_name(
     course_id: int,
     payload: CourseNameUpdate,
-    current_user=Depends(require_roles(_DIRECTOR_ROLES)),
+    current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
     """Update only the name of a course. Restricted to the director's own department."""
@@ -94,9 +117,17 @@ async def update_course(
     current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
-    """Update a course."""
+    """Update a course. Restricted to the director's own department."""
 
-    course = await controller.update(course_id, payload, current_user)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    course = await controller.update(course_id, payload, department_id, current_user)
 
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")
@@ -110,9 +141,17 @@ async def delete_course(
     current_user=Depends(require_roles(_ROLES)),
     controller: CoursesController = Depends(get_courses_controller),
 ):
-    """Delete a course."""
+    """Delete a course. Restricted to the director's own department."""
 
-    course = await controller.delete(course_id, current_user)
+    department_id = current_user.get("department_id")
+
+    if not department_id:
+        raise HTTPException(
+            status_code=400,
+            detail="El director no tiene un departamento asignado",
+        )
+
+    course = await controller.delete(course_id, department_id, current_user)
 
     if not course:
         raise HTTPException(status_code=404, detail="Curso no encontrado")

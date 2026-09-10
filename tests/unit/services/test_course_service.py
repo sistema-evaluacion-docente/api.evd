@@ -17,7 +17,14 @@ from api.services.course_service import CourseService
 
 
 class TestCourseService:
-    """Test suite for CourseService."""
+    """Test suite for CourseService.
+
+    Every operation is confined to the caller's own department — mirrors the
+    scoping rule ``SettingService`` follows for settings.
+    """
+
+    OWN_DEPARTMENT_ID = 5
+    OTHER_DEPARTMENT_ID = 99
 
     @pytest.fixture
     def mock_courses_repo(self):
@@ -46,7 +53,7 @@ class TestCourseService:
         """Mock CourseModel instance with department relationship."""
 
         department = MagicMock(spec=DepartmentModel)
-        department.id = 5
+        department.id = self.OWN_DEPARTMENT_ID
         department.code = "D01"
         department.name = "Matemáticas"
 
@@ -54,7 +61,7 @@ class TestCourseService:
         course.id = 1
         course.code = "MATH101"
         course.name = "Cálculo I"
-        course.department_id = 5
+        course.department_id = self.OWN_DEPARTMENT_ID
         course.department = department
         course.created_at = "2024-01-01T00:00:00Z"
         course.updated_at = "2024-01-01T00:00:00Z"
@@ -64,35 +71,32 @@ class TestCourseService:
     def current_user(self):
         """Mock current user dict."""
 
-        return {"id": 99, "roles": ["ADMIN"]}
+        return {"id": 99, "roles": ["DIRECTOR DE DEPARTAMENTO"]}
 
     @pytest.fixture
     def create_data(self):
         """Sample CourseCreate schema."""
 
-        return CourseCreate(
-            code="MATH101",
-            name="Cálculo I",
-            department_id=5,
-        )
+        return CourseCreate(code="MATH101", name="Cálculo I")
 
     @pytest.mark.asyncio
     async def test_get_all_returns_paginated_courses(
         self, service, mock_courses_repo, mock_course
     ):
-        """Test get_all returns paginated courses."""
+        """Test get_all returns paginated courses scoped to the caller's department."""
 
         mock_courses_repo.search.return_value = ([mock_course], 1)
 
         filters = CourseFilters()
         pagination = PaginationParams(page=1, limit=10)
 
-        result = await service.get_all(filters, pagination)
+        result = await service.get_all(filters, pagination, self.OWN_DEPARTMENT_ID)
 
         assert result["total"] == 1
         assert result["page"] == 1
         assert result["limit"] == 10
         assert len(result["items"]) == 1
+        assert filters.department_id == self.OWN_DEPARTMENT_ID
         mock_courses_repo.search.assert_called_once_with(filters, pagination)
 
     @pytest.mark.asyncio
@@ -104,23 +108,38 @@ class TestCourseService:
         mock_courses_repo.search.return_value = ([mock_course], 1)
 
         result = await service.get_all(
-            CourseFilters(), PaginationParams(page=1, limit=10)
+            CourseFilters(), PaginationParams(page=1, limit=10), self.OWN_DEPARTMENT_ID
         )
 
         item = result["items"][0]
         assert item["department"] == {
-            "id": 5,
+            "id": self.OWN_DEPARTMENT_ID,
             "code": "D01",
             "name": "Matemáticas",
         }
 
     @pytest.mark.asyncio
+    async def test_get_all_rejects_another_departments_filter(
+        self, service, mock_courses_repo
+    ):
+        """Test a caller cannot list another department's courses via the filter."""
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_all(
+                CourseFilters(department_id=self.OTHER_DEPARTMENT_ID),
+                PaginationParams(page=1, limit=10),
+                self.OWN_DEPARTMENT_ID,
+            )
+
+        mock_courses_repo.search.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_get_by_id_found(self, service, mock_courses_repo, mock_course):
-        """Test get_by_id returns course dict when found."""
+        """Test get_by_id returns course dict when found in the caller's department."""
 
         mock_courses_repo.get_by_id.return_value = mock_course
 
-        result = await service.get_by_id(1)
+        result = await service.get_by_id(1, self.OWN_DEPARTMENT_ID)
 
         assert result is not None
         assert result["id"] == 1
@@ -132,9 +151,20 @@ class TestCourseService:
 
         mock_courses_repo.get_by_id.return_value = None
 
-        result = await service.get_by_id(999)
+        result = await service.get_by_id(999, self.OWN_DEPARTMENT_ID)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_rejects_another_departments_course(
+        self, service, mock_courses_repo, mock_course
+    ):
+        """Test a caller cannot read a course outside their department."""
+
+        mock_courses_repo.get_by_id.return_value = mock_course
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_id(1, self.OTHER_DEPARTMENT_ID)
 
     @pytest.mark.asyncio
     async def test_create_course_success(
@@ -146,15 +176,17 @@ class TestCourseService:
         create_data,
         current_user,
     ):
-        """Test create succeeds with valid data."""
+        """Test create succeeds with valid data, forcing the caller's department."""
 
         mock_courses_repo.get_by_code.return_value = None
         mock_courses_repo.create.return_value = mock_course
 
-        result = await service.create(create_data, current_user)
+        result = await service.create(create_data, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is not None
         mock_courses_repo.create.assert_called_once()
+        created_payload = mock_courses_repo.create.call_args[0][0]
+        assert created_payload["department_id"] == self.OWN_DEPARTMENT_ID
         mock_courses_repo.db.commit.assert_called_once()
         mock_audit_service.log.assert_called_once()
 
@@ -167,7 +199,20 @@ class TestCourseService:
         mock_courses_repo.get_by_code.return_value = mock_course
 
         with pytest.raises(ResourceAlreadyExistsError):
-            await service.create(create_data, {"id": 99})
+            await service.create(create_data, self.OWN_DEPARTMENT_ID, {"id": 99})
+
+        mock_courses_repo.create.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_course_rejects_another_department(
+        self, service, mock_courses_repo
+    ):
+        """Test a caller cannot create a course in another department."""
+
+        data = CourseCreate(code="MATH101", department_id=self.OTHER_DEPARTMENT_ID)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.create(data, self.OWN_DEPARTMENT_ID, {"id": 99})
 
         mock_courses_repo.create.assert_not_called()
 
@@ -180,7 +225,7 @@ class TestCourseService:
         mock_course,
         current_user,
     ):
-        """Test update succeeds when course exists."""
+        """Test update succeeds when the course belongs to the caller's department."""
 
         mock_courses_repo.get.return_value = mock_course
         mock_courses_repo.get_by_code.return_value = None
@@ -188,7 +233,7 @@ class TestCourseService:
 
         data = CourseUpdate(name="Cálculo II")
 
-        result = await service.update(1, data, current_user)
+        result = await service.update(1, data, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is not None
         mock_courses_repo.update_course.assert_called_once()
@@ -204,9 +249,37 @@ class TestCourseService:
 
         data = CourseUpdate(name="Cálculo II")
 
-        result = await service.update(999, data, current_user)
+        result = await service.update(999, data, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_update_course_rejects_another_departments_course(
+        self, service, mock_courses_repo, mock_course, current_user
+    ):
+        """Test a caller cannot update a course outside their department."""
+
+        mock_courses_repo.get.return_value = mock_course
+        data = CourseUpdate(name="Cálculo II")
+
+        with pytest.raises(PermissionDeniedError):
+            await service.update(1, data, self.OTHER_DEPARTMENT_ID, current_user)
+
+        mock_courses_repo.update_course.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_update_course_rejects_moving_to_another_department(
+        self, service, mock_courses_repo, mock_course, current_user
+    ):
+        """Test a caller cannot move a course to another department."""
+
+        mock_courses_repo.get.return_value = mock_course
+        data = CourseUpdate(department_id=self.OTHER_DEPARTMENT_ID)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.update(1, data, self.OWN_DEPARTMENT_ID, current_user)
+
+        mock_courses_repo.update_course.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_update_course_code_change_to_duplicate_raises(
@@ -222,7 +295,7 @@ class TestCourseService:
         data = CourseUpdate(code="OTHER")
 
         with pytest.raises(ResourceAlreadyExistsError):
-            await service.update(1, data, {"id": 99})
+            await service.update(1, data, self.OWN_DEPARTMENT_ID, {"id": 99})
 
         mock_courses_repo.update_course.assert_not_called()
 
@@ -237,7 +310,7 @@ class TestCourseService:
 
         data = CourseUpdate(code="MATH101")
 
-        result = await service.update(1, data, current_user)
+        result = await service.update(1, data, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is not None
         mock_courses_repo.get_by_code.assert_not_called()
@@ -257,7 +330,7 @@ class TestCourseService:
         mock_courses_repo.count_academic_groups.return_value = 0
         mock_courses_repo.delete_course.return_value = mock_course
 
-        result = await service.delete(1, current_user)
+        result = await service.delete(1, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is not None
         mock_courses_repo.delete_course.assert_called_once_with(1)
@@ -271,9 +344,22 @@ class TestCourseService:
 
         mock_courses_repo.get.return_value = None
 
-        result = await service.delete(999, current_user)
+        result = await service.delete(999, self.OWN_DEPARTMENT_ID, current_user)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_delete_course_rejects_another_departments_course(
+        self, service, mock_courses_repo, mock_course, current_user
+    ):
+        """Test a caller cannot delete a course outside their department."""
+
+        mock_courses_repo.get.return_value = mock_course
+
+        with pytest.raises(PermissionDeniedError):
+            await service.delete(1, self.OTHER_DEPARTMENT_ID, current_user)
+
+        mock_courses_repo.delete_course.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_delete_course_with_academic_groups_raises(
@@ -285,7 +371,7 @@ class TestCourseService:
         mock_courses_repo.count_academic_groups.return_value = 3
 
         with pytest.raises(ValidationError):
-            await service.delete(1, {"id": 99})
+            await service.delete(1, self.OWN_DEPARTMENT_ID, {"id": 99})
 
         mock_courses_repo.delete_course.assert_not_called()
 
@@ -298,7 +384,9 @@ class TestCourseService:
         mock_courses_repo.get_by_id.return_value = mock_course
         mock_courses_repo.update_course.return_value = mock_course
 
-        result = await service.update_name(1, "Álgebra Lineal", 5, current_user)
+        result = await service.update_name(
+            1, "Álgebra Lineal", self.OWN_DEPARTMENT_ID, current_user
+        )
 
         assert result is not None
         mock_courses_repo.update_course.assert_called_once_with(
@@ -314,7 +402,9 @@ class TestCourseService:
 
         mock_courses_repo.get_by_id.return_value = None
 
-        result = await service.update_name(999, "Álgebra Lineal", 5, current_user)
+        result = await service.update_name(
+            999, "Álgebra Lineal", self.OWN_DEPARTMENT_ID, current_user
+        )
 
         assert result is None
 
@@ -327,6 +417,8 @@ class TestCourseService:
         mock_courses_repo.get_by_id.return_value = mock_course
 
         with pytest.raises(PermissionDeniedError):
-            await service.update_name(1, "Álgebra Lineal", 99, current_user)
+            await service.update_name(
+                1, "Álgebra Lineal", self.OTHER_DEPARTMENT_ID, current_user
+            )
 
         mock_courses_repo.update_course.assert_not_called()

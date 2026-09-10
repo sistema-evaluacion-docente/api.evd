@@ -10,7 +10,15 @@ from api.services.audit_service import AuditService
 
 
 class CourseService:
-    """Service for course-related business operations."""
+    """Service for course-related business operations.
+
+    Every operation here is confined to the caller's own department — the
+    route resolves that department from the director's token, never from a
+    parameter, and hands it in. A course, or a payload, naming another
+    department is refused with a 403 rather than silently answered with (or
+    redirected to) the caller's own scope, the same rule ``SettingService``
+    follows for settings.
+    """
 
     def __init__(
         self,
@@ -24,33 +32,56 @@ class CourseService:
         self,
         filters: CourseFilters,
         pagination: PaginationParams,
+        department_id: int,
     ) -> dict:
-        """Retrieve all courses based on filters and pagination."""
+        """Retrieve the caller's department's courses, based on filters and pagination."""
+
+        if filters.department_id is not None and filters.department_id != department_id:
+            raise PermissionDeniedError(
+                "Solo puede consultar los cursos de su propio departamento"
+            )
+
+        filters.department_id = department_id
 
         courses, total = self.courses_repository.search(filters, pagination)
         items = [self._enrich_course_to_dict(course) for course in courses]
 
         return build_paginated_response(items, total, pagination)
 
-    async def get_by_id(self, course_id: int) -> dict | None:
-        """Retrieve a course by ID."""
+    async def get_by_id(self, course_id: int, department_id: int) -> dict | None:
+        """Retrieve a course by ID, rejecting one outside the caller's department."""
 
         course = self.courses_repository.get_by_id(course_id)
 
         if not course:
             return None
 
+        if course.department_id != department_id:
+            raise PermissionDeniedError(
+                "Solo puede consultar los cursos de su propio departamento"
+            )
+
         return self._enrich_course_to_dict(course)
 
-    async def create(self, data: CourseCreate, current_user: dict) -> dict:
-        """Create a new course, rejecting duplicate codes."""
+    async def create(
+        self, data: CourseCreate, department_id: int, current_user: dict
+    ) -> dict:
+        """Create a new course in the caller's department, rejecting duplicate codes."""
+
+        if data.department_id is not None and data.department_id != department_id:
+            raise PermissionDeniedError(
+                "Solo puede crear cursos en su propio departamento"
+            )
 
         existing = self.courses_repository.get_by_code(data.code)
 
         if existing:
             raise ResourceAlreadyExistsError("course", "code", data.code)
 
-        course = self.courses_repository.create(data.model_dump())
+        payload = data.model_dump()
+        payload["department_id"] = department_id
+
+        course = self.courses_repository.create(payload)
         self.courses_repository.db.commit()
         self.courses_repository.db.refresh(course)
 
@@ -63,24 +94,38 @@ class CourseService:
             actor_id=current_user.get("id"),
             description=(
                 f"Se creó el curso {data.code} "
-                f"(nombre: {data.name}, departamento: {data.department_id})"
+                f"(nombre: {data.name}, departamento: {department_id})"
             ),
         )
 
         return result
 
     async def update(
-        self, course_id: int, data: CourseUpdate, current_user: dict
+        self,
+        course_id: int,
+        data: CourseUpdate,
+        department_id: int,
+        current_user: dict,
     ) -> dict | None:
-        """Update a course's fields."""
+        """Update a course's fields, rejecting one outside the caller's department."""
 
         course = self.courses_repository.get(course_id)
 
         if not course:
             return None
 
+        if course.department_id != department_id:
+            raise PermissionDeniedError(
+                "Solo puede editar los cursos de su propio departamento"
+            )
+
         old_data = course_to_dict(course)
         payload = data.model_dump(exclude_unset=True)
+
+        if payload.get("department_id") is not None and payload["department_id"] != department_id:
+            raise PermissionDeniedError(
+                "Solo puede asignar cursos a su propio departamento"
+            )
 
         if payload.get("code") is not None and payload.get("code") != course.code:
             existing = self.courses_repository.get_by_code(payload["code"])
@@ -146,13 +191,21 @@ class CourseService:
 
         return result
 
-    async def delete(self, course_id: int, current_user: dict) -> dict | None:
-        """Delete a course, rejecting if it has academic groups."""
+    async def delete(
+        self, course_id: int, department_id: int, current_user: dict
+    ) -> dict | None:
+        """Delete a course, rejecting one outside the caller's department
+        or with academic groups."""
 
         course = self.courses_repository.get(course_id)
 
         if not course:
             return None
+
+        if course.department_id != department_id:
+            raise PermissionDeniedError(
+                "Solo puede eliminar los cursos de su propio departamento"
+            )
 
         groups_count = self.courses_repository.count_academic_groups(course_id)
 
