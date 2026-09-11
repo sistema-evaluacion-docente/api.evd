@@ -392,7 +392,7 @@ async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
     compare_previous: bool = False,
-    _=Depends(require_roles(_ALL_ROLES)),
+    current_user=Depends(require_roles(_ALL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation.
@@ -401,10 +401,22 @@ async def get_teacher_evaluation_detail(
     field with the same detail for the immediately preceding academic period
     (e.g. "2025-2" -> "2025-1"), or null if the teacher has no evaluation there.
     By default only the detail for `period_name` is returned.
+
+    Periods are shared across departments (e.g. every department has its own
+    "2026-1"), so without a department to disambiguate, a director could be
+    handed another department's evaluation for that same period name — a
+    director's own `department_id` is already on the token, so it costs
+    nothing to pass it through and remove the ambiguity for that role.
     """
 
+    department_id = (
+        current_user.get("department_id")
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", [])
+        else None
+    )
+
     detail = await controller.get_teacher_detail(
-        period_name, teacher_id, compare_previous=compare_previous
+        period_name, teacher_id, department_id=department_id, compare_previous=compare_previous
     )
 
     if not detail:
