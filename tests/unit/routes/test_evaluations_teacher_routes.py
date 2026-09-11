@@ -73,7 +73,7 @@ class TestGetTeacherEvaluationDetail:
 
         args = controller.get_teacher_detail.call_args
         assert args.args == ("2025-1", 5)
-        assert args.kwargs == {"compare_previous": False}
+        assert args.kwargs == {"department_id": None, "compare_previous": False}
 
     async def test_forwards_compare_previous(self, client, controller):
         """The flag reaches the controller as a keyword argument."""
@@ -86,7 +86,40 @@ class TestGetTeacherEvaluationDetail:
         )
 
         assert controller.get_teacher_detail.call_args.kwargs == {
-            "compare_previous": True
+            "department_id": None,
+            "compare_previous": True,
+        }
+
+    async def test_scopes_the_lookup_to_the_directors_own_department(
+        self, client, controller, auth
+    ):
+        """A director's own department_id is forwarded, resolving the
+        ambiguity when another department has an evaluation for the same
+        period name."""
+
+        auth.as_user(DIRECTOR_USER)
+        controller.get_teacher_detail.return_value = TEACHER_DETAIL
+
+        client.get("/evaluations/teachers/5/detail", params={"period_name": "2025-1"})
+
+        assert controller.get_teacher_detail.call_args.kwargs == {
+            "department_id": DIRECTOR_USER["department_id"],
+            "compare_previous": False,
+        }
+
+    async def test_does_not_scope_the_lookup_for_a_docente(self, client, controller, auth):
+        """A DOCENTE has no department_id of their own on the token, so the
+        lookup stays unscoped for that role — same behavior as before this
+        department_id was introduced."""
+
+        auth.as_user(DOCENTE_USER)
+        controller.get_teacher_detail.return_value = TEACHER_DETAIL
+
+        client.get("/evaluations/teachers/5/detail", params={"period_name": "2025-1"})
+
+        assert controller.get_teacher_detail.call_args.kwargs == {
+            "department_id": None,
+            "compare_previous": False,
         }
 
     async def test_requires_the_period_name(self, client, controller):
