@@ -4,8 +4,6 @@
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
 ' =============================================================================
-title Casos de uso del Director — Planes de mejoramiento: formatos oficiales\nRequisitos RF-6.7 a RF-6.11
-
 left to right direction
 
 skinparam backgroundColor #FFFFFF
@@ -45,7 +43,6 @@ rectangle "Planes de mejoramiento: contenido y formatos oficiales" {
   usecase "Generar y descargar los\nformatos oficiales\n<size:10><color:#607D8B>RF-6.11</color></size>" as D48
   usecase "Cargar la versión firmada del formato\n<size:10><color:#607D8B>RF-6.11</color></size>" as D49
   usecase "Eliminar la versión firmada\n<size:10><color:#607D8B>RF-6.11</color></size>" as D50
-  usecase "Fijar la meta de cada\nindicador comprometido\n<size:10><color:#607D8B>RF-6.9</color></size>" as D61
 }
 
 DIR --> D44
@@ -55,7 +52,5 @@ DIR --> D47
 DIR --> D48
 DIR --> D49
 DIR --> D50
-
-D61 .> D45 : <<extend>>\n(el director fija\nsu propia meta)
 
 @enduml

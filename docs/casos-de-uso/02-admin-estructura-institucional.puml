@@ -4,8 +4,6 @@
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
 ' =============================================================================
-title Casos de uso del Administrador — Estructura institucional\nRequisitos RF-2.1 a RF-2.3, RF-2.6 y RF-2.7
-
 left to right direction
 
 skinparam backgroundColor #FFFFFF
