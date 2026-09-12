@@ -1,0 +1,59 @@
+@startuml cu-01-visitante-y-sesion
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Visitante y de la sesión\nRequisitos RF-1.1, RF-1.2 y RF-7.1
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Visitante" as VIS
+actor "Usuario autenticado" as USR
+actor "Firebase Auth" as FBA <<externo>> #FFF3E0
+
+VIS <|-- USR
+
+rectangle "Acceso, sesión y notificaciones propias" {
+  usecase "Consultar la página pública\n<size:10><color:#607D8B>RF-1.1</color></size>" as V1
+  usecase "Iniciar sesión\n<size:10><color:#607D8B>RF-1.1</color></size>" as V2
+  usecase "Seleccionar el rol de trabajo\n<size:10><color:#607D8B>RF-1.2</color></size>" as U1
+  usecase "Cerrar sesión\n<size:10><color:#607D8B>RF-1.1</color></size>" as U2
+  usecase "Gestionar las notificaciones propias\n<size:10><color:#607D8B>RF-7.1</color></size>" as U4
+}
+
+VIS --> V1
+VIS --> V2
+USR --> U2
+USR --> U4
+
+V2 --> FBA
+USR --> U1
+@enduml

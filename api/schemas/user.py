@@ -49,6 +49,20 @@ class UserUpdate(BaseModel):
     roles: Optional[list[RoleName]] = Field(default=None, min_length=1)
 
 
+class UserSelfUpdate(BaseModel):
+    """Schema for the fields a user may change on their own account.
+
+    Deliberately narrower than ``UserUpdate``: it carries neither ``roles`` nor
+    ``active``. Both decide what the account is allowed to do, so they belong to
+    an administrator and travel through ``PUT /users/{uid}/roles`` and
+    ``PATCH /users/{uid}/status``. Accepting them here let any authenticated
+    user grant themselves ADMIN.
+    """
+
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 class UserOut(BaseModel):
     """
     Schema for outputting a user.

@@ -1,0 +1,56 @@
+@startuml cu-05-director-carga-de-evaluaciones
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Carga y procesamiento de evaluaciones\nRequisitos RF-3.1 a RF-3.4, RF-3.7 y RF-4.5
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Carga y procesamiento de evaluaciones" {
+  usecase "Cargar los PDF oficiales del periodo\n<size:10><color:#607D8B>RF-3.1 · RF-3.2</color></size>" as D8
+  usecase "Seguir el progreso del procesamiento\n<size:10><color:#607D8B>RF-3.4</color></size>" as D9
+  usecase "Reprocesar el análisis de IA\n<size:10><color:#607D8B>RF-4.5</color></size>" as D10
+  usecase "Activar o desactivar una evaluación\n<size:10><color:#607D8B>RF-3.7</color></size>" as D11
+  usecase "Eliminar una evaluación\n<size:10><color:#607D8B>RF-3.7</color></size>" as D12
+  usecase "Consultar los ítems del instrumento\n<size:10><color:#607D8B>RF-3.3</color></size>" as D13
+}
+
+DIR --> D8
+DIR --> D9
+DIR --> D10
+DIR --> D11
+DIR --> D12
+DIR --> D13
+
+@enduml

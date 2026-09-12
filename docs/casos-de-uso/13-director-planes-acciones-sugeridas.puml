@@ -1,0 +1,55 @@
+@startuml cu-13-director-planes-acciones-sugeridas
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Planes de mejoramiento: acciones sugeridas\nRequisito RF-6.6
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Acciones sugeridas del departamento" {
+  usecase "Consultar las acciones\nsugeridas vigentes\n<size:10><color:#607D8B>RF-6.6</color></size>" as D57
+  usecase "Crear y editar las acciones\nsugeridas del departamento\n<size:10><color:#607D8B>RF-6.6</color></size>" as D58
+  usecase "Eliminar las acciones sugeridas propias\n<size:10><color:#607D8B>RF-6.6</color></size>" as D59
+  usecase "Consultar el historial de cambios\n<size:10><color:#607D8B>RF-6.6</color></size>" as D60
+  usecase "Insertar una acción sugerida\nen el compromiso\n<size:10><color:#607D8B>RF-6.6 · RF-6.8</color></size>" as D62
+}
+
+DIR --> D58
+DIR --> D59
+DIR --> D60
+DIR --> D62
+
+D62 ..> D57 : <<include>>
+
+@enduml

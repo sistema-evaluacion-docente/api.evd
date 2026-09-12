@@ -1,0 +1,56 @@
+@startuml cu-06-director-consulta-de-evaluaciones
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Consulta y descarga de evaluaciones\nRequisitos RF-3.5, RF-3.6 y RF-5.9
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Consulta y descarga de evaluaciones" {
+  usecase "Consultar las evaluaciones\n<size:10><color:#607D8B>RF-3.5</color></size>" as D14
+  usecase "Consultar el resumen y los\npromedios por dimensión\n<size:10><color:#607D8B>RF-3.5</color></size>" as D15
+  usecase "Consultar el detalle por dimensión\n<size:10><color:#607D8B>RF-3.5</color></size>" as D16
+  usecase "Descargar el documento oficial\n<size:10><color:#607D8B>RF-3.6</color></size>" as D17
+  usecase "Descargar las páginas del docente\nen el documento oficial\n<size:10><color:#607D8B>RF-3.6</color></size>" as D18
+  usecase "Generar el informe de la evaluación\n<size:10><color:#607D8B>RF-5.9</color></size>" as D19
+}
+
+DIR --> D14
+DIR --> D15
+DIR --> D16
+DIR --> D17
+DIR --> D18
+DIR --> D19
+
+@enduml

@@ -1,0 +1,60 @@
+@startuml cu-16-sistema-procesamiento-y-analisis
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Sistema — Procesamiento del PDF y análisis con IA\nRequisitos RF-1.5, RF-3.1 a RF-3.4 y RF-4.1
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Sistema" as SYS <<automático>> #FFF8E1
+
+rectangle "Procesamiento en segundo plano y análisis con inteligencia artificial" {
+  usecase "Validar los PDF del periodo\n<size:10><color:#607D8B>RF-3.2</color></size>" as S1 #FFFDE7
+  usecase "Rechazar la carga de un\ndepartamento ajeno\n<size:10><color:#607D8B>RF-1.5 · RF-3.1</color></size>" as S2 #FFFDE7
+  usecase "Procesar la evaluación\nen segundo plano\n<size:10><color:#607D8B>RF-3.4</color></size>" as S3 #FFFDE7
+  usecase "Extraer los datos del PDF\n<size:10><color:#607D8B>RF-3.3</color></size>" as S4 #FFFDE7
+  usecase "Persistir los datos extraídos\n<size:10><color:#607D8B>RF-3.3</color></size>" as S5 #FFFDE7
+  usecase "Emitir el progreso en tiempo real\n<size:10><color:#607D8B>RF-3.4</color></size>" as S6 #FFFDE7
+  usecase "Clasificar el comentario por riesgo\ny categoría pedagógica\n<size:10><color:#607D8B>RF-4.1</color></size>" as S8 #FFFDE7
+  usecase "Ejecutar los modelos\nde clasificación\n<size:10><color:#607D8B>RF-4.1</color></size>" as S9 #FFFDE7
+}
+
+SYS --> S1
+SYS --> S2
+SYS --> S3
+
+S3 ..> S4 : <<include>>
+S3 ..> S5 : <<include>>
+S3 ..> S6 : <<include>>
+S3 ..> S8 : <<include>>
+S8 ..> S9 : <<include>>
+@enduml

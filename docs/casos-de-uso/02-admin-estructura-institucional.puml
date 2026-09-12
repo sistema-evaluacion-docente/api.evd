@@ -1,0 +1,58 @@
+@startuml cu-02-admin-estructura-institucional
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Administrador — Estructura institucional\nRequisitos RF-2.1 a RF-2.3, RF-2.6 y RF-2.7
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Administrador" as ADM
+
+rectangle "Estructura institucional" {
+  usecase "Gestionar facultades\n<size:10><color:#607D8B>RF-2.1</color></size>" as A1
+  usecase "Gestionar departamentos\n<size:10><color:#607D8B>RF-2.2</color></size>" as A2
+  usecase "Asignar o retirar el director\nde un departamento\n<size:10><color:#607D8B>RF-2.2 · RF-2.6</color></size>" as A3
+  usecase "Gestionar programas académicos\n<size:10><color:#607D8B>RF-2.3</color></size>" as A4
+  usecase "Gestionar el catálogo de directores\n<size:10><color:#607D8B>RF-2.6</color></size>" as A5
+  usecase "Gestionar periodos académicos\n<size:10><color:#607D8B>RF-2.7</color></size>" as A6
+  usecase "Activar o cerrar un periodo\n<size:10><color:#607D8B>RF-2.7</color></size>" as A7
+}
+
+ADM --> A1
+ADM --> A2
+ADM --> A3
+ADM --> A4
+ADM --> A5
+ADM --> A6
+ADM --> A7
+
+@enduml

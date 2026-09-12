@@ -1,0 +1,58 @@
+@startuml cu-19-sistema-avisos-y-correo
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Sistema — Notificaciones y correo institucional\nRequisitos RF-6.12, RF-6.13, RF-7.1 y RF-7.2
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Sistema" as SYS <<automático>> #FFF8E1
+actor "Servidor de correo (SMTP)" as SMTP <<externo>> #FFF3E0
+
+rectangle "Avisos del sistema" {
+  usecase "Notificar cada transición del plan\ny del ciclo de evidencias\n<size:10><color:#607D8B>RF-6.12 · RF-7.1</color></size>" as S29 #FFFDE7
+  usecase "Alertar al director del resultado\nde la verificación\n<size:10><color:#607D8B>RF-6.13 · RF-7.1</color></size>" as S30 #FFFDE7
+  usecase "Enviar el correo institucional\n<size:10><color:#607D8B>RF-7.2</color></size>" as S31 #FFFDE7
+  usecase "Emitir la notificación en tiempo real\n<size:10><color:#607D8B>RF-7.1</color></size>" as S32 #FFFDE7
+}
+
+SYS --> S29
+SYS --> S30
+
+S29 ..> S31 : <<include>>
+S29 ..> S32 : <<include>>
+S30 ..> S31 : <<include>>
+S30 ..> S32 : <<include>>
+
+S31 --> SMTP
+
+@enduml

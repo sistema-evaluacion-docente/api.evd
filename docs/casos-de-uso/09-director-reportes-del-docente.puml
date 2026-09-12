@@ -1,0 +1,58 @@
+@startuml cu-09-director-reportes-del-docente
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Reportes del docente\nRequisitos RF-5.3 a RF-5.5, RF-5.8 y RF-5.9
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Reportes y estadísticas del docente" {
+  usecase "Consultar el historial del docente\n<size:10><color:#607D8B>RF-5.3</color></size>" as D29
+  usecase "Comparar al docente con el periodo\nanterior y con su departamento\n<size:10><color:#607D8B>RF-5.3</color></size>" as D30
+  usecase "Consultar los promedios por\ndimensión y la matriz del docente\n<size:10><color:#607D8B>RF-5.4</color></size>" as D31
+  usecase "Consultar los cursos del docente\ny sus comentarios por materia\n<size:10><color:#607D8B>RF-5.5</color></size>" as D32
+  usecase "Comparar al docente entre\ndos periodos académicos\n<size:10><color:#607D8B>RF-5.8</color></size>" as D33
+  usecase "Generar el informe del docente\n<size:10><color:#607D8B>RF-5.9</color></size>" as D63
+  usecase "Generar el informe de una materia\n<size:10><color:#607D8B>RF-5.9</color></size>" as D34
+}
+
+DIR --> D29
+DIR --> D30
+DIR --> D31
+DIR --> D32
+DIR --> D33
+DIR --> D34
+DIR --> D63
+
+@enduml

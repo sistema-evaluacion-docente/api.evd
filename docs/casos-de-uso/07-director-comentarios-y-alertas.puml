@@ -1,0 +1,52 @@
+@startuml cu-07-director-comentarios-y-alertas
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Comentarios y alertas\nRequisitos RF-4.2 a RF-4.4
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Comentarios de los estudiantes y alertas" {
+  usecase "Consultar y filtrar los comentarios\n<size:10><color:#607D8B>RF-4.2</color></size>" as D20
+  usecase "Contar los comentarios por\ndepartamento y por docente\n<size:10><color:#607D8B>RF-4.2</color></size>" as D21
+  usecase "Consultar las alertas de riesgo alto\n<size:10><color:#607D8B>RF-4.4</color></size>" as D22
+  usecase "Corregir la clasificación\nde un comentario\n<size:10><color:#607D8B>RF-4.3</color></size>" as D23
+}
+
+DIR --> D20
+DIR --> D21
+DIR --> D22
+DIR --> D23
+
+@enduml

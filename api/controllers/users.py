@@ -8,6 +8,7 @@ from api.schemas.user import (
     UserCreate,
     UserFilters,
     UserRolesUpdate,
+    UserSelfUpdate,
     UserStatusUpdate,
     UserUpdate,
 )
@@ -39,10 +40,22 @@ class UsersController:
 
         return await self.service.get_by_uid(uid)
 
-    async def update(self, payload: UserUpdate, current_user):
-        """Update user information."""
+    async def update(self, payload: UserSelfUpdate, current_user):
+        """Update the caller's own account.
 
-        return await self.service.update_user(current_user.uid, payload)
+        Roles and active status never travel on this path — see
+        ``UserSelfUpdate`` — so the payload is widened only with the fields the
+        caller actually sent.
+        """
+
+        return await self.service.update_user(
+            current_user.uid, UserUpdate(**payload.model_dump(exclude_unset=True))
+        )
+
+    async def update_by_uid(self, uid: str, payload: UserUpdate):
+        """Update any user. Reserved for an administrator by the route."""
+
+        return await self.service.update_user(uid, payload)
 
     async def replace_roles(
         self,

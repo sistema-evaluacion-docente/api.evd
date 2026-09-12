@@ -1,0 +1,56 @@
+@startuml cu-04-director-docentes-y-oferta
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Docentes y oferta académica\nRequisitos RF-2.4, RF-2.5 y RF-2.7 a RF-2.9
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Docentes y oferta académica del departamento" {
+  usecase "Gestionar los docentes\ndel departamento\n<size:10><color:#607D8B>RF-2.8</color></size>" as D1
+  usecase "Cargar docentes de forma masiva\n<size:10><color:#607D8B>RF-2.9</color></size>" as D3
+  usecase "Consultar los docentes\ncon sus promedios\n<size:10><color:#607D8B>RF-2.8</color></size>" as D4
+  usecase "Renombrar una materia\n<size:10><color:#607D8B>RF-2.5</color></size>" as D5
+  usecase "Consultar las materias y sus grupos\n<size:10><color:#607D8B>RF-2.4</color></size>" as D6
+  usecase "Consultar los periodos disponibles\n<size:10><color:#607D8B>RF-2.7</color></size>" as D7
+}
+
+DIR --> D1
+DIR --> D3
+DIR --> D4
+DIR --> D5
+DIR --> D6
+DIR --> D7
+
+@enduml

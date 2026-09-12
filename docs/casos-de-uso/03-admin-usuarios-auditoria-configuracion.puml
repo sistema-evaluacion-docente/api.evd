@@ -1,0 +1,56 @@
+@startuml cu-03-admin-usuarios-auditoria-configuracion
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Administrador — Usuarios, auditoría y configuración\nRequisitos RF-1.3, RF-6.8, RF-8.2 y RF-9.1
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Administrador" as ADM
+
+rectangle "Usuarios, auditoría y configuración institucional" {
+  usecase "Gestionar usuarios, roles y estado\n<size:10><color:#607D8B>RF-1.3</color></size>" as A9
+  usecase "Consultar el historial de auditoría\n<size:10><color:#607D8B>RF-8.2</color></size>" as A10
+  usecase "Gestionar las configuraciones\ninstitucionales\n<size:10><color:#607D8B>RF-9.1</color></size>" as A12
+  usecase "Consultar el historial de cambios\nde una configuración\n<size:10><color:#607D8B>RF-9.1</color></size>" as A13
+  usecase "Fijar el umbral que dispara\nel plan de mejoramiento\n<size:10><color:#607D8B>RF-9.1</color></size>" as A14
+  usecase "Reabrir el acta cerrada de un plan\n<size:10><color:#607D8B>RF-6.8</color></size>" as A15
+}
+
+ADM --> A9
+ADM --> A10
+ADM --> A12
+ADM --> A13
+ADM --> A14
+ADM --> A15
+
+@enduml

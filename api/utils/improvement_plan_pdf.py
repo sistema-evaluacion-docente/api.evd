@@ -2,8 +2,7 @@
 Renderer for the three official UFPS improvement-plan forms.
 
 Pure "context in, bytes out" module — the business logic that builds the context
-lives in ``api/services/improvement_plan_document_service.py``. Same shape as
-``api/utils/evaluation_excel_export.py``.
+lives in ``api/services/improvement_plan_document_service.py``.
 
 Two outputs share the same Jinja templates so they can never drift apart: the
 PDF of record (WeasyPrint) and an editable Word copy, which is the very same

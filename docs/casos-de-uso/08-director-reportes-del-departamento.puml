@@ -1,0 +1,54 @@
+@startuml cu-08-director-reportes-del-departamento
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Reportes del departamento\nRequisitos RF-5.1, RF-5.2, RF-5.6, RF-5.7, RF-5.9 y RF-5.11
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Reportes y estadísticas del departamento" {
+  usecase "Consultar el panel de resumen\n<size:10><color:#607D8B>RF-5.11</color></size>" as D24
+  usecase "Consultar los promedios\ndel departamento\n<size:10><color:#607D8B>RF-5.1</color></size>" as D25
+  usecase "Generar el informe del departamento\n<size:10><color:#607D8B>RF-5.2 · RF-5.9</color></size>" as D26
+  usecase "Consultar el ranking y la\ndistribución de calificaciones\n<size:10><color:#607D8B>RF-5.6</color></size>" as D27
+  usecase "Comparar a los docentes\nde una misma materia\n<size:10><color:#607D8B>RF-5.7</color></size>" as D28
+}
+
+DIR --> D24
+DIR --> D25
+DIR --> D26
+DIR --> D27
+DIR --> D28
+
+@enduml

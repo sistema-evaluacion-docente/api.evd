@@ -1,0 +1,56 @@
+@startuml cu-12-director-planes-evidencias
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Director — Planes de mejoramiento: ciclo de evidencias\nRequisito RF-6.12
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Director de Departamento" as DIR
+
+rectangle "Planes de mejoramiento: ciclo de evidencias" {
+  usecase "Solicitar al docente una evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D51
+  usecase "Editar la solicitud de evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D52
+  usecase "Consultar las solicitudes del plan\n<size:10><color:#607D8B>RF-6.12</color></size>" as D53
+  usecase "Comentar en el hilo de la solicitud\n<size:10><color:#607D8B>RF-6.12</color></size>" as D54
+  usecase "Aprobar o rechazar la evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D55
+  usecase "Descargar el archivo de la evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D56
+}
+
+DIR --> D51
+DIR --> D52
+DIR --> D53
+DIR --> D54
+DIR --> D55
+DIR --> D56
+
+@enduml

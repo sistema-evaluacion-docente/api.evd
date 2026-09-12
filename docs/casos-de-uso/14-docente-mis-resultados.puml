@@ -1,0 +1,60 @@
+@startuml cu-14-docente-mis-resultados
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Casos de uso del Docente — Mis resultados\nRequisitos RF-3.6, RF-5.3 a RF-5.5, RF-5.10 y RF-5.11
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Docente" as DOC
+
+rectangle "Resultados propios del docente" {
+  usecase "Consultar el panel de resumen propio\n<size:10><color:#607D8B>RF-5.11</color></size>" as C1
+  usecase "Consultar los periodos\ny las materias propias\n<size:10><color:#607D8B>RF-5.5</color></size>" as C2
+  usecase "Consultar el historial propio\n<size:10><color:#607D8B>RF-5.3</color></size>" as C3
+  usecase "Compararse con el periodo\nanterior\n<size:10><color:#607D8B>RF-5.3</color></size>" as C4
+  usecase "Consultar los promedios por\ndimensión y la matriz propia\n<size:10><color:#607D8B>RF-5.4</color></size>" as C5
+  usecase "Consultar los comentarios recibidos\n<size:10><color:#607D8B>RF-5.5</color></size>" as C6
+  usecase "Descargar las páginas propias\nen el documento oficial\n<size:10><color:#607D8B>RF-3.6 · RF-5.10</color></size>" as C7
+  usecase "Generar el informe de\nuna materia propia\n<size:10><color:#607D8B>RF-5.10</color></size>" as C16
+}
+
+DOC --> C1
+DOC --> C2
+DOC --> C3
+DOC --> C4
+DOC --> C5
+DOC --> C6
+DOC --> C7
+DOC --> C16
+
+@enduml

@@ -1,0 +1,86 @@
+@startuml cu-00-contexto
+' =============================================================================
+' Sistema de Evaluación Docente (SET) — UFPS
+' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
+'         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
+' =============================================================================
+title Diagrama de contexto — Casos de uso\nSistema de Evaluación Docente (SET) · UFPS
+
+left to right direction
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontSize 13
+skinparam TitleFontSize 17
+skinparam TitleFontColor #0D47A1
+skinparam ArrowColor #455A64
+skinparam ArrowFontColor #546E7A
+skinparam ArrowFontSize 11
+skinparam nodesep 12
+skinparam ranksep 40
+skinparam actor {
+  BackgroundColor #ECEFF1
+  BorderColor #37474F
+  FontColor #263238
+}
+skinparam usecase {
+  BackgroundColor #E3F2FD
+  BorderColor #1565C0
+  FontColor #102A43
+}
+skinparam rectangle {
+  BackgroundColor #FAFCFD
+  BorderColor #78909C
+  FontColor #263238
+  FontStyle bold
+}
+
+actor "Visitante" as VIS
+actor "Usuario autenticado" as USR
+actor "Administrador" as ADM
+actor "Director de Departamento" as DIR
+actor "Docente" as DOC
+actor "Sistema" as SYS <<automático>> #FFF8E1
+actor "Firebase Auth" as FBA <<externo>> #FFF3E0
+actor "Servidor de correo (SMTP)" as SMTP <<externo>> #FFF3E0
+
+VIS <|-- USR
+USR <|-- ADM
+USR <|-- DIR
+USR <|-- DOC
+
+rectangle "Sistema de Evaluación Docente (SET)" {
+  usecase "Acceso y sesión\n<size:10><color:#607D8B>RF-1.1 · RF-1.2</color></size>" as A
+  usecase "Administración institucional\n<size:10><color:#607D8B>RF-1.3 · RF-2.1 a RF-2.3 · RF-2.6 · RF-2.7</color></size>" as B
+  usecase "Carga y procesamiento de evaluaciones\n<size:10><color:#607D8B>RF-3.1 a RF-3.7</color></size>" as C
+  usecase "Análisis de comentarios con\ninteligencia artificial\n<size:10><color:#607D8B>RF-4.1 a RF-4.5</color></size>" as D #FFFDE7
+  usecase "Reportes y estadísticas\n<size:10><color:#607D8B>RF-5.1 a RF-5.11</color></size>" as E
+  usecase "Planes de mejoramiento\n<size:10><color:#607D8B>RF-6.1 a RF-6.13</color></size>" as F
+  usecase "Notificaciones y correo\n<size:10><color:#607D8B>RF-7.1 · RF-7.2</color></size>" as G
+  usecase "Docentes y oferta académica\ndel departamento\n<size:10><color:#607D8B>RF-2.4 · RF-2.5 · RF-2.8 · RF-2.9</color></size>" as J
+  usecase "Auditoría\n<size:10><color:#607D8B>RF-8.1 · RF-8.2</color></size>" as H
+  usecase "Configuración institucional\n<size:10><color:#607D8B>RF-9.1</color></size>" as I
+}
+
+VIS --> A
+ADM --> B
+ADM --> H
+ADM --> I
+DIR --> J
+DIR --> C
+DIR --> D
+DIR --> E
+DIR --> F
+DOC --> E
+DOC --> F
+USR --> G
+SYS --> C
+SYS --> D
+SYS --> F
+SYS --> G
+SYS --> H
+
+A --> FBA
+G --> SMTP
+
+@enduml

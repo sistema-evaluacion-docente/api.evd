@@ -36,17 +36,9 @@ from api.schemas.evaluation_summary import (
 from api.schemas.academic_group import Modality
 from api.schemas.user import RoleName
 from api.utils.dimensions import QUESTIONS
-from api.utils.evaluation_excel_export import (
-    build_evaluation_report,
-    evaluation_streaming_response,
-)
 from api.utils.evaluation_processor import (
     analyze_evaluation_comments,
     process_evaluation,
-)
-from api.utils.teacher_excel_export import (
-    build_teacher_report,
-    teacher_streaming_response,
 )
 
 router = EnvelopeRouter(prefix="/evaluations", tags=["Evaluations"])
@@ -331,57 +323,6 @@ async def get_teacher_comments(
         )
 
     return result
-
-
-@router.get(
-    "/teachers/{teacher_id}/export",
-    responses={
-        200: {
-            "content": {
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
-            }
-        },
-    },
-)
-async def export_teacher_evaluation(
-    teacher_id: int,
-    period_name: str,
-    department_id: int,
-    include_comments: bool = Query(default=False),
-    _=Depends(require_roles(_EVAL_ROLES)),
-    controller: EvaluationsController = Depends(get_evaluations_controller),
-    db: Session = Depends(get_db),
-    stats_repo: StatsRepository = Depends(get_stats_repository),
-):
-    """Download an Excel report for a teacher's evaluation detail."""
-
-    detail = await controller.get_teacher_detail(period_name, teacher_id, department_id)
-    if not detail:
-        raise HTTPException(
-            status_code=404, detail="Evaluación o docente no encontrado"
-        )
-
-    evaluation_id = detail["evaluation_id"]
-
-    comparison = None
-    eval_record = (
-        db.query(EvaluationORM).filter(EvaluationORM.id == evaluation_id).first()
-    )
-    if eval_record:
-        comparison = await stats_repo.get_teacher_vs_department(
-            teacher_id, eval_record.academic_period_id
-        )
-
-    comments_by_course: dict[str, list] = {}
-    if include_comments:
-        comments_data = await controller.get_teacher_comments(evaluation_id, teacher_id)
-        if comments_data:
-            for c in comments_data["courses"]:
-                key = f"{c['course_code']} - {c['course_name'] or ''}"
-                comments_by_course[key] = c["comments"]
-
-    buffer, filename = build_teacher_report(detail, comparison, comments_by_course)
-    return teacher_streaming_response(buffer, filename)
 
 
 @router.get(
