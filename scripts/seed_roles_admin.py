@@ -15,8 +15,8 @@ Optional env vars:
 
 Creates:
     - Roles: ADMIN, DIRECTOR DE DEPARTAMENTO, DOCENTE
-    - Faculty: Ingeniería (code: ING)
-    - Department: Sistemas (code: SIS)
+    - Faculty: Ingeniería (code: FI)
+    - Department: Sistemas (code: 52)
     - Admin user with all roles
     - Teacher model linked to admin user
     - Director model linked to admin user and department
@@ -172,17 +172,17 @@ def seed_faculty_and_department() -> int:
         if not faculty:
             faculty = FacultyModel(
                 name="Ingeniería",
-                code="ING",
+                code="FI",
                 active=True,
             )
             db.add(faculty)
             db.flush()
 
-        department = db.query(DepartmentModel).filter(DepartmentModel.code == "SIS").first()
+        department = db.query(DepartmentModel).filter(DepartmentModel.code == "52").first()
         if not department:
             department = DepartmentModel(
                 name="Sistemas",
-                code="SIS",
+                code="52",
                 faculty_id=faculty.id,
                 active=True,
             )

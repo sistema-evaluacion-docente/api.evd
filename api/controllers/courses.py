@@ -18,25 +18,28 @@ class CoursesController:
         self,
         filters: CourseFilters,
         pagination: PaginationParams,
+        department_id: int,
     ):
-        """Retrieve all courses based on filters and pagination."""
+        """Retrieve the director's own department's courses, based on filters and pagination."""
 
-        return await self.service.get_all(filters, pagination)
+        return await self.service.get_all(filters, pagination, department_id)
 
-    async def get_by_id(self, course_id: int):
-        """Retrieve a course by ID."""
+    async def get_by_id(self, course_id: int, department_id: int):
+        """Retrieve a course by ID (director-scoped)."""
 
-        return await self.service.get_by_id(course_id)
+        return await self.service.get_by_id(course_id, department_id)
 
-    async def create(self, data: CourseCreate, current_user: dict):
-        """Create a new course."""
+    async def create(self, data: CourseCreate, department_id: int, current_user: dict):
+        """Create a new course (director-scoped)."""
 
-        return await self.service.create(data, current_user)
+        return await self.service.create(data, department_id, current_user)
 
-    async def update(self, course_id: int, data: CourseUpdate, current_user: dict):
-        """Update a course."""
+    async def update(
+        self, course_id: int, data: CourseUpdate, department_id: int, current_user: dict
+    ):
+        """Update a course (director-scoped)."""
 
-        return await self.service.update(course_id, data, current_user)
+        return await self.service.update(course_id, data, department_id, current_user)
 
     async def update_name(
         self, course_id: int, name: str, department_id: int, current_user: dict
@@ -45,10 +48,10 @@ class CoursesController:
 
         return await self.service.update_name(course_id, name, department_id, current_user)
 
-    async def delete(self, course_id: int, current_user: dict):
-        """Delete a course."""
+    async def delete(self, course_id: int, department_id: int, current_user: dict):
+        """Delete a course (director-scoped)."""
 
-        return await self.service.delete(course_id, current_user)
+        return await self.service.delete(course_id, department_id, current_user)
 
 
 def get_courses_controller(

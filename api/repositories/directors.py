@@ -108,6 +108,12 @@ class DirectorsRepository(BaseRepository[DirectorsModel]):
         has a director, update the existing director with the new user_id.
         """
 
+        # `user_id` and `department_id` both carry a DB-level unique
+        # constraint, and rows are soft-deleted (`active=False`), never
+        # removed — so once a user or a department has ever had a director
+        # row, that row is the only one that can ever exist for it. Every
+        # branch below must reuse it rather than insert a fresh one, or the
+        # insert fails on the unique constraint.
         existing_user_director = (
             self.db.query(DirectorsModel)
             .filter(DirectorsModel.user_id == user_id)
@@ -116,48 +122,36 @@ class DirectorsRepository(BaseRepository[DirectorsModel]):
 
         if (
             existing_user_director
+            and existing_user_director.active
             and existing_user_director.department_id != department_id
         ):
             raise ValueError("Este usuario ya es director de otro departamento")
 
-        existing = (
+        existing_department_director = (
             self.db.query(DirectorsModel)
             .filter(DirectorsModel.department_id == department_id)
             .first()
         )
 
-        if existing:
-            existing.user_id = user_id
-            existing.active = True
+        if existing_department_director:
+            existing_department_director.user_id = user_id
+            existing_department_director.active = True
             self.db.commit()
-            self.db.refresh(existing)
-            return existing
+            self.db.refresh(existing_department_director)
+            return existing_department_director
+
+        if existing_user_director:
+            existing_user_director.department_id = department_id
+            existing_user_director.active = True
+            self.db.commit()
+            self.db.refresh(existing_user_director)
+            return existing_user_director
 
         director = DirectorsModel(
             user_id=user_id,
             department_id=department_id,
         )
         self.db.add(director)
-        self.db.commit()
-        self.db.refresh(director)
-        return director
-
-    def unassign_director(self, department_id: int) -> DirectorsModel | None:
-        """Unassign director from a department by marking it as inactive."""
-
-        director = (
-            self.db.query(DirectorsModel)
-            .filter(
-                DirectorsModel.department_id == department_id,
-                DirectorsModel.active == True,
-            )
-            .first()
-        )
-
-        if not director:
-            return None
-
-        director.active = False
         self.db.commit()
         self.db.refresh(director)
         return director

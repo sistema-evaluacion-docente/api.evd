@@ -24,15 +24,17 @@ class EvaluationsController:
 
         return await self.service.get_all(user_email, filters, pagination)
 
-    async def get_by_id(self, evaluation_id: int, modality: str | None = None):
+    async def get_by_id(
+        self, evaluation_id: int, current_user: dict, modality: str | None = None
+    ):
         """Retrieve an evaluation by ID, optionally restricted to one modality."""
 
-        return await self.service.get_by_id(evaluation_id, modality)
+        return await self.service.get_by_id(evaluation_id, current_user, modality)
 
-    async def get_by_period(self, period_id: int):
+    async def get_by_period(self, period_id: int, current_user: dict):
         """Retrieve an evaluation by academic period ID."""
 
-        return await self.service.get_by_period(period_id)
+        return await self.service.get_by_period(period_id, current_user)
 
     async def get_pdf_path(
         self,
@@ -45,15 +47,15 @@ class EvaluationsController:
 
         return await self.service.get_pdf_path(evaluation_id, current_user, modality)
 
-    async def get_summary(self, evaluation_id: int):
+    async def get_summary(self, evaluation_id: int, current_user: dict):
         """Get aggregated statistics for an evaluation."""
 
-        return await self.service.get_summary(evaluation_id)
+        return await self.service.get_summary(evaluation_id, current_user)
 
-    async def get_dimension_averages(self, evaluation_id: int):
+    async def get_dimension_averages(self, evaluation_id: int, current_user: dict):
         """Get dimension-level averages for an evaluation."""
 
-        return await self.service.get_dimension_averages(evaluation_id)
+        return await self.service.get_dimension_averages(evaluation_id, current_user)
 
     async def get_dimension_detail(
         self,

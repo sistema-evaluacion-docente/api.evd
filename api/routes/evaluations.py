@@ -108,15 +108,17 @@ async def get_all_evaluations(
 @router.get(
     "/by-period/{period_id}",
     response_model=EvaluationOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_by_period(
     period_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by academic period ID."""
+    """Endpoint to get an evaluation by academic period ID. Only ADMIN or the
+    director of its department may access it."""
 
-    evaluation = await controller.get_by_period(period_id)
+    evaluation = await controller.get_by_period(period_id, current_user)
 
     if not evaluation:
         raise HTTPException(
@@ -129,6 +131,7 @@ async def get_evaluation_by_period(
 @router.get(
     "/{evaluation_id}",
     response_model=EvaluationOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_by_id(
     evaluation_id: int,
@@ -140,12 +143,13 @@ async def get_evaluation_by_id(
             "la evaluación completa."
         ),
     ),
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by ID, optionally restricted to one modality."""
+    """Endpoint to get an evaluation by ID, optionally restricted to one
+    modality. Only ADMIN or the director of its department may access it."""
 
-    evaluation = await controller.get_by_id(evaluation_id, modality)
+    evaluation = await controller.get_by_id(evaluation_id, current_user, modality)
 
     if not evaluation:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -221,15 +225,17 @@ async def get_teachers_by_period(
 @router.get(
     "/{evaluation_id}/summary",
     response_model=EvaluationSummaryOut,
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_summary(
     evaluation_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return aggregated department statistics for an evaluation."""
+    """Return aggregated department statistics for an evaluation. Only ADMIN
+    or the director of its department may access it."""
 
-    summary = await controller.get_summary(evaluation_id)
+    summary = await controller.get_summary(evaluation_id, current_user)
 
     if not summary:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -240,15 +246,17 @@ async def get_evaluation_summary(
 @router.get(
     "/{evaluation_id}/dimension-averages",
     response_model=list[DimensionAverageItem],
+    responses={403: {"description": "Forbidden"}},
 )
 async def get_evaluation_dimension_averages(
     evaluation_id: int,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return dimension-level averages aggregated across all groups for an evaluation."""
+    """Return dimension-level averages aggregated across all groups for an
+    evaluation. Only ADMIN or the director of its department may access it."""
 
-    dimensions = await controller.get_dimension_averages(evaluation_id)
+    dimensions = await controller.get_dimension_averages(evaluation_id, current_user)
 
     if dimensions is None:
         raise HTTPException(status_code=404, detail="Evaluación no encontrada")
@@ -325,7 +333,7 @@ async def get_teacher_evaluation_detail(
     teacher_id: int,
     period_name: str,
     compare_previous: bool = False,
-    _=Depends(require_roles(_ALL_ROLES)),
+    current_user=Depends(require_roles(_ALL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
     """Return per-course and per-dimension scores for a teacher within an evaluation.
@@ -334,10 +342,22 @@ async def get_teacher_evaluation_detail(
     field with the same detail for the immediately preceding academic period
     (e.g. "2025-2" -> "2025-1"), or null if the teacher has no evaluation there.
     By default only the detail for `period_name` is returned.
+
+    Periods are shared across departments (e.g. every department has its own
+    "2026-1"), so without a department to disambiguate, a director could be
+    handed another department's evaluation for that same period name — a
+    director's own `department_id` is already on the token, so it costs
+    nothing to pass it through and remove the ambiguity for that role.
     """
 
+    department_id = (
+        current_user.get("department_id")
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", [])
+        else None
+    )
+
     detail = await controller.get_teacher_detail(
-        period_name, teacher_id, compare_previous=compare_previous
+        period_name, teacher_id, department_id=department_id, compare_previous=compare_previous
     )
 
     if not detail:
@@ -346,6 +366,33 @@ async def get_teacher_evaluation_detail(
         )
 
     return detail
+
+
+@router.get(
+    "/{evaluation_id}/export",
+    responses={
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            }
+        },
+    },
+)
+async def export_evaluation(
+    evaluation_id: int,
+    current_user=Depends(require_roles(_EVAL_ROLES)),
+    controller: EvaluationsController = Depends(get_evaluations_controller),
+):
+    """Download an Excel file with the department evaluation summary. Only
+    ADMIN or the director of its department may access it."""
+
+    summary = await controller.get_summary(evaluation_id, current_user)
+
+    if not summary:
+        raise HTTPException(status_code=404, detail="Evaluación no encontrada")
+
+    buffer, filename = build_evaluation_report(summary)
+    return evaluation_streaming_response(buffer, filename)
 
 
 @router.post(

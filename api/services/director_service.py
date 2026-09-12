@@ -187,7 +187,9 @@ class DirectorService:
                     "Director", "department_id", str(data.department_id)
                 )
 
-        current_institutional_code = director.user.institutional_code if director.user else None
+        current_institutional_code = (
+            director.user.institutional_code if director.user else None
+        )
 
         if (
             data.institutional_code is not None
@@ -222,7 +224,9 @@ class DirectorService:
             department_id=data.department_id,
             active=data.active,
         )
-        director = self.directors_repository.update_director(director, director_update_data)
+        director = self.directors_repository.update_director(
+            director, director_update_data
+        )
 
         await self.audit_service.log(
             action="UPDATE",
@@ -235,7 +239,15 @@ class DirectorService:
         return await self.get_by_id(director.id)
 
     async def delete(self, director_id: int, current_user: dict) -> dict | None:
-        """Delete a director."""
+        """Delete a director.
+
+        Mirrors `unassign_director`: also retires the user's
+        `DIRECTOR_DE_DEPARTAMENTO` role, since this row is the only thing
+        that made them a director. Without this, deleting from
+        `/admin/directores` left the user with the role forever — still
+        seeing the director menu and routes, with no department to show
+        for it.
+        """
 
         director = self.directors_repository.get(director_id)
 
@@ -243,7 +255,11 @@ class DirectorService:
             return None
 
         director_dict = director_to_dict(director)
+        user_id = director.user_id
+
         self.directors_repository.delete_director(director)
+
+        await self._retire_director_role(user_id)
 
         await self.audit_service.log(
             action="DELETE",
@@ -291,24 +307,70 @@ class DirectorService:
     async def unassign_director(
         self, department_id: int, current_user: dict
     ) -> dict | None:
-        """Remove the director assignment from a department."""
+        """Remove the director assignment from a department.
+
+        This deletes the `directors` row outright rather than deactivating
+        it — an inactive row that still points at a department reads, in
+        the admin's directors list, as "this person still directs this
+        department, just inactive", which isn't true anymore. Permanently
+        removing a director is already `DirectorService.delete`'s job for
+        `DELETE /directors/{id}`; unassigning from a department is the same
+        operation reached from the other side.
+        """
 
         department = self.departments_repository.get(department_id)
 
         if not department:
             raise ResourceNotFoundError("Department", department_id)
 
-        director = self.directors_repository.unassign_director(department_id)
+        director = self.directors_repository.get_by_department_id(department_id)
 
         if not director:
             return None
 
+        director_dict = director_to_dict(director)
+        user_id = director.user_id
+
+        self.directors_repository.delete_director(director)
+
+        await self._retire_director_role(user_id)
+
         await self.audit_service.log(
             action="UNASSIGN",
             entity_name="directors",
-            entity_id=director.id,
+            entity_id=director_dict["id"],
             actor_id=current_user["id"],
             description=f"Se desasignó el director del departamento {department.name}",
         )
 
-        return director_to_dict(director)
+        return director_dict
+
+    async def _retire_director_role(self, user_id: int) -> None:
+        """Drop `DIRECTOR_DE_DEPARTAMENTO` from a user who just lost their
+        `directors` row, keeping their other roles. Shared by `delete` and
+        `unassign_director` — the same fact (this user no longer directs
+        anything) reached from either side."""
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            return
+
+        current_roles = self.users_repository.get_user_role_names(user.id)
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value not in current_roles:
+            return
+
+        remaining_roles = [
+            role
+            for role in current_roles
+            if role != RoleName.DIRECTOR_DE_DEPARTAMENTO.value
+        ]
+
+        # A user needs at least one role (`UserUpdate.roles` rejects an empty
+        # list); if this was their only one, leave it — deleting/unassigning a
+        # director doesn't mean to strip the user's last role and lock them out.
+        if remaining_roles:
+            await self.user_service.update_user(
+                user.uid, UserUpdate(roles=remaining_roles)
+            )
