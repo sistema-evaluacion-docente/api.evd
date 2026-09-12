@@ -1,9 +1,8 @@
-@startuml cu-33-director-comentarios-y-alertas
+@startuml cu-07-director-comentarios-y-alertas
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
 title Casos de uso del Director — Comentarios y alertas\nRequisitos RF-4.2 a RF-4.4
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,17 +38,15 @@ skinparam rectangle {
 actor "Director de Departamento" as DIR
 
 rectangle "Comentarios de los estudiantes y alertas" {
-  usecase "CU-DIR-20 Consultar y\nfiltrar los comentarios\n<size:10><color:#607D8B>RF-4.2</color></size>" as D20
-  usecase "CU-DIR-21 Contar los comentarios\npor departamento y por docente\n<size:10><color:#607D8B>RF-4.2</color></size>" as D21
-  usecase "CU-DIR-22 Consultar las alertas\nde riesgo alto de un docente\n<size:10><color:#607D8B>RF-4.4</color></size>" as D22
-  usecase "CU-DIR-23 Corregir la clasificación de\nriesgo y de categoría de un comentario\n<size:10><color:#607D8B>RF-4.3</color></size>" as D23
+  usecase "Consultar y filtrar los comentarios\n<size:10><color:#607D8B>RF-4.2</color></size>" as D20
+  usecase "Contar los comentarios por\ndepartamento y por docente\n<size:10><color:#607D8B>RF-4.2</color></size>" as D21
+  usecase "Consultar las alertas de riesgo alto\n<size:10><color:#607D8B>RF-4.4</color></size>" as D22
+  usecase "Corregir la clasificación\nde un comentario\n<size:10><color:#607D8B>RF-4.3</color></size>" as D23
 }
 
 DIR --> D20
 DIR --> D21
 DIR --> D22
 DIR --> D23
-
-D22 ..> D20 : <<include>>
 
 @enduml

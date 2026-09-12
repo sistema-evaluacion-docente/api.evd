@@ -1,11 +1,10 @@
-@startuml cu-39-director-configuracion-departamental
+@startuml cu-13-director-planes-acciones-sugeridas
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Director — Configuración departamental\nTabla 36 (ámbito del actor) y RF-8.1
+title Casos de uso del Director — Planes de mejoramiento: acciones sugeridas\nRequisito RF-6.6
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -40,16 +37,19 @@ skinparam rectangle {
 
 actor "Director de Departamento" as DIR
 
-rectangle "Configuración del departamento" {
-  usecase "CU-DIR-57 Consultar las\nconfiguraciones vigentes de su\ndepartamento y las heredadas" as D57
-  usecase "CU-DIR-58 Crear una configuración propia\npara sobreescribir el valor institucional" as D58
-  usecase "CU-DIR-59 Actualizar o eliminar una\nconfiguración de su departamento" as D59
-  usecase "CU-DIR-60 Consultar el historial\nde cambios de una configuración" as D60
+rectangle "Acciones sugeridas del departamento" {
+  usecase "Consultar las acciones\nsugeridas vigentes\n<size:10><color:#607D8B>RF-6.6</color></size>" as D57
+  usecase "Crear y editar las acciones\nsugeridas del departamento\n<size:10><color:#607D8B>RF-6.6</color></size>" as D58
+  usecase "Eliminar las acciones sugeridas propias\n<size:10><color:#607D8B>RF-6.6</color></size>" as D59
+  usecase "Consultar el historial de cambios\n<size:10><color:#607D8B>RF-6.6</color></size>" as D60
+  usecase "Insertar una acción sugerida\nen el compromiso\n<size:10><color:#607D8B>RF-6.6 · RF-6.8</color></size>" as D62
 }
 
-DIR --> D57
 DIR --> D58
 DIR --> D59
 DIR --> D60
+DIR --> D62
+
+D62 ..> D57 : <<include>>
 
 @enduml

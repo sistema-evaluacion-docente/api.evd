@@ -1,11 +1,10 @@
-@startuml cu-38-director-planes-evidencias
+@startuml cu-12-director-planes-evidencias
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Director — Planes de mejoramiento: ciclo de evidencias\nRequisitos RF-6.11 y RF-6.12
+title Casos de uso del Director — Planes de mejoramiento: ciclo de evidencias\nRequisito RF-6.12
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,12 +38,12 @@ skinparam rectangle {
 actor "Director de Departamento" as DIR
 
 rectangle "Planes de mejoramiento: ciclo de evidencias" {
-  usecase "CU-DIR-51 Solicitar al docente un\nentregable de evidencia concreto\n<size:10><color:#607D8B>RF-6.11</color></size>" as D51
-  usecase "CU-DIR-52 Editar la solicitud de evidencia" as D52
-  usecase "CU-DIR-53 Consultar las\nsolicitudes de evidencia del plan\n<size:10><color:#607D8B>RF-6.11</color></size>" as D53
-  usecase "CU-DIR-54 Comentar en el\nhilo de la solicitud\n<size:10><color:#607D8B>RF-6.11</color></size>" as D54
-  usecase "CU-DIR-55 Aprobar o rechazar\nla evidencia entregada\n<size:10><color:#607D8B>RF-6.11 · RF-6.12</color></size>" as D55
-  usecase "CU-DIR-56 Descargar el\narchivo de la evidencia\n<size:10><color:#607D8B>RF-6.11</color></size>" as D56
+  usecase "Solicitar al docente una evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D51
+  usecase "Editar la solicitud de evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D52
+  usecase "Consultar las solicitudes del plan\n<size:10><color:#607D8B>RF-6.12</color></size>" as D53
+  usecase "Comentar en el hilo de la solicitud\n<size:10><color:#607D8B>RF-6.12</color></size>" as D54
+  usecase "Aprobar o rechazar la evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D55
+  usecase "Descargar el archivo de la evidencia\n<size:10><color:#607D8B>RF-6.12</color></size>" as D56
 }
 
 DIR --> D51
@@ -55,7 +52,5 @@ DIR --> D53
 DIR --> D54
 DIR --> D55
 DIR --> D56
-
-D55 ..> D56 : <<include>>
 
 @enduml

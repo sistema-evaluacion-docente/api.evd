@@ -1,9 +1,8 @@
-@startuml cu-10-visitante-y-sesion
+@startuml cu-01-visitante-y-sesion
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
 title Casos de uso del Visitante y de la sesión\nRequisitos RF-1.1, RF-1.2 y RF-7.1
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -45,24 +42,18 @@ actor "Firebase Auth" as FBA <<externo>> #FFF3E0
 VIS <|-- USR
 
 rectangle "Acceso, sesión y notificaciones propias" {
-  usecase "CU-VIS-01 Consultar la página\npública de presentación" as V1
-  usecase "CU-VIS-02 Iniciar sesión con correo\ny contraseña o con cuenta de Google\n<size:10><color:#607D8B>RF-1.1</color></size>" as V2
-  usecase "CU-USR-01 Seleccionar el\nrol con el que se opera\n<size:10><color:#607D8B>RF-1.2</color></size>" as U1
-  usecase "CU-USR-02 Cerrar sesión" as U2
-  usecase "CU-USR-03 Consultar y\nactualizar el perfil propio" as U3
-  usecase "CU-USR-04 Gestionar las\nnotificaciones propias\n<size:10><color:#607D8B>RF-7.1</color></size>" as U4
-  usecase "CU-USR-05 Recibir las notificaciones en\ntiempo real y abrir el plan enlazado" as U5
+  usecase "Consultar la página pública\n<size:10><color:#607D8B>RF-1.1</color></size>" as V1
+  usecase "Iniciar sesión\n<size:10><color:#607D8B>RF-1.1</color></size>" as V2
+  usecase "Seleccionar el rol de trabajo\n<size:10><color:#607D8B>RF-1.2</color></size>" as U1
+  usecase "Cerrar sesión\n<size:10><color:#607D8B>RF-1.1</color></size>" as U2
+  usecase "Gestionar las notificaciones propias\n<size:10><color:#607D8B>RF-7.1</color></size>" as U4
 }
 
 VIS --> V1
 VIS --> V2
-USR --> U1
 USR --> U2
-USR --> U3
 USR --> U4
-USR --> U5
 
 V2 --> FBA
-U1 .> V2 : <<extend>>\n(la cuenta tiene\nvarios roles)
-
+USR --> U1
 @enduml

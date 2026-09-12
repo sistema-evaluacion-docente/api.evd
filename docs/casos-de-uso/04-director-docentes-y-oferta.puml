@@ -1,11 +1,10 @@
-@startuml cu-30-director-docentes-y-oferta
+@startuml cu-04-director-docentes-y-oferta
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Director — Docentes y oferta académica\nRequisitos RF-2.4, RF-2.5 y FA-3
+title Casos de uso del Director — Docentes y oferta académica\nRequisitos RF-2.4, RF-2.5 y RF-2.7 a RF-2.9
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,17 +38,15 @@ skinparam rectangle {
 actor "Director de Departamento" as DIR
 
 rectangle "Docentes y oferta académica del departamento" {
-  usecase "CU-DIR-01 Gestionar los\ndocentes de su departamento" as D1
-  usecase "CU-DIR-02 Crear un docente\njunto con su usuario de acceso" as D2
-  usecase "CU-DIR-03 Cargar docentes de forma\nmasiva desde un archivo Excel" as D3
-  usecase "CU-DIR-04 Consultar los\ndocentes con sus promedios" as D4
-  usecase "CU-DIR-05 Renombrar una\nmateria conservando su código\n<size:10><color:#607D8B>RF-2.5</color></size>" as D5
-  usecase "CU-DIR-06 Gestionar los grupos\nacadémicos y su modalidad\n<size:10><color:#607D8B>RF-2.4</color></size>" as D6
-  usecase "CU-DIR-07 Consultar los\nperiodos disponibles" as D7
+  usecase "Gestionar los docentes\ndel departamento\n<size:10><color:#607D8B>RF-2.8</color></size>" as D1
+  usecase "Cargar docentes de forma masiva\n<size:10><color:#607D8B>RF-2.9</color></size>" as D3
+  usecase "Consultar los docentes\ncon sus promedios\n<size:10><color:#607D8B>RF-2.8</color></size>" as D4
+  usecase "Renombrar una materia\n<size:10><color:#607D8B>RF-2.5</color></size>" as D5
+  usecase "Consultar las materias y sus grupos\n<size:10><color:#607D8B>RF-2.4</color></size>" as D6
+  usecase "Consultar los periodos disponibles\n<size:10><color:#607D8B>RF-2.7</color></size>" as D7
 }
 
 DIR --> D1
-DIR --> D2
 DIR --> D3
 DIR --> D4
 DIR --> D5

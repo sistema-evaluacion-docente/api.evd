@@ -1,11 +1,10 @@
-@startuml cu-37-director-planes-formatos
+@startuml cu-11-director-planes-formatos
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Director — Planes de mejoramiento: formatos oficiales\nRequisitos RF-6.6 a RF-6.10
+title Casos de uso del Director — Planes de mejoramiento: formatos oficiales\nRequisitos RF-6.7 a RF-6.11
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,17 +38,16 @@ skinparam rectangle {
 actor "Director de Departamento" as DIR
 
 rectangle "Planes de mejoramiento: contenido y formatos oficiales" {
-  usecase "CU-DIR-43 Mantener el catálogo de\nacciones sugeridas del departamento\n<size:10><color:#607D8B>RF-6.6</color></size>" as D43
-  usecase "CU-DIR-44 Registrar el caso reportado\npor un programa académico (Formato 1)\n<size:10><color:#607D8B>RF-6.7</color></size>" as D44
-  usecase "CU-DIR-45 Elaborar el acta del Formato 2\ny justificar sus ítems con comentarios\n<size:10><color:#607D8B>RF-6.8</color></size>" as D45
-  usecase "CU-DIR-46 Cerrar el acta\ny congelar su contenido\n<size:10><color:#607D8B>RF-6.8</color></size>" as D46
-  usecase "CU-DIR-47 Registrar los puntos de control\ny las notas de seguimiento (Formato 3)\n<size:10><color:#607D8B>RF-6.9</color></size>" as D47
-  usecase "CU-DIR-48 Generar y descargar el\nformato oficial en PDF o en Word\n<size:10><color:#607D8B>RF-6.10</color></size>" as D48
-  usecase "CU-DIR-49 Cargar la versión\nfirmada del formato\n<size:10><color:#607D8B>RF-6.10</color></size>" as D49
-  usecase "CU-DIR-50 Eliminar la versión firmada\n<size:10><color:#607D8B>RF-6.10</color></size>" as D50
+  usecase "Registrar el caso del programa\n(Formato 1)\n<size:10><color:#607D8B>RF-6.7</color></size>" as D44
+  usecase "Elaborar el acta del Formato 2\n<size:10><color:#607D8B>RF-6.8</color></size>" as D45
+  usecase "Cerrar el acta\n<size:10><color:#607D8B>RF-6.8</color></size>" as D46
+  usecase "Registrar las notas de seguimiento\n(Formato 3)\n<size:10><color:#607D8B>RF-6.10</color></size>" as D47
+  usecase "Generar y descargar los\nformatos oficiales\n<size:10><color:#607D8B>RF-6.11</color></size>" as D48
+  usecase "Cargar la versión firmada del formato\n<size:10><color:#607D8B>RF-6.11</color></size>" as D49
+  usecase "Eliminar la versión firmada\n<size:10><color:#607D8B>RF-6.11</color></size>" as D50
+  usecase "Fijar la meta de cada\nindicador comprometido\n<size:10><color:#607D8B>RF-6.9</color></size>" as D61
 }
 
-DIR --> D43
 DIR --> D44
 DIR --> D45
 DIR --> D46
@@ -59,5 +55,7 @@ DIR --> D47
 DIR --> D48
 DIR --> D49
 DIR --> D50
+
+D61 .> D45 : <<extend>>\n(el director fija\nsu propia meta)
 
 @enduml

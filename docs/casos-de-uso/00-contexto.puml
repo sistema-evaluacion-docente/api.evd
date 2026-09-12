@@ -3,7 +3,6 @@
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
 title Diagrama de contexto — Casos de uso\nSistema de Evaluación Docente (SET) · UFPS
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -54,25 +51,26 @@ USR <|-- DOC
 
 rectangle "Sistema de Evaluación Docente (SET)" {
   usecase "Acceso y sesión\n<size:10><color:#607D8B>RF-1.1 · RF-1.2</color></size>" as A
-  usecase "Administración institucional\n<size:10><color:#607D8B>RF-1.3 · RF-2.1 a RF-2.6</color></size>" as B
-  usecase "Carga y procesamiento de evaluaciones\n<size:10><color:#607D8B>RF-3.1 a RF-3.6</color></size>" as C
-  usecase "Análisis de comentarios con\ninteligencia artificial\n<size:10><color:#607D8B>RF-4.1 a RF-4.4</color></size>" as D #FFFDE7
-  usecase "Reportes y estadísticas\n<size:10><color:#607D8B>RF-5.1 a RF-5.9</color></size>" as E
+  usecase "Administración institucional\n<size:10><color:#607D8B>RF-1.3 · RF-2.1 a RF-2.3 · RF-2.6 · RF-2.7</color></size>" as B
+  usecase "Carga y procesamiento de evaluaciones\n<size:10><color:#607D8B>RF-3.1 a RF-3.7</color></size>" as C
+  usecase "Análisis de comentarios con\ninteligencia artificial\n<size:10><color:#607D8B>RF-4.1 a RF-4.5</color></size>" as D #FFFDE7
+  usecase "Reportes y estadísticas\n<size:10><color:#607D8B>RF-5.1 a RF-5.11</color></size>" as E
   usecase "Planes de mejoramiento\n<size:10><color:#607D8B>RF-6.1 a RF-6.13</color></size>" as F
   usecase "Notificaciones y correo\n<size:10><color:#607D8B>RF-7.1 · RF-7.2</color></size>" as G
+  usecase "Docentes y oferta académica\ndel departamento\n<size:10><color:#607D8B>RF-2.4 · RF-2.5 · RF-2.8 · RF-2.9</color></size>" as J
   usecase "Auditoría\n<size:10><color:#607D8B>RF-8.1 · RF-8.2</color></size>" as H
-  usecase "Configuración institucional\ny departamental" as I
+  usecase "Configuración institucional\n<size:10><color:#607D8B>RF-9.1</color></size>" as I
 }
 
 VIS --> A
 ADM --> B
 ADM --> H
 ADM --> I
+DIR --> J
 DIR --> C
 DIR --> D
 DIR --> E
 DIR --> F
-DIR --> I
 DOC --> E
 DOC --> F
 USR --> G
@@ -80,6 +78,7 @@ SYS --> C
 SYS --> D
 SYS --> F
 SYS --> G
+SYS --> H
 
 A --> FBA
 G --> SMTP

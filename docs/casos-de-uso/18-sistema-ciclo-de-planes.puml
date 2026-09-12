@@ -1,11 +1,10 @@
-@startuml cu-52-sistema-ciclo-de-planes
+@startuml cu-18-sistema-ciclo-de-planes
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Sistema — Reglas del ciclo del plan de mejoramiento\nRequisitos RF-6.1, RF-6.3, RF-6.6, RF-6.8, RF-6.9, RF-6.10 y RF-6.12
+title Casos de uso del Sistema — Automatismos del plan de mejoramiento\nRequisitos RF-4.4, RF-6.1, RF-6.11 y RF-6.12
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -40,24 +37,14 @@ skinparam rectangle {
 
 actor "Sistema" as SYS <<automático>> #FFF8E1
 
-rectangle "Reglas automáticas del plan de mejoramiento" {
-  usecase "CU-SIS-21 Sugerir candidatos a plan\nentre los docentes bajo el umbral\ninstitucional o con riesgo alto\n<size:10><color:#607D8B>RF-6.1 · RF-4.4</color></size>" as S21 #FFFDE7
-  usecase "CU-SIS-22 Registrar el periodo de origen\nen el que se detectó el bajo desempeño\n<size:10><color:#607D8B>RF-6.3</color></size>" as S22 #FFFDE7
-  usecase "CU-SIS-23 Heredar el catálogo\ninstitucional de acciones cuando el\ndepartamento no tiene uno propio\n<size:10><color:#607D8B>RF-6.6</color></size>" as S23 #FFFDE7
-  usecase "CU-SIS-24 Impedir la edición del\ncontenido congelado del acta\n<size:10><color:#607D8B>RF-6.8</color></size>" as S24 #FFFDE7
-  usecase "CU-SIS-25 Llevar el acta a FIRMADA\nal cargar el Formato 2 firmado\n<size:10><color:#607D8B>RF-6.8 · RF-6.10</color></size>" as S25 #FFFDE7
-  usecase "CU-SIS-26 Regenerar la matriz\nde seguimiento cada vez que\nse registra un seguimiento" as S26 #FFFDE7
-  usecase "CU-SIS-27 Llevar la solicitud de\nevidencia a EN_REVISION tras la entrega\n<size:10><color:#607D8B>RF-6.12</color></size>" as S27 #FFFDE7
-  usecase "CU-SIS-28 Devolver la solicitud\na PENDIENTE con un comentario\nde sistema al rechazarla\n<size:10><color:#607D8B>RF-6.12</color></size>" as S28 #FFFDE7
+rectangle "Lo que el sistema hace por su cuenta en el plan" {
+  usecase "Sugerir candidatos a plan\n<size:10><color:#607D8B>RF-6.1 · RF-4.4</color></size>" as S21 #FFFDE7
+  usecase "Componer el formato y\nrenderizarlo en PDF\n<size:10><color:#607D8B>RF-6.11</color></size>" as S25 #FFFDE7
+  usecase "Avisar en el hilo que la\nevidencia fue rechazada\n<size:10><color:#607D8B>RF-6.12</color></size>" as S28 #FFFDE7
 }
 
 SYS --> S21
-SYS --> S22
-SYS --> S23
-SYS --> S24
 SYS --> S25
-SYS --> S26
-SYS --> S27
 SYS --> S28
 
 @enduml

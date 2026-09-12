@@ -1,11 +1,10 @@
-@startuml cu-50-sistema-procesamiento-y-analisis
+@startuml cu-16-sistema-procesamiento-y-analisis
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
-title Casos de uso del Sistema — Procesamiento del PDF y análisis con IA\nRequisitos RF-3.2 a RF-3.4 y RF-4.1
+title Casos de uso del Sistema — Procesamiento del PDF y análisis con IA\nRequisitos RF-1.5, RF-3.1 a RF-3.4 y RF-4.1
 
 left to right direction
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,31 +38,23 @@ skinparam rectangle {
 actor "Sistema" as SYS <<automático>> #FFF8E1
 
 rectangle "Procesamiento en segundo plano y análisis con inteligencia artificial" {
-  usecase "CU-SIS-01 Validar que ambos PDF\ncoincidan en periodo y departamento\ny sean de modalidades distintas\n<size:10><color:#607D8B>RF-3.2</color></size>" as S1 #FFFDE7
-  usecase "CU-SIS-02 Rechazar la carga de un\ndepartamento ajeno al del director (403)\n<size:10><color:#607D8B>RF-1.5 · RF-3.1</color></size>" as S2 #FFFDE7
-  usecase "CU-SIS-03 Procesar la\nevaluación en segundo plano\n<size:10><color:#607D8B>RF-3.4</color></size>" as S3 #FFFDE7
-  usecase "CU-SIS-04 Extraer del PDF el\ndocente, el curso, el grupo, las\n22 preguntas y los comentarios\n<size:10><color:#607D8B>RF-3.3</color></size>" as S4 #FFFDE7
-  usecase "CU-SIS-05 Persistir los grupos, los\npuntajes y los comentarios extraídos\n<size:10><color:#607D8B>RF-3.3</color></size>" as S5 #FFFDE7
-  usecase "CU-SIS-06 Emitir el progreso del\nprocesamiento en tiempo real\n<size:10><color:#607D8B>RF-3.4</color></size>" as S6 #FFFDE7
-  usecase "CU-SIS-07 Registrar el fallo y\ndejar la evaluación en FAILED\n<size:10><color:#607D8B>RF-3.4</color></size>" as S7 #FFFDE7
-  usecase "CU-SIS-08 Clasificar el comentario por\nnivel de riesgo y categoría pedagógica\n<size:10><color:#607D8B>RF-4.1</color></size>" as S8 #FFFDE7
-  usecase "CU-SIS-09 Ejecutar los\nmodelos de HuggingFace dentro\ndel mismo proceso de la API\n<size:10><color:#607D8B>RF-4.1 · FA-5</color></size>" as S9 #FFFDE7
-  usecase "CU-SIS-10 Registrar el modelo y\nla confianza de la clasificación" as S10 #FFFDE7
+  usecase "Validar los PDF del periodo\n<size:10><color:#607D8B>RF-3.2</color></size>" as S1 #FFFDE7
+  usecase "Rechazar la carga de un\ndepartamento ajeno\n<size:10><color:#607D8B>RF-1.5 · RF-3.1</color></size>" as S2 #FFFDE7
+  usecase "Procesar la evaluación\nen segundo plano\n<size:10><color:#607D8B>RF-3.4</color></size>" as S3 #FFFDE7
+  usecase "Extraer los datos del PDF\n<size:10><color:#607D8B>RF-3.3</color></size>" as S4 #FFFDE7
+  usecase "Persistir los datos extraídos\n<size:10><color:#607D8B>RF-3.3</color></size>" as S5 #FFFDE7
+  usecase "Emitir el progreso en tiempo real\n<size:10><color:#607D8B>RF-3.4</color></size>" as S6 #FFFDE7
+  usecase "Clasificar el comentario por riesgo\ny categoría pedagógica\n<size:10><color:#607D8B>RF-4.1</color></size>" as S8 #FFFDE7
+  usecase "Ejecutar los modelos\nde clasificación\n<size:10><color:#607D8B>RF-4.1</color></size>" as S9 #FFFDE7
 }
 
 SYS --> S1
 SYS --> S2
 SYS --> S3
-SYS --> S4
-SYS --> S5
-SYS --> S6
-SYS --> S7
-SYS --> S8
-SYS --> S9
-SYS --> S10
 
 S3 ..> S4 : <<include>>
+S3 ..> S5 : <<include>>
+S3 ..> S6 : <<include>>
 S3 ..> S8 : <<include>>
-S7 .> S3 : <<extend>>\n(el PDF no se puede\nparsear o persistir)
-
+S8 ..> S9 : <<include>>
 @enduml

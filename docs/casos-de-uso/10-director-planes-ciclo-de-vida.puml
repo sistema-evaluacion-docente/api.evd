@@ -1,9 +1,8 @@
-@startuml cu-36-director-planes-ciclo-de-vida
+@startuml cu-10-director-planes-ciclo-de-vida
 ' =============================================================================
 ' Sistema de Evaluación Docente (SET) — UFPS
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
-' Especificación de cada caso de uso: docs/casos-de-uso/README.md
 ' =============================================================================
 title Casos de uso del Director — Planes de mejoramiento: ciclo de vida\nRequisitos RF-6.1 a RF-6.5 y RF-6.13
 
@@ -19,8 +18,6 @@ skinparam ArrowFontColor #546E7A
 skinparam ArrowFontSize 11
 skinparam nodesep 12
 skinparam ranksep 40
-' Descomenta la línea siguiente para aristas ortogonales (requiere Graphviz).
-' skinparam linetype ortho
 skinparam actor {
   BackgroundColor #ECEFF1
   BorderColor #37474F
@@ -41,14 +38,14 @@ skinparam rectangle {
 actor "Director de Departamento" as DIR
 
 rectangle "Planes de mejoramiento: detección y ciclo de vida" {
-  usecase "CU-DIR-35 Consultar los docentes\nen riesgo y los candidatos a plan\n<size:10><color:#607D8B>RF-6.1</color></size>" as D35
-  usecase "CU-DIR-36 Crear un plan con sus\ncompromisos y las asignaturas involucradas\n<size:10><color:#607D8B>RF-6.2 · RF-6.3</color></size>" as D36
-  usecase "CU-DIR-37 Consultar los\nplanes del departamento\n<size:10><color:#607D8B>RF-6.2</color></size>" as D37
-  usecase "CU-DIR-38 Editar un plan\n<size:10><color:#607D8B>RF-6.2</color></size>" as D38
-  usecase "CU-DIR-39 Eliminar un plan\n<size:10><color:#607D8B>RF-6.2</color></size>" as D39
-  usecase "CU-DIR-40 Cerrar el plan con\nsu resultado y su motivo\n<size:10><color:#607D8B>RF-6.4</color></size>" as D40
-  usecase "CU-DIR-41 Consultar los cursos y el\nhistorial de planes de un docente\n<size:10><color:#607D8B>RF-6.5</color></size>" as D41
-  usecase "CU-DIR-42 Consultar el resultado\nde la verificación del plan\n<size:10><color:#607D8B>RF-6.13</color></size>" as D42
+  usecase "Consultar los docentes en riesgo\ny los candidatos a plan\n<size:10><color:#607D8B>RF-6.1</color></size>" as D35
+  usecase "Crear un plan con sus compromisos\ny las asignaturas involucradas\n<size:10><color:#607D8B>RF-6.2 · RF-6.3</color></size>" as D36
+  usecase "Consultar los planes del departamento\n<size:10><color:#607D8B>RF-6.2</color></size>" as D37
+  usecase "Editar un plan\n<size:10><color:#607D8B>RF-6.2</color></size>" as D38
+  usecase "Eliminar un plan\n<size:10><color:#607D8B>RF-6.2</color></size>" as D39
+  usecase "Cerrar el plan con su resultado\ny su observación\n<size:10><color:#607D8B>RF-6.4</color></size>" as D40
+  usecase "Consultar el historial de\nplanes de un docente\n<size:10><color:#607D8B>RF-6.5</color></size>" as D41
+  usecase "Consultar el resultado de la\nverificación del plan\n<size:10><color:#607D8B>RF-6.13</color></size>" as D42
 }
 
 DIR --> D35
