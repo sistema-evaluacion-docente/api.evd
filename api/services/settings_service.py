@@ -42,8 +42,8 @@ class SettingService:
 
         roles = set((current_user or {}).get("roles", []))
 
-        # if RoleName.ADMIN.value in roles:
-        #     return False
+        #if RoleName.ADMIN.value in roles:
+         #   return False
 
         return RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
 
