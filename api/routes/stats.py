@@ -13,6 +13,7 @@ from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.stats import (
     DepartmentPeriodRangeReport,
     DepartmentPeriodRangeSubject,
+    DepartmentCaseSummary,
     DepartmentPeriodRangeSubjectFiltersDep,
     DepartmentUploadStatus,
     FacultyPeriodAverage,
@@ -67,6 +68,34 @@ async def get_department_uploads_by_period(
     in the period (analysed or not). A DECANO only sees their own faculty."""
 
     result = await controller.get_department_uploads_by_period(
+        academic_period_id, current_user
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
+
+    return result
+
+
+@router.get(
+    "/departments/cases",
+    response_model=list[DepartmentCaseSummary],
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_department_cases_by_period(
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    current_user=Depends(
+        require_roles(
+            [RoleName.ADMIN, RoleName.VICERRECTOR_ACADEMICO, RoleName.DECANO]
+        )
+    ),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """One row per active department with counts only: high-risk comments,
+    improvement plans started and risk levels reclassified by the director in
+    the period. A DECANO only sees their own faculty."""
+
+    result = await controller.get_department_cases_by_period(
         academic_period_id, current_user
     )
 

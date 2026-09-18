@@ -32,6 +32,15 @@ class StatsController:
             academic_period_id, current_user
         )
 
+    async def get_department_cases_by_period(
+        self, academic_period_id: int, current_user: dict
+    ) -> list[dict] | None:
+        """Get per-department case counts for a period."""
+
+        return await self.service.get_department_cases_by_period(
+            academic_period_id, current_user
+        )
+
     async def get_faculty_averages_by_period(
         self, faculty_id: int, current_user: dict
     ) -> list[dict]:

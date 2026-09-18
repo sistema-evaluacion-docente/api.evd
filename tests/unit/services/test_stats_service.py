@@ -151,6 +151,35 @@ class TestStatsService:
         )
 
     @pytest.mark.asyncio
+    async def test_get_department_cases_by_period_unscoped_for_admin(
+        self, service, mock_stats_repo, admin_user
+    ):
+        """Test ADMIN/VICERRECTOR see every department (no faculty filter)."""
+
+        mock_stats_repo.get_department_cases_by_period = AsyncMock(
+            return_value=[{"department_id": 1}]
+        )
+
+        result = await service.get_department_cases_by_period(3, admin_user)
+
+        mock_stats_repo.get_department_cases_by_period.assert_awaited_once_with(3, None)
+        assert result == [{"department_id": 1}]
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_by_period_scopes_a_dean_to_their_faculty(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO only gets the departments of their own faculty."""
+
+        mock_stats_repo.get_department_cases_by_period = AsyncMock(return_value=[])
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        await service.get_department_cases_by_period(3, dean_user)
+
+        mock_stats_repo.get_department_cases_by_period.assert_awaited_once_with(3, 1)
+
+    @pytest.mark.asyncio
     async def test_get_faculty_averages_by_period_delegates_to_repository(
         self, service, mock_stats_repo, admin_user
     ):

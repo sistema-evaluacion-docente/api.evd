@@ -30,6 +30,7 @@ def controller():
         "get_department_averages_by_period",
         "get_faculty_averages_by_period",
         "get_department_uploads_by_period",
+        "get_department_cases_by_period",
         "get_department_average_with_previous",
         "get_subject_teachers_comparison",
         "get_department_period_range_report",
@@ -136,6 +137,53 @@ class TestDepartmentUploadsByPeriod:
 
     def test_without_period_returns_422(self, client, controller):
         assert client.get("/stats/departments/uploads").status_code == 422
+
+
+class TestDepartmentCasesByPeriod:
+    """GET /stats/departments/cases"""
+
+    URL = "/stats/departments/cases?academic_period_id=1"
+
+    def test_returns_the_result(self, client, controller):
+        controller.get_department_cases_by_period.return_value = []
+
+        assert client.get(self.URL).status_code == 200
+
+    def test_passes_the_period_and_current_user_to_the_controller(
+        self, client, controller, auth
+    ):
+        auth.as_user(DECANO_USER)
+        controller.get_department_cases_by_period.return_value = []
+
+        client.get(self.URL)
+
+        controller.get_department_cases_by_period.assert_awaited_once_with(
+            1, DECANO_USER
+        )
+
+    def test_for_a_vicerrector_returns_200(self, client, controller, auth):
+        auth.as_user(VICERRECTOR_USER)
+        controller.get_department_cases_by_period.return_value = []
+
+        assert client.get(self.URL).status_code == 200
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        assert client.get(self.URL).status_code == 403
+
+    def test_for_a_teacher_returns_403(self, client, controller, auth):
+        auth.as_user(DOCENTE_USER)
+
+        assert client.get(self.URL).status_code == 403
+
+    def test_when_period_missing_returns_404(self, client, controller):
+        controller.get_department_cases_by_period.return_value = None
+
+        assert client.get(self.URL).status_code == 404
+
+    def test_without_period_returns_422(self, client, controller):
+        assert client.get("/stats/departments/cases").status_code == 422
 
 
 class TestFacultyAveragesByPeriod:

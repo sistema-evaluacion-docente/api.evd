@@ -14,7 +14,7 @@ def _chain(first=None, all_=None):
     """A query mock whose builder methods all return itself."""
 
     query = MagicMock()
-    for method in ("filter", "order_by", "join", "group_by"):
+    for method in ("filter", "order_by", "join", "group_by", "options", "select_from"):
         getattr(query, method).return_value = query
     query.first.return_value = first
     query.all.return_value = all_ if all_ is not None else []
@@ -29,6 +29,75 @@ def _department(id_, name, code="C"):
 
 class TestStatsRepository:
     """Test suite for StatsRepository."""
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_returns_none_for_a_missing_period(
+        self, mock_db
+    ):
+        """Test an unknown academic period yields None (the route's 404)."""
+
+        mock_db.query.side_effect = [_chain(first=None)]
+
+        assert await StatsRepository(mock_db).get_department_cases_by_period(9) is None
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_returns_empty_without_departments(
+        self, mock_db
+    ):
+        """Test a scope with no active departments yields an empty list."""
+
+        mock_db.query.side_effect = [_chain(first=MagicMock()), _chain(all_=[])]
+
+        result = await StatsRepository(mock_db).get_department_cases_by_period(1, 5)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_fills_zeros_for_departments_without_cases(
+        self, mock_db
+    ):
+        """Test every department gets a row with its counts, and zeros when
+        it has no cases; only counts and faculty names are exposed."""
+
+        sistemas = _department(1, "Sistemas", "52")
+        sistemas.faculty_id = 7
+        sistemas.faculty.name = "Ingeniería"
+        civil = _department(2, "Civil", "53")
+        civil.faculty_id = None
+        civil.faculty = None
+
+        mock_db.query.side_effect = [
+            _chain(first=MagicMock()),
+            _chain(all_=[sistemas, civil]),
+            _chain(all_=[(1, 12)]),
+            _chain(all_=[(1, 5)]),
+            _chain(all_=[(1, 3)]),
+        ]
+
+        result = await StatsRepository(mock_db).get_department_cases_by_period(1)
+
+        assert result == [
+            {
+                "department_id": 1,
+                "department_name": "Sistemas",
+                "department_code": "52",
+                "faculty_id": 7,
+                "faculty_name": "Ingeniería",
+                "high_risk_comments": 12,
+                "plans_total": 3,
+                "risk_reclassified_by_director": 5,
+            },
+            {
+                "department_id": 2,
+                "department_name": "Civil",
+                "department_code": "53",
+                "faculty_id": None,
+                "faculty_name": None,
+                "high_risk_comments": 0,
+                "plans_total": 0,
+                "risk_reclassified_by_director": 0,
+            },
+        ]
 
     @pytest.mark.asyncio
     async def test_get_department_uploads_returns_none_for_a_missing_period(

@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
@@ -20,6 +20,7 @@ from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
+from api.models.improvement_plan import ImprovementPlanModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
@@ -175,6 +176,118 @@ class StatsRepository:
             for row in results
         ]
 
+    def _get_scoped_departments(
+        self, faculty_id: int | None = None, with_faculty: bool = False
+    ) -> list[DepartmentModel]:
+        """Active departments ordered by name, optionally of one faculty.
+        `with_faculty` loads each department's faculty in the same query."""
+
+        query = self.db.query(DepartmentModel).filter(
+            DepartmentModel.active.isnot(False)
+        )
+
+        if with_faculty:
+            query = query.options(joinedload(DepartmentModel.faculty))
+
+        if faculty_id is not None:
+            query = query.filter(DepartmentModel.faculty_id == faculty_id)
+
+        return query.order_by(DepartmentModel.name).all()
+
+    async def get_department_cases_by_period(
+        self, academic_period_id: int, faculty_id: int | None = None
+    ) -> list[dict] | None:
+        """
+        Get one row per active department (optionally of one faculty) with
+        counts only: high-risk comments, improvement plans started in the
+        period and comments whose risk the director reclassified. Grouped
+        queries, one per metric, never one per department.
+
+        Returns None when the academic period doesn't exist.
+        """
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+
+        if not period:
+            return None
+
+        departments = self._get_scoped_departments(faculty_id, with_faculty=True)
+
+        if not departments:
+            return []
+
+        department_ids = [department.id for department in departments]
+
+        def comment_counts(*extra_filters) -> dict[int, int]:
+            rows = (
+                self.db.query(EvaluationModel.department_id, func.count(CommentModel.id))
+                .select_from(CommentModel)
+                .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+                .filter(
+                    EvaluationModel.academic_period_id == academic_period_id,
+                    EvaluationModel.department_id.in_(department_ids),
+                    EvaluationModel.active.isnot(False),
+                    *extra_filters,
+                )
+                .group_by(EvaluationModel.department_id)
+                .all()
+            )
+
+            return {row[0]: row[1] for row in rows}
+
+        high_risk_rows = (
+            self.db.query(EvaluationModel.department_id, func.count(CommentModel.id))
+            .select_from(CommentModel)
+            .join(RiskLevelModel, RiskLevelModel.id == CommentModel.risk_level)
+            .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+            .filter(
+                RiskLevelModel.name == "ALTO",
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .group_by(EvaluationModel.department_id)
+            .all()
+        )
+        high_risk_by_department = {row[0]: row[1] for row in high_risk_rows}
+
+        reclassified_by_department = comment_counts(
+            CommentModel.risk_level_modified_by_director.is_(True)
+        )
+
+        plan_rows = (
+            self.db.query(
+                ImprovementPlanModel.department_id, func.count(ImprovementPlanModel.id)
+            )
+            .filter(
+                ImprovementPlanModel.origin_period_id == academic_period_id,
+                ImprovementPlanModel.department_id.in_(department_ids),
+            )
+            .group_by(ImprovementPlanModel.department_id)
+            .all()
+        )
+        plans_by_department = {row[0]: row[1] for row in plan_rows}
+
+        return [
+            {
+                "department_id": department.id,
+                "department_name": department.name,
+                "department_code": department.code,
+                "faculty_id": department.faculty_id,
+                "faculty_name": department.faculty.name if department.faculty else None,
+                "high_risk_comments": high_risk_by_department.get(department.id, 0),
+                "plans_total": plans_by_department.get(department.id, 0),
+                "risk_reclassified_by_director": reclassified_by_department.get(
+                    department.id, 0
+                ),
+            }
+            for department in departments
+        ]
+
     async def get_department_uploads_by_period(
         self, academic_period_id: int, faculty_id: int | None = None
     ) -> list[dict] | None:
@@ -195,16 +308,7 @@ class StatsRepository:
         if not period:
             return None
 
-        departments_query = self.db.query(DepartmentModel).filter(
-            DepartmentModel.active.isnot(False)
-        )
-
-        if faculty_id is not None:
-            departments_query = departments_query.filter(
-                DepartmentModel.faculty_id == faculty_id
-            )
-
-        departments = departments_query.order_by(DepartmentModel.name).all()
+        departments = self._get_scoped_departments(faculty_id)
 
         if not departments:
             return []

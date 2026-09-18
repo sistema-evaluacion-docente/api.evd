@@ -580,6 +580,20 @@ class DepartmentUploadStatus(BaseModel):
     global_average: Optional[float]
 
 
+class DepartmentCaseSummary(BaseModel):
+    """Per-department counts of cases in a period. Counts only — never ids,
+    comment text, teachers or plan details."""
+
+    department_id: int
+    department_name: str
+    department_code: str
+    faculty_id: Optional[int]
+    faculty_name: Optional[str]
+    high_risk_comments: int
+    plans_total: int
+    risk_reclassified_by_director: int
+
+
 class FacultyPeriodAveragesResponse(BaseModel):
     """Response envelope for the faculty period averages list."""
 

@@ -22,6 +22,7 @@ class TestStatsController:
         service.get_department_averages_by_period = AsyncMock()
         service.get_department_average_with_previous = AsyncMock()
         service.get_department_uploads_by_period = AsyncMock()
+        service.get_department_cases_by_period = AsyncMock()
         service.get_teacher_performance_ranking = AsyncMock()
         service.get_teacher_ranking_paginated = AsyncMock()
         service.get_grade_distribution = AsyncMock()
@@ -93,6 +94,22 @@ class TestStatsController:
         result = await controller.get_department_uploads_by_period(3, current_user)
 
         mock_service.get_department_uploads_by_period.assert_awaited_once_with(
+            3, current_user
+        )
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_by_period(self, controller, mock_service):
+        """Test get_department_cases_by_period delegates to service."""
+
+        mock_service.get_department_cases_by_period.return_value = [
+            {"department_id": 1}
+        ]
+        current_user = {"id": 99, "roles": ["DECANO"], "faculty_id": 1}
+
+        result = await controller.get_department_cases_by_period(3, current_user)
+
+        mock_service.get_department_cases_by_period.assert_awaited_once_with(
             3, current_user
         )
         assert len(result) == 1
