@@ -175,6 +175,102 @@ class StatsRepository:
             for row in results
         ]
 
+    async def get_department_uploads_by_period(
+        self, academic_period_id: int, faculty_id: int | None = None
+    ) -> list[dict] | None:
+        """
+        Get one row per active department (optionally of one faculty) saying
+        whether it uploaded an evaluation in the period, whatever its analysis
+        state. `global_average` only exists once the evaluation was analysed.
+
+        Returns None when the academic period doesn't exist.
+        """
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+
+        if not period:
+            return None
+
+        departments_query = self.db.query(DepartmentModel).filter(
+            DepartmentModel.active.isnot(False)
+        )
+
+        if faculty_id is not None:
+            departments_query = departments_query.filter(
+                DepartmentModel.faculty_id == faculty_id
+            )
+
+        departments = departments_query.order_by(DepartmentModel.name).all()
+
+        if not departments:
+            return []
+
+        department_ids = [department.id for department in departments]
+
+        evaluations = (
+            self.db.query(EvaluationModel)
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .order_by(EvaluationModel.created_at.desc())
+            .all()
+        )
+
+        evaluations_by_department: dict[int, list] = {}
+
+        for evaluation in evaluations:
+            evaluations_by_department.setdefault(evaluation.department_id, []).append(
+                evaluation
+            )
+
+        average_rows = (
+            self.db.query(
+                EvaluationModel.department_id,
+                func.avg(EvaluationScoreModel.overall_average),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .group_by(EvaluationModel.department_id)
+            .all()
+        )
+        average_by_department = {row[0]: row[1] for row in average_rows}
+
+        results = []
+
+        for department in departments:
+            department_evaluations = evaluations_by_department.get(department.id, [])
+            latest = department_evaluations[0] if department_evaluations else None
+            average = average_by_department.get(department.id)
+
+            results.append(
+                {
+                    "department_id": department.id,
+                    "department_name": department.name,
+                    "department_code": department.code,
+                    "evaluation_count": len(department_evaluations),
+                    "has_uploaded": latest is not None,
+                    "last_uploaded_at": latest.created_at if latest else None,
+                    "status": latest.status if latest else None,
+                    "ai_status": latest.ai_status if latest else None,
+                    "global_average": float(average) if average else None,
+                }
+            )
+
+        return results
+
     async def get_department_average_with_previous(
         self, department_id: int, academic_period_id: int
     ) -> dict | None:

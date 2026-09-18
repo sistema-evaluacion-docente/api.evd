@@ -14,6 +14,7 @@ from api.schemas.stats import (
     DepartmentPeriodRangeReport,
     DepartmentPeriodRangeSubject,
     DepartmentPeriodRangeSubjectFiltersDep,
+    DepartmentUploadStatus,
     FacultyPeriodAverage,
 )
 from api.schemas.user import RoleName
@@ -46,6 +47,33 @@ async def get_department_averages_by_period(
     return await controller.get_department_averages_by_period(
         department_id, current_user
     )
+
+
+@router.get(
+    "/departments/uploads",
+    response_model=list[DepartmentUploadStatus],
+    responses={403: {"description": "Forbidden"}, 404: {"description": "Not found"}},
+)
+async def get_department_uploads_by_period(
+    academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
+    current_user=Depends(
+        require_roles(
+            [RoleName.ADMIN, RoleName.VICERRECTOR_ACADEMICO, RoleName.DECANO]
+        )
+    ),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """One row per active department saying whether it uploaded an evaluation
+    in the period (analysed or not). A DECANO only sees their own faculty."""
+
+    result = await controller.get_department_uploads_by_period(
+        academic_period_id, current_user
+    )
+
+    if result is None:
+        raise HTTPException(status_code=404, detail="Periodo académico no encontrado")
+
+    return result
 
 
 @router.get(

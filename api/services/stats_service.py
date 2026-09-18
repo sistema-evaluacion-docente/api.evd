@@ -42,6 +42,23 @@ class StatsService:
             department_id, faculty_id
         )
 
+    async def get_department_uploads_by_period(
+        self, academic_period_id: int, current_user: dict
+    ) -> list[dict] | None:
+        """Get which departments uploaded evaluations in a period.
+
+        A DECANO only gets the departments of their own faculty.
+        """
+
+        faculty_id = None
+
+        if is_scoped_dean(current_user):
+            faculty_id = current_user.get("faculty_id")
+
+        return await self.stats_repository.get_department_uploads_by_period(
+            academic_period_id, faculty_id
+        )
+
     async def get_faculty_averages_by_period(
         self, faculty_id: int, current_user: dict
     ) -> list[dict]:
