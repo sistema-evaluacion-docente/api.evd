@@ -35,13 +35,14 @@ class StatsRepository:
         self.db = db
 
     async def get_department_averages_by_period(
-        self, department_id: int | None = None
+        self, department_id: int | None = None, faculty_id: int | None = None
     ) -> list[dict]:
         """
         Get global average per department per academic period.
 
         Joins evaluations -> evaluation_scores and groups by
-        (department, academic_period).
+        (department, academic_period). `faculty_id` scopes the result to a
+        single faculty's departments (used for a DECANO's implicit scope).
         """
 
         query = (
@@ -87,6 +88,9 @@ class StatsRepository:
         if department_id is not None:
             query = query.filter(DepartmentModel.id == department_id)
 
+        if faculty_id is not None:
+            query = query.filter(DepartmentModel.faculty_id == faculty_id)
+
         results = query.all()
 
         return [
@@ -94,6 +98,71 @@ class StatsRepository:
                 "department_id": row.department_id,
                 "department_name": row.department_name,
                 "department_code": row.department_code,
+                "academic_period_id": row.academic_period_id,
+                "academic_period_code": row.academic_period_code,
+                "academic_period_name": row.academic_period_name,
+                "global_average": (
+                    float(row.global_average) if row.global_average else None
+                ),
+                "total_respondents": row.total_respondents,
+                "evaluation_count": row.evaluation_count,
+            }
+            for row in results
+        ]
+
+    async def get_faculty_averages_by_period(self, faculty_id: int) -> list[dict]:
+        """
+        Get a faculty's global average per academic period, combining every
+        department that belongs to it. Same single-pass shape as
+        `get_department_averages_by_period`, grouped by faculty instead of
+        department (join `Department -> Faculty`).
+        """
+
+        results = (
+            self.db.query(
+                FacultyModel.id.label("faculty_id"),
+                FacultyModel.name.label("faculty_name"),
+                FacultyModel.code.label("faculty_code"),
+                AcademicPeriodModel.id.label("academic_period_id"),
+                AcademicPeriodModel.code.label("academic_period_code"),
+                AcademicPeriodModel.name.label("academic_period_name"),
+                func.avg(EvaluationScoreModel.overall_average).label("global_average"),
+                func.sum(EvaluationScoreModel.respondent_count).label(
+                    "total_respondents"
+                ),
+                func.count(EvaluationScoreModel.id).label("evaluation_count"),
+            )
+            .join(DepartmentModel, DepartmentModel.faculty_id == FacultyModel.id)
+            .join(
+                EvaluationModel,
+                EvaluationModel.department_id == DepartmentModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicPeriodModel,
+                AcademicPeriodModel.id == EvaluationModel.academic_period_id,
+            )
+            .filter(FacultyModel.id == faculty_id)
+            .group_by(
+                FacultyModel.id,
+                FacultyModel.name,
+                FacultyModel.code,
+                AcademicPeriodModel.id,
+                AcademicPeriodModel.code,
+                AcademicPeriodModel.name,
+            )
+            .order_by(AcademicPeriodModel.code.desc())
+            .all()
+        )
+
+        return [
+            {
+                "faculty_id": row.faculty_id,
+                "faculty_name": row.faculty_name,
+                "faculty_code": row.faculty_code,
                 "academic_period_id": row.academic_period_id,
                 "academic_period_code": row.academic_period_code,
                 "academic_period_name": row.academic_period_name,

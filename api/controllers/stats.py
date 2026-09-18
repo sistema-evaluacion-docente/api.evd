@@ -15,19 +15,30 @@ class StatsController:
         self.service = service
 
     async def get_department_averages_by_period(
-        self, department_id: int | None = None
+        self, department_id: int | None, current_user: dict
     ) -> list[dict]:
         """Get global average per department per academic period."""
 
-        return await self.service.get_department_averages_by_period(department_id)
+        return await self.service.get_department_averages_by_period(
+            department_id, current_user
+        )
+
+    async def get_faculty_averages_by_period(
+        self, faculty_id: int, current_user: dict
+    ) -> list[dict]:
+        """Get a faculty's global average per academic period."""
+
+        return await self.service.get_faculty_averages_by_period(
+            faculty_id, current_user
+        )
 
     async def get_department_average_with_previous(
-        self, department_id: int, academic_period_id: int
+        self, department_id: int, academic_period_id: int, current_user: dict
     ) -> dict | None:
         """Get department average for a period with previous period comparison."""
 
         return await self.service.get_department_average_with_previous(
-            department_id, academic_period_id
+            department_id, academic_period_id, current_user
         )
 
     async def get_teacher_performance_ranking(
@@ -163,15 +174,16 @@ class StatsController:
 
     async def get_department_period_range_report(
         self,
-        department_id: int,
+        department_id: int | None,
         start_period_code: str,
         end_period_code: str,
+        current_user: dict,
     ) -> dict | None:
         """Get department averages and dimension averages across a range of
         academic periods."""
 
         return await self.service.get_department_period_range_report(
-            department_id, start_period_code, end_period_code
+            department_id, start_period_code, end_period_code, current_user
         )
 
     async def get_department_period_range_subjects(

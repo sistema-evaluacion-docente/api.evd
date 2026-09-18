@@ -550,6 +550,32 @@ class DepartmentPeriodRangeReport(BaseModel):
     comments_pedagogical_category_counts: dict[str, int]
 
 
+class FacultyPeriodAverage(BaseModel):
+    """A faculty's global average for a single academic period, combining
+    every department that belongs to it."""
+
+    faculty_id: int
+    faculty_name: str
+    faculty_code: str
+    academic_period_id: int
+    academic_period_code: str
+    academic_period_name: Optional[str]
+    global_average: Optional[float]
+    total_respondents: int
+    evaluation_count: int
+
+
+class FacultyPeriodAveragesResponse(BaseModel):
+    """Response envelope for the faculty period averages list."""
+
+    status: int
+    message: str
+    data: list[FacultyPeriodAverage]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
 class DepartmentPeriodRangeReportResponse(BaseModel):
     """Response envelope for the department period range report."""
 

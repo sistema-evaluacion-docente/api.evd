@@ -14,12 +14,21 @@ from api.schemas.stats import (
     DepartmentPeriodRangeReport,
     DepartmentPeriodRangeSubject,
     DepartmentPeriodRangeSubjectFiltersDep,
+    FacultyPeriodAverage,
 )
 from api.schemas.user import RoleName
 
 router = EnvelopeRouter(prefix="/stats", tags=["Stats"])
 
-_EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
+_EVAL_ROLES = [
+    RoleName.ADMIN,
+    RoleName.DIRECTOR_DE_DEPARTAMENTO,
+    RoleName.VICERRECTOR_ACADEMICO,
+]
+# Department-scoped aggregate endpoints a DECANO may also see (their own
+# faculty only) — never widen DECANO into `_EVAL_ROLES` itself, since that
+# also gates teacher-level/ranking/distribution/subject endpoints.
+_DEPT_STATS_ROLES = _EVAL_ROLES + [RoleName.DECANO]
 
 
 @router.get(
@@ -29,12 +38,34 @@ _EVAL_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO]
 )
 async def get_department_averages_by_period(
     department_id: Annotated[int | None, Query()] = None,
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_DEPT_STATS_ROLES)),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """Get global department averages by academic period."""
 
-    return await controller.get_department_averages_by_period(department_id)
+    return await controller.get_department_averages_by_period(
+        department_id, current_user
+    )
+
+
+@router.get(
+    "/faculties/{faculty_id}/average",
+    response_model=list[FacultyPeriodAverage],
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_faculty_averages_by_period(
+    faculty_id: int,
+    current_user=Depends(
+        require_roles(
+            [RoleName.ADMIN, RoleName.VICERRECTOR_ACADEMICO, RoleName.DECANO]
+        )
+    ),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """Get a faculty's global average by academic period (aggregate summary
+    across all of its departments). A DECANO only sees their own faculty."""
+
+    return await controller.get_faculty_averages_by_period(faculty_id, current_user)
 
 
 @router.get(
@@ -45,13 +76,13 @@ async def get_department_averages_by_period(
 async def get_department_average_with_previous(
     department_id: int,
     academic_period_id: Annotated[int, Query(..., description="Academic period ID")],
-    _=Depends(require_roles(_EVAL_ROLES)),
+    current_user=Depends(require_roles(_DEPT_STATS_ROLES)),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """Get department average for a period with previous period comparison."""
 
     result = await controller.get_department_average_with_previous(
-        department_id, academic_period_id
+        department_id, academic_period_id, current_user
     )
 
     if not result:
@@ -104,26 +135,20 @@ async def get_department_period_range_report(
     end_period: Annotated[
         str, Query(..., description="Código del periodo final (ej. '2022-1')")
     ],
-    current_user=Depends(require_roles([RoleName.DIRECTOR_DE_DEPARTAMENTO])),
+    department_id: Annotated[int | None, Query()] = None,
+    current_user=Depends(require_roles(_DEPT_STATS_ROLES)),
     controller: StatsController = Depends(get_stats_controller),
 ):
     """
     Get overall/per-period averages and pedagogical dimension averages for
-    the director's own department across a range of academic periods
-    (e.g. from "2020-1" to "2022-1"). Only the department's director can
-    access this report.
+    a department across a range of academic periods (e.g. from "2020-1" to
+    "2022-1"). A DIRECTOR defaults to their own department when
+    `department_id` is omitted; ADMIN/VICERRECTOR_ACADEMICO/DECANO must
+    provide it (a DECANO's must fall inside their own faculty).
     """
 
-    department_id = current_user.get("department_id")
-
-    if not department_id:
-        raise HTTPException(
-            status_code=400,
-            detail="El director no tiene un departamento asignado",
-        )
-
     result = await controller.get_department_period_range_report(
-        department_id, start_period, end_period
+        department_id, start_period, end_period, current_user
     )
 
     if result is None:
