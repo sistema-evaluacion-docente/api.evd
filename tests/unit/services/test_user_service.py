@@ -122,6 +122,41 @@ class TestUserService:
         assert result is None
 
     @pytest.mark.asyncio
+    async def test_get_by_uid_resolves_faculty_for_a_dean(
+        self, service, mock_users_repo, mock_user
+    ):
+        """Test a DECANO's faculty_id/faculty_name get resolved via the
+        deans association, mirroring how a director's department resolves."""
+
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_users_repo.get_user_role_names.return_value = ["DECANO"]
+        mock_users_repo.get_teacher_by_user_id.return_value = None
+        mock_users_repo.get_dean_by_user_id.return_value = MagicMock(faculty_id=3)
+        mock_users_repo.get_faculty_name.return_value = "Ingenierías"
+
+        result = await service.get_by_uid("test-uid-123")
+
+        assert result["faculty_id"] == 3
+        assert result["faculty_name"] == "Ingenierías"
+        assert result["department_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_by_uid_non_dean_has_no_faculty(
+        self, service, mock_users_repo, mock_user
+    ):
+        """Test a non-DECANO role never resolves a faculty."""
+
+        mock_users_repo.get_by_uid.return_value = mock_user
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_users_repo.get_teacher_by_user_id.return_value = None
+
+        result = await service.get_by_uid("test-uid-123")
+
+        assert result["faculty_id"] is None
+        assert result["faculty_name"] is None
+        mock_users_repo.get_dean_by_user_id.assert_not_called()
+
+    @pytest.mark.asyncio
     async def test_get_all(self, service, mock_users_repo, mock_user):
         """Test get_all returns paginated users."""
 

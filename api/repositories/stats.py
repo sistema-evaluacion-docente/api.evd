@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi.params import Depends
 from sqlalchemy import func, or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
@@ -20,6 +20,7 @@ from api.models.evaluation import EvaluationModel
 from api.models.evaluation_question_score import EvaluationQuestionScoreModel
 from api.models.evaluation_score import EvaluationScoreModel
 from api.models.faculty import FacultyModel
+from api.models.improvement_plan import ImprovementPlanModel
 from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
@@ -35,13 +36,14 @@ class StatsRepository:
         self.db = db
 
     async def get_department_averages_by_period(
-        self, department_id: int | None = None
+        self, department_id: int | None = None, faculty_id: int | None = None
     ) -> list[dict]:
         """
         Get global average per department per academic period.
 
         Joins evaluations -> evaluation_scores and groups by
-        (department, academic_period).
+        (department, academic_period). `faculty_id` scopes the result to a
+        single faculty's departments (used for a DECANO's implicit scope).
         """
 
         query = (
@@ -87,6 +89,9 @@ class StatsRepository:
         if department_id is not None:
             query = query.filter(DepartmentModel.id == department_id)
 
+        if faculty_id is not None:
+            query = query.filter(DepartmentModel.faculty_id == faculty_id)
+
         results = query.all()
 
         return [
@@ -105,6 +110,270 @@ class StatsRepository:
             }
             for row in results
         ]
+
+    async def get_faculty_averages_by_period(self, faculty_id: int) -> list[dict]:
+        """
+        Get a faculty's global average per academic period, combining every
+        department that belongs to it. Same single-pass shape as
+        `get_department_averages_by_period`, grouped by faculty instead of
+        department (join `Department -> Faculty`).
+        """
+
+        results = (
+            self.db.query(
+                FacultyModel.id.label("faculty_id"),
+                FacultyModel.name.label("faculty_name"),
+                FacultyModel.code.label("faculty_code"),
+                AcademicPeriodModel.id.label("academic_period_id"),
+                AcademicPeriodModel.code.label("academic_period_code"),
+                AcademicPeriodModel.name.label("academic_period_name"),
+                func.avg(EvaluationScoreModel.overall_average).label("global_average"),
+                func.sum(EvaluationScoreModel.respondent_count).label(
+                    "total_respondents"
+                ),
+                func.count(EvaluationScoreModel.id).label("evaluation_count"),
+            )
+            .join(DepartmentModel, DepartmentModel.faculty_id == FacultyModel.id)
+            .join(
+                EvaluationModel,
+                EvaluationModel.department_id == DepartmentModel.id,
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicPeriodModel,
+                AcademicPeriodModel.id == EvaluationModel.academic_period_id,
+            )
+            .filter(FacultyModel.id == faculty_id)
+            .group_by(
+                FacultyModel.id,
+                FacultyModel.name,
+                FacultyModel.code,
+                AcademicPeriodModel.id,
+                AcademicPeriodModel.code,
+                AcademicPeriodModel.name,
+            )
+            .order_by(AcademicPeriodModel.code.desc())
+            .all()
+        )
+
+        return [
+            {
+                "faculty_id": row.faculty_id,
+                "faculty_name": row.faculty_name,
+                "faculty_code": row.faculty_code,
+                "academic_period_id": row.academic_period_id,
+                "academic_period_code": row.academic_period_code,
+                "academic_period_name": row.academic_period_name,
+                "global_average": (
+                    float(row.global_average) if row.global_average else None
+                ),
+                "total_respondents": row.total_respondents,
+                "evaluation_count": row.evaluation_count,
+            }
+            for row in results
+        ]
+
+    def _get_scoped_departments(
+        self, faculty_id: int | None = None, with_faculty: bool = False
+    ) -> list[DepartmentModel]:
+        """Active departments ordered by name, optionally of one faculty.
+        `with_faculty` loads each department's faculty in the same query."""
+
+        query = self.db.query(DepartmentModel).filter(
+            DepartmentModel.active.isnot(False)
+        )
+
+        if with_faculty:
+            query = query.options(joinedload(DepartmentModel.faculty))
+
+        if faculty_id is not None:
+            query = query.filter(DepartmentModel.faculty_id == faculty_id)
+
+        return query.order_by(DepartmentModel.name).all()
+
+    async def get_department_cases_by_period(
+        self, academic_period_id: int, faculty_id: int | None = None
+    ) -> list[dict] | None:
+        """
+        Get one row per active department (optionally of one faculty) with
+        counts only: high-risk comments, improvement plans started in the
+        period and comments whose risk the director reclassified. Grouped
+        queries, one per metric, never one per department.
+
+        Returns None when the academic period doesn't exist.
+        """
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+
+        if not period:
+            return None
+
+        departments = self._get_scoped_departments(faculty_id, with_faculty=True)
+
+        if not departments:
+            return []
+
+        department_ids = [department.id for department in departments]
+
+        def comment_counts(*extra_filters) -> dict[int, int]:
+            rows = (
+                self.db.query(EvaluationModel.department_id, func.count(CommentModel.id))
+                .select_from(CommentModel)
+                .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+                .filter(
+                    EvaluationModel.academic_period_id == academic_period_id,
+                    EvaluationModel.department_id.in_(department_ids),
+                    EvaluationModel.active.isnot(False),
+                    *extra_filters,
+                )
+                .group_by(EvaluationModel.department_id)
+                .all()
+            )
+
+            return {row[0]: row[1] for row in rows}
+
+        high_risk_rows = (
+            self.db.query(EvaluationModel.department_id, func.count(CommentModel.id))
+            .select_from(CommentModel)
+            .join(RiskLevelModel, RiskLevelModel.id == CommentModel.risk_level)
+            .join(EvaluationModel, EvaluationModel.id == CommentModel.evaluation_id)
+            .filter(
+                RiskLevelModel.name == "ALTO",
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .group_by(EvaluationModel.department_id)
+            .all()
+        )
+        high_risk_by_department = {row[0]: row[1] for row in high_risk_rows}
+
+        reclassified_by_department = comment_counts(
+            CommentModel.risk_level_modified_by_director.is_(True)
+        )
+
+        plan_rows = (
+            self.db.query(
+                ImprovementPlanModel.department_id, func.count(ImprovementPlanModel.id)
+            )
+            .filter(
+                ImprovementPlanModel.origin_period_id == academic_period_id,
+                ImprovementPlanModel.department_id.in_(department_ids),
+            )
+            .group_by(ImprovementPlanModel.department_id)
+            .all()
+        )
+        plans_by_department = {row[0]: row[1] for row in plan_rows}
+
+        return [
+            {
+                "department_id": department.id,
+                "department_name": department.name,
+                "department_code": department.code,
+                "faculty_id": department.faculty_id,
+                "faculty_name": department.faculty.name if department.faculty else None,
+                "high_risk_comments": high_risk_by_department.get(department.id, 0),
+                "plans_total": plans_by_department.get(department.id, 0),
+                "risk_reclassified_by_director": reclassified_by_department.get(
+                    department.id, 0
+                ),
+            }
+            for department in departments
+        ]
+
+    async def get_department_uploads_by_period(
+        self, academic_period_id: int, faculty_id: int | None = None
+    ) -> list[dict] | None:
+        """
+        Get one row per active department (optionally of one faculty) saying
+        whether it uploaded an evaluation in the period, whatever its analysis
+        state. `global_average` only exists once the evaluation was analysed.
+
+        Returns None when the academic period doesn't exist.
+        """
+
+        period = (
+            self.db.query(AcademicPeriodModel)
+            .filter(AcademicPeriodModel.id == academic_period_id)
+            .first()
+        )
+
+        if not period:
+            return None
+
+        departments = self._get_scoped_departments(faculty_id)
+
+        if not departments:
+            return []
+
+        department_ids = [department.id for department in departments]
+
+        evaluations = (
+            self.db.query(EvaluationModel)
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .order_by(EvaluationModel.created_at.desc())
+            .all()
+        )
+
+        evaluations_by_department: dict[int, list] = {}
+
+        for evaluation in evaluations:
+            evaluations_by_department.setdefault(evaluation.department_id, []).append(
+                evaluation
+            )
+
+        average_rows = (
+            self.db.query(
+                EvaluationModel.department_id,
+                func.avg(EvaluationScoreModel.overall_average),
+            )
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.department_id.in_(department_ids),
+                EvaluationModel.active.isnot(False),
+            )
+            .group_by(EvaluationModel.department_id)
+            .all()
+        )
+        average_by_department = {row[0]: row[1] for row in average_rows}
+
+        results = []
+
+        for department in departments:
+            department_evaluations = evaluations_by_department.get(department.id, [])
+            latest = department_evaluations[0] if department_evaluations else None
+            average = average_by_department.get(department.id)
+
+            results.append(
+                {
+                    "department_id": department.id,
+                    "department_name": department.name,
+                    "department_code": department.code,
+                    "evaluation_count": len(department_evaluations),
+                    "has_uploaded": latest is not None,
+                    "last_uploaded_at": latest.created_at if latest else None,
+                    "status": latest.status if latest else None,
+                    "ai_status": latest.ai_status if latest else None,
+                    "global_average": float(average) if average else None,
+                }
+            )
+
+        return results
 
     async def get_department_average_with_previous(
         self, department_id: int, academic_period_id: int

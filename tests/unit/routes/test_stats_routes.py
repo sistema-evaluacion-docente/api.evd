@@ -13,7 +13,12 @@ import pytest
 
 from api.controllers.stats import get_stats_controller
 from api.routes.stats import router
-from tests.unit.routes.conftest import DIRECTOR_USER, DOCENTE_USER
+from tests.unit.routes.conftest import (
+    DECANO_USER,
+    DIRECTOR_USER,
+    DOCENTE_USER,
+    VICERRECTOR_USER,
+)
 
 
 @pytest.fixture
@@ -23,6 +28,9 @@ def controller():
     mock = MagicMock()
     for name in (
         "get_department_averages_by_period",
+        "get_faculty_averages_by_period",
+        "get_department_uploads_by_period",
+        "get_department_cases_by_period",
         "get_department_average_with_previous",
         "get_subject_teachers_comparison",
         "get_department_period_range_report",
@@ -70,6 +78,140 @@ class TestDepartmentAveragesByPeriod:
 
         assert response.status_code == 403
 
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        auth.as_user(DECANO_USER)
+        controller.get_department_averages_by_period.return_value = [{"a": 1}]
+
+        response = client.get("/stats/departments/averages")
+
+        assert response.status_code == 200
+
+    def test_for_a_vicerrector_returns_200(self, client, controller, auth):
+        auth.as_user(VICERRECTOR_USER)
+        controller.get_department_averages_by_period.return_value = [{"a": 1}]
+
+        response = client.get("/stats/departments/averages")
+
+        assert response.status_code == 200
+
+
+class TestDepartmentUploadsByPeriod:
+    """GET /stats/departments/uploads"""
+
+    URL = "/stats/departments/uploads?academic_period_id=1"
+
+    def test_returns_the_result(self, client, controller):
+        controller.get_department_uploads_by_period.return_value = []
+
+        response = client.get(self.URL)
+
+        assert response.status_code == 200
+
+    def test_passes_the_period_and_current_user_to_the_controller(
+        self, client, controller, auth
+    ):
+        auth.as_user(DECANO_USER)
+        controller.get_department_uploads_by_period.return_value = []
+
+        client.get(self.URL)
+
+        controller.get_department_uploads_by_period.assert_awaited_once_with(
+            1, DECANO_USER
+        )
+
+    def test_for_a_vicerrector_returns_200(self, client, controller, auth):
+        auth.as_user(VICERRECTOR_USER)
+        controller.get_department_uploads_by_period.return_value = []
+
+        assert client.get(self.URL).status_code == 200
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        assert client.get(self.URL).status_code == 403
+
+    def test_when_period_missing_returns_404(self, client, controller):
+        controller.get_department_uploads_by_period.return_value = None
+
+        assert client.get(self.URL).status_code == 404
+
+    def test_without_period_returns_422(self, client, controller):
+        assert client.get("/stats/departments/uploads").status_code == 422
+
+
+class TestDepartmentCasesByPeriod:
+    """GET /stats/departments/cases"""
+
+    URL = "/stats/departments/cases?academic_period_id=1"
+
+    def test_returns_the_result(self, client, controller):
+        controller.get_department_cases_by_period.return_value = []
+
+        assert client.get(self.URL).status_code == 200
+
+    def test_passes_the_period_and_current_user_to_the_controller(
+        self, client, controller, auth
+    ):
+        auth.as_user(DECANO_USER)
+        controller.get_department_cases_by_period.return_value = []
+
+        client.get(self.URL)
+
+        controller.get_department_cases_by_period.assert_awaited_once_with(
+            1, DECANO_USER
+        )
+
+    def test_for_a_vicerrector_returns_200(self, client, controller, auth):
+        auth.as_user(VICERRECTOR_USER)
+        controller.get_department_cases_by_period.return_value = []
+
+        assert client.get(self.URL).status_code == 200
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        assert client.get(self.URL).status_code == 403
+
+    def test_for_a_teacher_returns_403(self, client, controller, auth):
+        auth.as_user(DOCENTE_USER)
+
+        assert client.get(self.URL).status_code == 403
+
+    def test_when_period_missing_returns_404(self, client, controller):
+        controller.get_department_cases_by_period.return_value = None
+
+        assert client.get(self.URL).status_code == 404
+
+    def test_without_period_returns_422(self, client, controller):
+        assert client.get("/stats/departments/cases").status_code == 422
+
+
+class TestFacultyAveragesByPeriod:
+    """GET /stats/faculties/{faculty_id}/average"""
+
+    def test_returns_the_result(self, client, controller):
+        controller.get_faculty_averages_by_period.return_value = [{"a": 1}]
+
+        response = client.get("/stats/faculties/3/average")
+
+        assert response.status_code == 200
+        assert response.json()["data"] == [{"a": 1}]
+
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        auth.as_user(DECANO_USER)
+        controller.get_faculty_averages_by_period.return_value = [{"a": 1}]
+
+        response = client.get("/stats/faculties/3/average")
+
+        assert response.status_code == 200
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        response = client.get("/stats/faculties/3/average")
+
+        assert response.status_code == 403
+
 
 class TestDepartmentAverageWithPrevious:
     """GET /stats/departments/{department_id}/average"""
@@ -91,6 +233,16 @@ class TestDepartmentAverageWithPrevious:
         )
 
         assert response.status_code == 404
+
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        auth.as_user(DECANO_USER)
+        controller.get_department_average_with_previous.return_value = {"a": 1}
+
+        response = client.get(
+            "/stats/departments/7/average?academic_period_id=1"
+        )
+
+        assert response.status_code == 200
 
 
 class TestSubjectTeachersComparison:
@@ -153,16 +305,41 @@ class TestDepartmentPeriodRangeReport:
 
         assert response.status_code == 404
 
-    def test_for_a_director_without_department_returns_400(
+    def test_passes_department_id_and_current_user_to_the_controller(
         self, client, controller, auth
     ):
-        auth.as_user({**DIRECTOR_USER, "department_id": None})
+        auth.as_user(DIRECTOR_USER)
+        controller.get_department_period_range_report.return_value = {"a": 1}
+
+        response = client.get(
+            "/stats/departments/period-range"
+            "?start_period=2020-1&end_period=2022-1&department_id=42"
+        )
+
+        assert response.status_code == 200
+        controller.get_department_period_range_report.assert_awaited_once_with(
+            42, "2020-1", "2022-1", DIRECTOR_USER
+        )
+
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        auth.as_user(DECANO_USER)
+        controller.get_department_period_range_report.return_value = {"a": 1}
+
+        response = client.get(
+            "/stats/departments/period-range"
+            "?start_period=2020-1&end_period=2022-1&department_id=11"
+        )
+
+        assert response.status_code == 200
+
+    def test_for_a_teacher_returns_403(self, client, controller, auth):
+        auth.as_user(DOCENTE_USER)
 
         response = client.get(
             "/stats/departments/period-range?start_period=2020-1&end_period=2022-1"
         )
 
-        assert response.status_code == 400
+        assert response.status_code == 403
 
 
 class TestDepartmentPeriodRangeSubjects:

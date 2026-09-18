@@ -20,7 +20,13 @@ from api.schemas.user import RoleName
 router = EnvelopeRouter(prefix="/academic-periods", tags=["Academic Periods"])
 
 _ROLES = [RoleName.ADMIN]
-_READ_ROLES = [RoleName.ADMIN, RoleName.DIRECTOR_DE_DEPARTAMENTO, RoleName.DOCENTE]
+_READ_ROLES = [
+    RoleName.ADMIN,
+    RoleName.DIRECTOR_DE_DEPARTAMENTO,
+    RoleName.DOCENTE,
+    RoleName.DECANO,
+    RoleName.VICERRECTOR_ACADEMICO,
+]
 
 
 @router.get("/", response_model=list[AcademicPeriodOut])

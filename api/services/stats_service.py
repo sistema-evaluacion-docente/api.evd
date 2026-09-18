@@ -3,10 +3,11 @@
 import re
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ValidationError
+from api.exceptions import PermissionDeniedError, ValidationError
 from api.repositories.stats import StatsRepository
 from api.schemas.pagination import build_paginated_response
 from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
+from api.utils.scope import assert_department_in_dean_scope, is_scoped_dean
 
 _PERIOD_CODE_PATTERN = re.compile(r"^\d{4}-[12]$")
 
@@ -18,18 +19,86 @@ class StatsService:
         self.stats_repository = stats_repository
 
     async def get_department_averages_by_period(
-        self, department_id: int | None = None
+        self, department_id: int | None, current_user: dict
     ) -> list[dict]:
-        """Get global average per department per academic period."""
+        """Get global average per department per academic period.
+
+        A DECANO without an explicit `department_id` gets their own
+        faculty's departments combined; with one, it must fall inside
+        their faculty.
+        """
+
+        faculty_id = None
+
+        if is_scoped_dean(current_user):
+            if department_id is not None:
+                assert_department_in_dean_scope(
+                    current_user, self.stats_repository.db, department_id
+                )
+            else:
+                faculty_id = current_user.get("faculty_id")
 
         return await self.stats_repository.get_department_averages_by_period(
-            department_id
+            department_id, faculty_id
         )
 
+    async def get_department_uploads_by_period(
+        self, academic_period_id: int, current_user: dict
+    ) -> list[dict] | None:
+        """Get which departments uploaded evaluations in a period.
+
+        A DECANO only gets the departments of their own faculty.
+        """
+
+        faculty_id = None
+
+        if is_scoped_dean(current_user):
+            faculty_id = current_user.get("faculty_id")
+
+        return await self.stats_repository.get_department_uploads_by_period(
+            academic_period_id, faculty_id
+        )
+
+    async def get_department_cases_by_period(
+        self, academic_period_id: int, current_user: dict
+    ) -> list[dict] | None:
+        """Get per-department case counts for a period.
+
+        A DECANO only gets the departments of their own faculty.
+        """
+
+        faculty_id = None
+
+        if is_scoped_dean(current_user):
+            faculty_id = current_user.get("faculty_id")
+
+        return await self.stats_repository.get_department_cases_by_period(
+            academic_period_id, faculty_id
+        )
+
+    async def get_faculty_averages_by_period(
+        self, faculty_id: int, current_user: dict
+    ) -> list[dict]:
+        """Get a faculty's global average per academic period."""
+
+        if is_scoped_dean(current_user) and faculty_id != current_user.get(
+            "faculty_id"
+        ):
+            raise PermissionDeniedError(
+                "No tienes permiso para ver información de esta facultad"
+            )
+
+        return await self.stats_repository.get_faculty_averages_by_period(faculty_id)
+
     async def get_department_average_with_previous(
-        self, department_id: int, academic_period_id: int
+        self, department_id: int, academic_period_id: int, current_user: dict
     ) -> dict | None:
         """Get department average for a period with previous period comparison."""
+
+        if is_scoped_dean(current_user):
+            assert_department_in_dean_scope(
+                current_user, self.stats_repository.db, department_id
+            )
 
         return await self.stats_repository.get_department_average_with_previous(
             department_id, academic_period_id
@@ -192,19 +261,34 @@ class StatsService:
 
     async def get_department_period_range_report(
         self,
-        department_id: int,
+        department_id: int | None,
         start_period_code: str,
         end_period_code: str,
+        current_user: dict,
     ) -> dict | None:
         """
         Get a department's overall/per-period averages and pedagogical
         dimension averages aggregated across a range of academic periods.
+
+        A DIRECTOR defaults to their own department when `department_id` is
+        omitted; every other role must provide it, and a DECANO's must fall
+        inside their own faculty.
         """
 
         self._validate_period_range(start_period_code, end_period_code)
 
+        resolved_department_id = department_id or current_user.get("department_id")
+
+        if not resolved_department_id:
+            raise ValidationError("Debe indicar un department_id")
+
+        if is_scoped_dean(current_user):
+            assert_department_in_dean_scope(
+                current_user, self.stats_repository.db, resolved_department_id
+            )
+
         return await self.stats_repository.get_department_period_range_report(
-            department_id, start_period_code, end_period_code
+            resolved_department_id, start_period_code, end_period_code
         )
 
     async def get_department_period_range_subjects(

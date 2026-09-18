@@ -11,7 +11,13 @@ import pytest
 
 from api.controllers.academic_periods import get_academic_periods_controller
 from api.routes.academic_periods import router
-from tests.unit.routes.conftest import DIRECTOR_USER, DOCENTE_USER, paginated
+from tests.unit.routes.conftest import (
+    DECANO_USER,
+    DIRECTOR_USER,
+    DOCENTE_USER,
+    VICERRECTOR_USER,
+    paginated,
+)
 
 PERIOD = {
     "id": 1,
@@ -68,9 +74,38 @@ class TestListAcademicPeriods:
 
         assert response.status_code == 200
 
+    def test_is_readable_by_a_decano_and_a_vicerrector(
+        self, client, controller, auth
+    ):
+        """Test the read-only roles can list academic periods."""
+
+        controller.get_all.return_value = paginated([])
+
+        for user in (DECANO_USER, VICERRECTOR_USER):
+            auth.as_user(user)
+
+            assert client.get("/academic-periods/").status_code == 200
+
+    def test_a_decano_cannot_create(self, client, controller, auth):
+        """Test the read-only roles still can't write."""
+
+        auth.as_user(DECANO_USER)
+
+        response = client.post("/academic-periods/", json={"code": "2026-2"})
+
+        assert response.status_code == 403
+
 
 class TestGetAcademicPeriod:
     """GET /academic-periods/{period_id}"""
+
+    def test_is_readable_by_a_decano(self, client, controller, auth):
+        """Test a decano can fetch a single period."""
+
+        auth.as_user(DECANO_USER)
+        controller.get_by_id.return_value = PERIOD
+
+        assert client.get("/academic-periods/1").status_code == 200
 
     def test_when_period_exists_returns_200(self, client, controller):
         """Test an existing period is returned."""

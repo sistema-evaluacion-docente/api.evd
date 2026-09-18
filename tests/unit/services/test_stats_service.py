@@ -28,21 +28,33 @@ class TestStatsService:
 
         return StatsService(mock_stats_repo)
 
+    @pytest.fixture
+    def admin_user(self):
+        """Mock current user dict with an unrestricted role."""
+
+        return {"id": 99, "roles": ["ADMIN"]}
+
     @pytest.mark.asyncio
-    async def test_get_department_averages_by_period(self, service, mock_stats_repo):
+    async def test_get_department_averages_by_period(
+        self, service, mock_stats_repo, admin_user
+    ):
         """Test get_department_averages_by_period delegates to repository."""
 
         mock_stats_repo.get_department_averages_by_period = AsyncMock(
             return_value=[{"department_id": 1, "global_average": 4.5}]
         )
 
-        result = await service.get_department_averages_by_period(department_id=1)
+        result = await service.get_department_averages_by_period(1, admin_user)
 
-        mock_stats_repo.get_department_averages_by_period.assert_awaited_once_with(1)
+        mock_stats_repo.get_department_averages_by_period.assert_awaited_once_with(
+            1, None
+        )
         assert result == [{"department_id": 1, "global_average": 4.5}]
 
     @pytest.mark.asyncio
-    async def test_get_department_average_with_previous(self, service, mock_stats_repo):
+    async def test_get_department_average_with_previous(
+        self, service, mock_stats_repo, admin_user
+    ):
         """Test get_department_average_with_previous delegates to repository."""
 
         mock_stats_repo.get_department_average_with_previous = AsyncMock(
@@ -53,12 +65,151 @@ class TestStatsService:
             }
         )
 
-        result = await service.get_department_average_with_previous(1, 1)
+        result = await service.get_department_average_with_previous(1, 1, admin_user)
 
         mock_stats_repo.get_department_average_with_previous.assert_awaited_once_with(
             1, 1
         )
         assert result["global_average"] == 4.5
+
+    @pytest.mark.asyncio
+    async def test_get_department_averages_by_period_dean_without_department_id_scopes_by_faculty(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO with no explicit department_id gets their own
+        faculty's departments combined (repository's faculty_id filter)."""
+
+        mock_stats_repo.get_department_averages_by_period = AsyncMock(
+            return_value=[{"department_id": 3, "global_average": 4.0}]
+        )
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        result = await service.get_department_averages_by_period(None, dean_user)
+
+        mock_stats_repo.get_department_averages_by_period.assert_awaited_once_with(
+            None, 1
+        )
+        assert result == [{"department_id": 3, "global_average": 4.0}]
+
+    @pytest.mark.asyncio
+    async def test_get_department_averages_by_period_dean_outside_faculty_raises_permission_denied(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO who explicitly asks for a department outside their
+        faculty is rejected."""
+
+        from api.exceptions import PermissionDeniedError
+        from api.models.department import DepartmentModel
+
+        other_department = MagicMock(spec=DepartmentModel)
+        other_department.faculty_id = 99
+
+        mock_stats_repo.db.query.return_value.filter.return_value.first.return_value = (
+            other_department
+        )
+        mock_stats_repo.get_department_averages_by_period = AsyncMock()
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_department_averages_by_period(7, dean_user)
+
+        mock_stats_repo.get_department_averages_by_period.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_uploads_by_period_unscoped_for_admin(
+        self, service, mock_stats_repo, admin_user
+    ):
+        """Test ADMIN/VICERRECTOR see every department (no faculty filter)."""
+
+        mock_stats_repo.get_department_uploads_by_period = AsyncMock(
+            return_value=[{"department_id": 1}]
+        )
+
+        result = await service.get_department_uploads_by_period(3, admin_user)
+
+        mock_stats_repo.get_department_uploads_by_period.assert_awaited_once_with(
+            3, None
+        )
+        assert result == [{"department_id": 1}]
+
+    @pytest.mark.asyncio
+    async def test_get_department_uploads_by_period_scopes_a_dean_to_their_faculty(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO only gets the departments of their own faculty."""
+
+        mock_stats_repo.get_department_uploads_by_period = AsyncMock(return_value=[])
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        await service.get_department_uploads_by_period(3, dean_user)
+
+        mock_stats_repo.get_department_uploads_by_period.assert_awaited_once_with(
+            3, 1
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_by_period_unscoped_for_admin(
+        self, service, mock_stats_repo, admin_user
+    ):
+        """Test ADMIN/VICERRECTOR see every department (no faculty filter)."""
+
+        mock_stats_repo.get_department_cases_by_period = AsyncMock(
+            return_value=[{"department_id": 1}]
+        )
+
+        result = await service.get_department_cases_by_period(3, admin_user)
+
+        mock_stats_repo.get_department_cases_by_period.assert_awaited_once_with(3, None)
+        assert result == [{"department_id": 1}]
+
+    @pytest.mark.asyncio
+    async def test_get_department_cases_by_period_scopes_a_dean_to_their_faculty(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO only gets the departments of their own faculty."""
+
+        mock_stats_repo.get_department_cases_by_period = AsyncMock(return_value=[])
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        await service.get_department_cases_by_period(3, dean_user)
+
+        mock_stats_repo.get_department_cases_by_period.assert_awaited_once_with(3, 1)
+
+    @pytest.mark.asyncio
+    async def test_get_faculty_averages_by_period_delegates_to_repository(
+        self, service, mock_stats_repo, admin_user
+    ):
+        """Test get_faculty_averages_by_period delegates to repository."""
+
+        mock_stats_repo.get_faculty_averages_by_period = AsyncMock(
+            return_value=[{"faculty_id": 1, "global_average": 4.5}]
+        )
+
+        result = await service.get_faculty_averages_by_period(1, admin_user)
+
+        mock_stats_repo.get_faculty_averages_by_period.assert_awaited_once_with(1)
+        assert result == [{"faculty_id": 1, "global_average": 4.5}]
+
+    @pytest.mark.asyncio
+    async def test_get_faculty_averages_by_period_dean_outside_own_faculty_raises_permission_denied(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO asking for a faculty that isn't their own is rejected."""
+
+        from api.exceptions import PermissionDeniedError
+
+        mock_stats_repo.get_faculty_averages_by_period = AsyncMock()
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_faculty_averages_by_period(2, dean_user)
+
+        mock_stats_repo.get_faculty_averages_by_period.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_teacher_performance_ranking(self, service, mock_stats_repo):
@@ -285,7 +436,7 @@ class TestStatsService:
 
     @pytest.mark.asyncio
     async def test_get_department_period_range_report_with_valid_range_delegates_to_repository(
-        self, service, mock_stats_repo
+        self, service, mock_stats_repo, admin_user
     ):
         """Test get_department_period_range_report delegates to repository when
         the period codes are well-formed and in order."""
@@ -297,7 +448,9 @@ class TestStatsService:
             }
         )
 
-        result = await service.get_department_period_range_report(1, "2020-1", "2022-1")
+        result = await service.get_department_period_range_report(
+            1, "2020-1", "2022-1", admin_user
+        )
 
         mock_stats_repo.get_department_period_range_report.assert_awaited_once_with(
             1, "2020-1", "2022-1"
@@ -306,7 +459,7 @@ class TestStatsService:
 
     @pytest.mark.asyncio
     async def test_get_department_period_range_report_with_malformed_code_raises_validation_error(
-        self, service, mock_stats_repo
+        self, service, mock_stats_repo, admin_user
     ):
         """Test get_department_period_range_report rejects period codes that
         don't match the 'AAAA-N' format."""
@@ -314,13 +467,15 @@ class TestStatsService:
         mock_stats_repo.get_department_period_range_report = AsyncMock()
 
         with pytest.raises(ValidationError):
-            await service.get_department_period_range_report(1, "2020-I", "2022-1")
+            await service.get_department_period_range_report(
+                1, "2020-I", "2022-1", admin_user
+            )
 
         mock_stats_repo.get_department_period_range_report.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_get_department_period_range_report_with_inverted_range_raises_validation_error(
-        self, service, mock_stats_repo
+        self, service, mock_stats_repo, admin_user
     ):
         """Test get_department_period_range_report rejects a start period
         that is after the end period."""
@@ -328,7 +483,78 @@ class TestStatsService:
         mock_stats_repo.get_department_period_range_report = AsyncMock()
 
         with pytest.raises(ValidationError):
-            await service.get_department_period_range_report(1, "2022-1", "2020-1")
+            await service.get_department_period_range_report(
+                1, "2022-1", "2020-1", admin_user
+            )
+
+        mock_stats_repo.get_department_period_range_report.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_without_department_id_raises_validation_error(
+        self, service, mock_stats_repo, admin_user
+    ):
+        """Test get_department_period_range_report rejects a missing
+        department_id when current_user has none to fall back on either."""
+
+        mock_stats_repo.get_department_period_range_report = AsyncMock()
+
+        with pytest.raises(ValidationError):
+            await service.get_department_period_range_report(
+                None, "2020-1", "2022-1", admin_user
+            )
+
+        mock_stats_repo.get_department_period_range_report.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_director_defaults_to_own_department(
+        self, service, mock_stats_repo
+    ):
+        """Test a DIRECTOR without an explicit department_id falls back to
+        their own department, resolved from current_user."""
+
+        mock_stats_repo.get_department_period_range_report = AsyncMock(
+            return_value={"department_id": 5, "dimensions": []}
+        )
+
+        director_user = {
+            "id": 1,
+            "roles": ["DIRECTOR DE DEPARTAMENTO"],
+            "department_id": 5,
+        }
+
+        result = await service.get_department_period_range_report(
+            None, "2020-1", "2022-1", director_user
+        )
+
+        mock_stats_repo.get_department_period_range_report.assert_awaited_once_with(
+            5, "2020-1", "2022-1"
+        )
+        assert result["department_id"] == 5
+
+    @pytest.mark.asyncio
+    async def test_get_department_period_range_report_dean_outside_faculty_raises_permission_denied(
+        self, service, mock_stats_repo
+    ):
+        """Test a DECANO asking for a department outside their faculty is
+        rejected before the repository query runs."""
+
+        from api.exceptions import PermissionDeniedError
+        from api.models.department import DepartmentModel
+
+        other_department = MagicMock(spec=DepartmentModel)
+        other_department.faculty_id = 99
+
+        mock_stats_repo.db.query.return_value.filter.return_value.first.return_value = (
+            other_department
+        )
+        mock_stats_repo.get_department_period_range_report = AsyncMock()
+
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_department_period_range_report(
+                7, "2020-1", "2022-1", dean_user
+            )
 
         mock_stats_repo.get_department_period_range_report.assert_not_awaited()
 

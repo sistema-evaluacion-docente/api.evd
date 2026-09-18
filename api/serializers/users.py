@@ -8,6 +8,8 @@ def user_to_dict(
     roles: list[str] | None = None,
     department_id: int | None = None,
     department_name: str | None = None,
+    faculty_id: int | None = None,
+    faculty_name: str | None = None,
 ) -> dict:
     """Convert UserModel instance to dictionary."""
 
@@ -17,6 +19,8 @@ def user_to_dict(
         "email": user.email,
         "department_id": department_id,
         "department_name": department_name,
+        "faculty_id": faculty_id,
+        "faculty_name": faculty_name,
         "name": user.name,
         "active": user.active,
         "avatar_url": user.avatar_url,

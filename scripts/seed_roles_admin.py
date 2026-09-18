@@ -68,6 +68,14 @@ DEFAULT_ROLES: list[DefaultRole] = [
     DefaultRole(
         name=RoleName.ADMIN.value, description="Administracion general del sistema"
     ),
+    DefaultRole(
+        name=RoleName.DECANO.value,
+        description="Solo lectura: estadisticas agregadas de su facultad",
+    ),
+    DefaultRole(
+        name=RoleName.VICERRECTOR_ACADEMICO.value,
+        description="Solo lectura: facultades y departamentos, alcance global",
+    ),
 ]
 
 

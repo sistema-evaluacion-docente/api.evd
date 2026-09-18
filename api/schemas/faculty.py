@@ -25,6 +25,14 @@ class FacultyUpdate(BaseModel):
     active: Optional[bool] = None
 
 
+class DeanSummary(BaseModel):
+    """Lightweight dean info embedded in FacultyOut."""
+
+    id: int
+    name: Optional[str] = None
+    avatar_url: Optional[str] = None
+
+
 class FacultyOut(BaseModel):
     """Schema for outputting a faculty."""
 
@@ -33,6 +41,7 @@ class FacultyOut(BaseModel):
     code: str
     active: Optional[bool]
     department_count: int = 0
+    dean: Optional[DeanSummary] = None
     created_at: datetime
     updated_at: datetime
 

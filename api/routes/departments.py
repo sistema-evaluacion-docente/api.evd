@@ -26,29 +26,30 @@ from api.schemas.user import RoleName
 router = EnvelopeRouter(prefix="/departments", tags=["Departments"])
 
 _ROLES = [RoleName.ADMIN]
+_READ_ROLES = [RoleName.ADMIN, RoleName.VICERRECTOR_ACADEMICO, RoleName.DECANO]
 
 
 @router.get("/", response_model=list[DepartmentOut])
 async def get_all_departments(
     filters: DepartmentFiltersDep,
     pagination: PaginationDep,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_READ_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
     """List all departments with pagination and filters."""
 
-    return await controller.get_all(filters, pagination)
+    return await controller.get_all(filters, pagination, current_user)
 
 
 @router.get("/{department_id}", response_model=DepartmentOut)
 async def get_department_by_id(
     department_id: int,
-    _=Depends(require_roles(_ROLES)),
+    current_user=Depends(require_roles(_READ_ROLES)),
     controller: DepartmentsController = Depends(get_departments_controller),
 ):
     """Get a department by ID."""
 
-    department = await controller.get_by_id(department_id)
+    department = await controller.get_by_id(department_id, current_user)
 
     if not department:
         raise HTTPException(status_code=404, detail="Departmento no encontrado")

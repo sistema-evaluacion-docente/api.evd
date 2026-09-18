@@ -50,9 +50,10 @@ class TestDepartmentsController:
 
         filters = DepartmentFilters()
         pagination = PaginationParams(page=1, limit=10)
-        result = await controller.get_all(filters, pagination)
+        current_user = {"id": 99, "roles": ["ADMIN"]}
+        result = await controller.get_all(filters, pagination, current_user)
 
-        mock_service.get_all.assert_called_once_with(filters, pagination)
+        mock_service.get_all.assert_called_once_with(filters, pagination, current_user)
         assert result["total"] == 0
 
     @pytest.mark.asyncio
@@ -61,9 +62,10 @@ class TestDepartmentsController:
 
         mock_service.get_by_id.return_value = {"id": 1, "code": "CS", "name": "CS"}
 
-        result = await controller.get_by_id(1)
+        current_user = {"id": 99, "roles": ["ADMIN"]}
+        result = await controller.get_by_id(1, current_user)
 
-        mock_service.get_by_id.assert_called_once_with(1)
+        mock_service.get_by_id.assert_called_once_with(1, current_user)
         assert result["id"] == 1
 
     @pytest.mark.asyncio

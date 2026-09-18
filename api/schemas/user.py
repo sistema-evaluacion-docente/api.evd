@@ -17,6 +17,8 @@ class RoleName(str, Enum):
     DOCENTE = "DOCENTE"
     DIRECTOR_DE_DEPARTAMENTO = "DIRECTOR DE DEPARTAMENTO"
     ADMIN = "ADMIN"
+    DECANO = "DECANO"
+    VICERRECTOR_ACADEMICO = "VICERRECTOR ACADEMICO"
 
 
 class UserCreate(BaseModel):
@@ -73,6 +75,8 @@ class UserOut(BaseModel):
     email: str
     department_id: Optional[int]
     department_name: Optional[str] = None
+    faculty_id: Optional[int] = None
+    faculty_name: Optional[str] = None
     name: Optional[str]
     active: Optional[bool]
     avatar_url: Optional[str]

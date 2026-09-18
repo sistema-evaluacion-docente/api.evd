@@ -45,6 +45,20 @@ class FacultiesController:
 
         return await self.service.delete(faculty_id, current_user)
 
+    async def assign_dean(
+        self, faculty_id: int, user_id: int, current_user: dict
+    ) -> dict:
+        """Assign a dean to a faculty."""
+
+        return await self.service.assign_dean(faculty_id, user_id, current_user)
+
+    async def unassign_dean(
+        self, faculty_id: int, current_user: dict
+    ) -> dict | None:
+        """Unassign the dean from a faculty."""
+
+        return await self.service.unassign_dean(faculty_id, current_user)
+
 
 def get_faculties_controller(
     service: FacultyService = Depends(get_faculty_service),

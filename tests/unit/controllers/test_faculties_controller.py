@@ -28,6 +28,8 @@ class TestFacultiesController:
         service.create = AsyncMock()
         service.update = AsyncMock()
         service.delete = AsyncMock()
+        service.assign_dean = AsyncMock()
+        service.unassign_dean = AsyncMock()
         return service
 
     @pytest.fixture
@@ -110,4 +112,28 @@ class TestFacultiesController:
         result = await controller.delete(1, current_user)
 
         mock_service.delete.assert_called_once_with(1, current_user)
+        assert result is not None
+
+    @pytest.mark.asyncio
+    async def test_assign_dean_delegates_to_service(self, controller, mock_service):
+        """Test assign_dean delegates to service."""
+
+        current_user = {"id": 99}
+        mock_service.assign_dean.return_value = {"id": 1, "user_id": 10, "faculty_id": 1}
+
+        result = await controller.assign_dean(1, 10, current_user)
+
+        mock_service.assign_dean.assert_called_once_with(1, 10, current_user)
+        assert result["user_id"] == 10
+
+    @pytest.mark.asyncio
+    async def test_unassign_dean_delegates_to_service(self, controller, mock_service):
+        """Test unassign_dean delegates to service."""
+
+        current_user = {"id": 99}
+        mock_service.unassign_dean.return_value = {"id": 1}
+
+        result = await controller.unassign_dean(1, current_user)
+
+        mock_service.unassign_dean.assert_called_once_with(1, current_user)
         assert result is not None

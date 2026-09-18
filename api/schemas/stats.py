@@ -550,6 +550,61 @@ class DepartmentPeriodRangeReport(BaseModel):
     comments_pedagogical_category_counts: dict[str, int]
 
 
+class FacultyPeriodAverage(BaseModel):
+    """A faculty's global average for a single academic period, combining
+    every department that belongs to it."""
+
+    faculty_id: int
+    faculty_name: str
+    faculty_code: str
+    academic_period_id: int
+    academic_period_code: str
+    academic_period_name: Optional[str]
+    global_average: Optional[float]
+    total_respondents: int
+    evaluation_count: int
+
+
+class DepartmentUploadStatus(BaseModel):
+    """Whether a department uploaded an evaluation in a period, regardless of
+    its analysis state. `global_average` is null until it was analysed."""
+
+    department_id: int
+    department_name: str
+    department_code: str
+    evaluation_count: int
+    has_uploaded: bool
+    last_uploaded_at: Optional[datetime]
+    status: Optional[str]
+    ai_status: Optional[str]
+    global_average: Optional[float]
+
+
+class DepartmentCaseSummary(BaseModel):
+    """Per-department counts of cases in a period. Counts only — never ids,
+    comment text, teachers or plan details."""
+
+    department_id: int
+    department_name: str
+    department_code: str
+    faculty_id: Optional[int]
+    faculty_name: Optional[str]
+    high_risk_comments: int
+    plans_total: int
+    risk_reclassified_by_director: int
+
+
+class FacultyPeriodAveragesResponse(BaseModel):
+    """Response envelope for the faculty period averages list."""
+
+    status: int
+    message: str
+    data: list[FacultyPeriodAverage]
+    error: Optional[str] = None
+    timestamp: datetime
+    path: str
+
+
 class DepartmentPeriodRangeReportResponse(BaseModel):
     """Response envelope for the department period range report."""
 
