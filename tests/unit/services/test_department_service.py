@@ -74,7 +74,7 @@ class TestDepartmentService:
 
     @pytest.mark.asyncio
     async def test_get_all_returns_paginated_departments(
-        self, service, mock_departments_repo, mock_department
+        self, service, mock_departments_repo, mock_department, current_user
     ):
         """Test get_all returns paginated departments."""
 
@@ -85,7 +85,7 @@ class TestDepartmentService:
         filters = DepartmentFilters()
         pagination = PaginationParams(page=1, limit=10)
 
-        result = await service.get_all(filters, pagination)
+        result = await service.get_all(filters, pagination, current_user)
 
         assert result["total"] == 1
         assert result["page"] == 1
@@ -95,7 +95,7 @@ class TestDepartmentService:
 
     @pytest.mark.asyncio
     async def test_get_all_with_director_and_teachers(
-        self, service, mock_departments_repo, mock_department
+        self, service, mock_departments_repo, mock_department, current_user
     ):
         """Test get_all includes director and teacher_count."""
 
@@ -108,14 +108,14 @@ class TestDepartmentService:
         filters = DepartmentFilters()
         pagination = PaginationParams(page=1, limit=10)
 
-        result = await service.get_all(filters, pagination)
+        result = await service.get_all(filters, pagination, current_user)
 
         assert result["items"][0]["director"].id == 10
         assert result["items"][0]["teacher_count"] == 5
 
     @pytest.mark.asyncio
     async def test_get_by_id_found(
-        self, service, mock_departments_repo, mock_department
+        self, service, mock_departments_repo, mock_department, current_user
     ):
         """Test get_by_id returns department dict when found."""
 
@@ -123,21 +123,76 @@ class TestDepartmentService:
         mock_departments_repo.get_director_by_department_id.return_value = None
         mock_departments_repo.count_teachers_by_department_ids.return_value = {}
 
-        result = await service.get_by_id(1)
+        result = await service.get_by_id(1, current_user)
 
         assert result is not None
         assert result["id"] == 1
         assert result["teacher_count"] == 0
 
     @pytest.mark.asyncio
-    async def test_get_by_id_not_found(self, service, mock_departments_repo):
+    async def test_get_by_id_not_found(
+        self, service, mock_departments_repo, current_user
+    ):
         """Test get_by_id returns None when not found."""
 
         mock_departments_repo.get_by_id.return_value = None
 
-        result = await service.get_by_id(999)
+        result = await service.get_by_id(999, current_user)
 
         assert result is None
+
+    @pytest.mark.asyncio
+    async def test_get_all_forces_faculty_id_for_a_dean(
+        self, service, mock_departments_repo, mock_department
+    ):
+        """Test a DECANO always gets their own faculty's departments,
+        regardless of what filters.faculty_id was requested with."""
+
+        mock_departments_repo.search.return_value = ([mock_department], 1)
+        mock_departments_repo.get_directors_by_department_ids.return_value = {}
+        mock_departments_repo.count_teachers_by_department_ids.return_value = {}
+
+        filters = DepartmentFilters(faculty_id=99)
+        pagination = PaginationParams(page=1, limit=10)
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        await service.get_all(filters, pagination, dean_user)
+
+        assert filters.faculty_id == 1
+        mock_departments_repo.search.assert_called_once_with(filters, pagination)
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_dean_outside_faculty_raises_permission_denied(
+        self, service, mock_departments_repo, mock_department
+    ):
+        """Test a DECANO asking for a department outside their faculty is
+        rejected with 403, not a silent 404."""
+
+        from api.exceptions import PermissionDeniedError
+
+        mock_department.faculty_id = 99
+        mock_departments_repo.get_by_id.return_value = mock_department
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_id(1, dean_user)
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_dean_inside_faculty_succeeds(
+        self, service, mock_departments_repo, mock_department
+    ):
+        """Test a DECANO can see a department that belongs to their faculty."""
+
+        mock_department.faculty_id = 1
+        mock_departments_repo.get_by_id.return_value = mock_department
+        mock_departments_repo.get_director_by_department_id.return_value = None
+        mock_departments_repo.count_teachers_by_department_ids.return_value = {}
+        dean_user = {"id": 2, "roles": ["DECANO"], "faculty_id": 1}
+
+        result = await service.get_by_id(1, dean_user)
+
+        assert result is not None
+        assert result["id"] == 1
 
     @pytest.mark.asyncio
     async def test_create_department_success(

@@ -1,7 +1,11 @@
 """Service for department-related business operations."""
 
 from api.core.pagination import PaginationParams
-from api.exceptions import ResourceAlreadyExistsError, ValidationError
+from api.exceptions import (
+    PermissionDeniedError,
+    ResourceAlreadyExistsError,
+    ValidationError,
+)
 from api.repositories.departments import DepartmentsRepository
 from api.repositories.users import UsersRepository
 from api.schemas.department import (
@@ -13,6 +17,7 @@ from api.schemas.department import (
 from api.schemas.pagination import build_paginated_response
 from api.serializers.departments import department_to_dict
 from api.services.audit_service import AuditService
+from api.utils.scope import is_scoped_dean as _is_scoped_dean
 
 
 class DepartmentService:
@@ -32,8 +37,16 @@ class DepartmentService:
         self,
         filters: DepartmentFilters,
         pagination: PaginationParams,
+        current_user: dict,
     ) -> dict:
-        """Retrieve all departments based on filters and pagination."""
+        """Retrieve all departments based on filters and pagination.
+
+        A DECANO always gets their own faculty's departments, regardless of
+        what `filters.faculty_id` was requested with.
+        """
+
+        if _is_scoped_dean(current_user):
+            filters.faculty_id = current_user.get("faculty_id")
 
         departments, total = self.departments_repository.search(filters, pagination)
 
@@ -57,13 +70,25 @@ class DepartmentService:
 
         return build_paginated_response(items, total, pagination)
 
-    async def get_by_id(self, department_id: int) -> dict | None:
-        """Retrieve a department by ID."""
+    async def get_by_id(self, department_id: int, current_user: dict) -> dict | None:
+        """Retrieve a department by ID.
+
+        Raises 403 (rather than 404) if a DECANO asks for a department
+        outside their faculty — same "reject, never silently ignore"
+        criterion `SettingService` already applies to out-of-scope access.
+        """
 
         department = self.departments_repository.get_by_id(department_id)
 
         if not department:
             return None
+
+        if _is_scoped_dean(current_user) and department.faculty_id != current_user.get(
+            "faculty_id"
+        ):
+            raise PermissionDeniedError(
+                "No tienes permiso para ver este departamento"
+            )
 
         data = department_to_dict(department)
         director_info = self.departments_repository.get_director_by_department_id(

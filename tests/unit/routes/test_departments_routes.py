@@ -12,7 +12,12 @@ import pytest
 from api.controllers.departments import get_departments_controller
 from api.controllers.directors import get_directors_controller
 from api.routes.departments import router
-from tests.unit.routes.conftest import DIRECTOR_USER, paginated
+from tests.unit.routes.conftest import (
+    DECANO_USER,
+    DIRECTOR_USER,
+    VICERRECTOR_USER,
+    paginated,
+)
 
 DEPARTMENT = {
     "id": 7,
@@ -94,6 +99,26 @@ class TestListDepartments:
 
         assert response.status_code == 403
 
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        """Test a DECANO can list departments (service scopes by faculty)."""
+
+        auth.as_user(DECANO_USER)
+        controller.get_all.return_value = paginated([DEPARTMENT])
+
+        response = client.get("/departments/")
+
+        assert response.status_code == 200
+
+    def test_for_a_vicerrector_returns_200(self, client, controller, auth):
+        """Test a VICERRECTOR_ACADEMICO can list every department."""
+
+        auth.as_user(VICERRECTOR_USER)
+        controller.get_all.return_value = paginated([DEPARTMENT])
+
+        response = client.get("/departments/")
+
+        assert response.status_code == 200
+
 
 class TestGetDepartment:
     """GET /departments/{department_id}"""
@@ -115,6 +140,25 @@ class TestGetDepartment:
         response = client.get("/departments/999")
 
         assert response.status_code == 404
+
+    def test_for_a_decano_returns_200(self, client, controller, auth):
+        """Test a DECANO can fetch a single department by id."""
+
+        auth.as_user(DECANO_USER)
+        controller.get_by_id.return_value = DEPARTMENT
+
+        response = client.get("/departments/7")
+
+        assert response.status_code == 200
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        """Test a director cannot fetch a department by id."""
+
+        auth.as_user(DIRECTOR_USER)
+
+        response = client.get("/departments/7")
+
+        assert response.status_code == 403
 
 
 class TestCreateDepartment:

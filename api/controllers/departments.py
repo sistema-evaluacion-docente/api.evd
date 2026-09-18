@@ -22,15 +22,16 @@ class DepartmentsController:
         self,
         filters: DepartmentFilters,
         pagination: PaginationParams,
+        current_user: dict,
     ):
         """Retrieve all departments based on filters and pagination."""
 
-        return await self.service.get_all(filters, pagination)
+        return await self.service.get_all(filters, pagination, current_user)
 
-    async def get_by_id(self, department_id: int):
+    async def get_by_id(self, department_id: int, current_user: dict):
         """Retrieve a department by ID."""
 
-        return await self.service.get_by_id(department_id)
+        return await self.service.get_by_id(department_id, current_user)
 
     async def create(self, data: DepartmentCreate, current_user: dict):
         """Create a new department."""
