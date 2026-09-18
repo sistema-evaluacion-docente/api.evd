@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from api.core.pagination import PaginationParams
+from api.models.dean import DeanModel
 from api.models.faculty import FacultyModel
 from api.repositories.base import BaseRepository
 from api.repositories.faculties import FacultiesRepository
@@ -207,3 +208,146 @@ class TestFacultiesRepository:
 
         mock_db.delete.assert_called_once_with(mock_faculty_model)
         mock_db.commit.assert_called_once()
+
+    @pytest.fixture
+    def mock_dean_model(self):
+        """Mock DeanModel instance."""
+
+        dean = MagicMock(spec=DeanModel)
+        dean.id = 1
+        dean.user_id = 10
+        dean.faculty_id = 1
+        dean.active = True
+        return dean
+
+    def test_get_dean_by_faculty_id_found(self, repo, mock_db, mock_dean_model):
+        """Test get_dean_by_faculty_id returns dean when found."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_dean_model
+        )
+
+        result = repo.get_dean_by_faculty_id(1)
+
+        assert result == mock_dean_model
+
+    def test_get_dean_by_faculty_id_not_found(self, repo, mock_db):
+        """Test get_dean_by_faculty_id returns None when not found."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        result = repo.get_dean_by_faculty_id(999)
+
+        assert result is None
+
+    def test_get_dean_by_user_id_found(self, repo, mock_db, mock_dean_model):
+        """Test get_dean_by_user_id returns dean when found."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_dean_model
+        )
+
+        result = repo.get_dean_by_user_id(10)
+
+        assert result == mock_dean_model
+
+    def test_assign_dean_success(self, repo, mock_db):
+        """Test assign_dean creates a new dean when none exists."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value.first.side_effect = [None, None]
+
+        result = repo.assign_dean(10, 1)
+
+        mock_db.add.assert_called_once()
+        mock_db.commit.assert_called_once()
+        assert result is not None
+
+    def test_assign_dean_replaces_existing_faculty_dean(
+        self, repo, mock_db, mock_dean_model
+    ):
+        """Test assign_dean replaces the existing dean for that faculty."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value.first.side_effect = [None, mock_dean_model]
+
+        repo.assign_dean(20, 1)
+
+        assert mock_dean_model.user_id == 20
+        mock_db.commit.assert_called_once()
+
+    def test_assign_dean_user_already_dean_of_other_faculty_raises(
+        self, repo, mock_db, mock_dean_model
+    ):
+        """Test assign_dean raises when the user is already dean elsewhere."""
+
+        mock_dean_model.faculty_id = 2
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value.first.return_value = mock_dean_model
+
+        with pytest.raises(ValueError) as exc_info:
+            repo.assign_dean(10, 1)
+
+        assert "Este usuario ya es decano de otra facultad" in str(exc_info.value)
+
+    def test_delete_dean(self, repo, mock_db, mock_dean_model):
+        """Test delete_dean deletes and commits."""
+
+        repo.delete_dean(mock_dean_model)
+
+        mock_db.delete.assert_called_once_with(mock_dean_model)
+        mock_db.commit.assert_called_once()
+
+    def test_get_dean_with_user_by_faculty_id_found(self, repo, mock_db):
+        """Test get_dean_with_user_by_faculty_id returns user info when found."""
+
+        row = MagicMock(id=10, avatar_url=None)
+        row.name = "Decano"
+        mock_db.query.return_value.select_from.return_value.join.return_value.filter.return_value.first.return_value = (
+            row
+        )
+
+        result = repo.get_dean_with_user_by_faculty_id(1)
+
+        assert result == {"id": 10, "name": "Decano", "avatar_url": None}
+
+    def test_get_dean_with_user_by_faculty_id_not_found(self, repo, mock_db):
+        """Test get_dean_with_user_by_faculty_id returns None when no dean."""
+
+        mock_db.query.return_value.select_from.return_value.join.return_value.filter.return_value.first.return_value = (
+            None
+        )
+
+        result = repo.get_dean_with_user_by_faculty_id(999)
+
+        assert result is None
+
+    def test_get_deans_by_faculty_ids_empty_input(self, repo, mock_db):
+        """Test get_deans_by_faculty_ids returns empty dict for empty input."""
+
+        result = repo.get_deans_by_faculty_ids([])
+
+        assert result == {}
+
+    def test_get_deans_by_faculty_ids(self, repo, mock_db):
+        """Test get_deans_by_faculty_ids returns a dict keyed by faculty_id."""
+
+        row1 = MagicMock(id=10, avatar_url=None, faculty_id=1)
+        row1.name = "Decano Uno"
+        row2 = MagicMock(id=20, avatar_url=None, faculty_id=2)
+        row2.name = "Decano Dos"
+        mock_db.query.return_value.select_from.return_value.join.return_value.filter.return_value.all.return_value = [
+            row1,
+            row2,
+        ]
+
+        result = repo.get_deans_by_faculty_ids([1, 2])
+
+        assert result == {
+            1: {"id": 10, "name": "Decano Uno", "avatar_url": None},
+            2: {"id": 20, "name": "Decano Dos", "avatar_url": None},
+        }

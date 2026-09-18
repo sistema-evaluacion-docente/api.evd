@@ -55,6 +55,26 @@ DOCENTE_USER = {
     "department_id": None,
 }
 
+DECANO_USER = {
+    "id": 4,
+    "uid": "decano-uid",
+    "email": "decano@ufps.edu.co",
+    "name": "Decano",
+    "roles": [RoleName.DECANO.value],
+    "department_id": None,
+    "faculty_id": 3,
+}
+
+VICERRECTOR_USER = {
+    "id": 5,
+    "uid": "vicerrector-uid",
+    "email": "vicerrector@ufps.edu.co",
+    "name": "Vicerrector",
+    "roles": [RoleName.VICERRECTOR_ACADEMICO.value],
+    "department_id": None,
+    "faculty_id": None,
+}
+
 
 class FakeAuth:
     """Controls what the auth dependencies resolve to during a test.

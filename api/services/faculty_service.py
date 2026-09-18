@@ -3,13 +3,17 @@
 from api.core.pagination import PaginationParams
 from api.exceptions import (
     ResourceAlreadyExistsError,
+    ResourceNotFoundError,
     ValidationError,
 )
 from api.repositories.faculties import FacultiesRepository
 from api.repositories.users import UsersRepository
-from api.schemas.faculty import FacultyCreate, FacultyFilters, FacultyUpdate
+from api.schemas.faculty import DeanSummary, FacultyCreate, FacultyFilters, FacultyUpdate
+from api.schemas.user import RoleName, UserUpdate
+from api.serializers.deans import dean_to_dict
 from api.serializers.faculties import faculty_to_dict
 from api.services.audit_service import AuditService
+from api.services.user_service import UserService
 
 
 class FacultyService:
@@ -20,10 +24,12 @@ class FacultyService:
         faculties_repository: FacultiesRepository,
         users_repository: UsersRepository,
         audit_service: AuditService,
+        user_service: UserService,
     ):
         self.faculties_repository = faculties_repository
         self.users_repository = users_repository
         self.audit_service = audit_service
+        self.user_service = user_service
 
     async def get_all(
         self, filters: FacultyFilters, pagination: PaginationParams
@@ -34,11 +40,16 @@ class FacultyService:
 
         faculty_ids = [f.id for f in faculties]
         dept_counts = self.faculties_repository.get_department_counts(faculty_ids)
+        deans_by_faculty = self.faculties_repository.get_deans_by_faculty_ids(
+            faculty_ids
+        )
 
         items = []
         for faculty in faculties:
             data = faculty_to_dict(faculty)
             data["department_count"] = dept_counts.get(faculty.id, 0)
+            dean_info = deans_by_faculty.get(faculty.id)
+            data["dean"] = DeanSummary(**dean_info) if dean_info else None
             items.append(data)
 
         return {
@@ -59,6 +70,10 @@ class FacultyService:
         data = faculty_to_dict(faculty)
         dept_counts = self.faculties_repository.get_department_counts([faculty.id])
         data["department_count"] = dept_counts.get(faculty.id, 0)
+        dean_info = self.faculties_repository.get_dean_with_user_by_faculty_id(
+            faculty_id
+        )
+        data["dean"] = DeanSummary(**dean_info) if dean_info else None
         return data
 
     async def create(self, data: FacultyCreate, current_user: dict) -> dict:
@@ -80,6 +95,7 @@ class FacultyService:
 
         result = faculty_to_dict(faculty)
         result["department_count"] = 0
+        result["dean"] = None
         return result
 
     async def update(
@@ -126,6 +142,10 @@ class FacultyService:
         result = faculty_to_dict(updated)
         dept_counts = self.faculties_repository.get_department_counts([faculty.id])
         result["department_count"] = dept_counts.get(faculty.id, 0)
+        dean_info = self.faculties_repository.get_dean_with_user_by_faculty_id(
+            faculty_id
+        )
+        result["dean"] = DeanSummary(**dean_info) if dean_info else None
         return result
 
     async def delete(self, faculty_id: int, current_user: dict) -> dict | None:
@@ -152,3 +172,101 @@ class FacultyService:
         )
 
         return faculty_data
+
+    async def assign_dean(
+        self, faculty_id: int, user_id: int, current_user: dict
+    ) -> dict:
+        """Assign a user as dean of a faculty, replacing any existing dean."""
+
+        faculty = self.faculties_repository.get(faculty_id)
+
+        if not faculty:
+            raise ResourceNotFoundError("Faculty", faculty_id)
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            raise ResourceNotFoundError("User", user_id)
+
+        current_roles = self.users_repository.get_user_role_names(user.id)
+
+        if RoleName.DECANO.value not in current_roles:
+            new_roles = current_roles + [RoleName.DECANO.value]
+            await self.user_service.update_user(user.uid, UserUpdate(roles=new_roles))
+
+        dean = self.faculties_repository.assign_dean(user_id, faculty_id)
+
+        await self.audit_service.log(
+            action="ASSIGN",
+            entity_name="deans",
+            entity_id=dean.id,
+            actor_id=current_user["id"],
+            description=f"Se asignó el usuario {user_id} como decano de la facultad {faculty.name}",
+        )
+
+        return dean_to_dict(dean)
+
+    async def unassign_dean(
+        self, faculty_id: int, current_user: dict
+    ) -> dict | None:
+        """Remove the dean assignment from a faculty.
+
+        Deletes the `deans` row outright rather than deactivating it, same
+        reasoning as DirectorService.unassign_director: an inactive row
+        still pointing at a faculty would misleadingly read as "still dean,
+        just inactive".
+        """
+
+        faculty = self.faculties_repository.get(faculty_id)
+
+        if not faculty:
+            raise ResourceNotFoundError("Faculty", faculty_id)
+
+        dean = self.faculties_repository.get_dean_by_faculty_id(faculty_id)
+
+        if not dean:
+            return None
+
+        dean_dict = dean_to_dict(dean)
+        user_id = dean.user_id
+
+        self.faculties_repository.delete_dean(dean)
+
+        await self._retire_dean_role(user_id)
+
+        await self.audit_service.log(
+            action="UNASSIGN",
+            entity_name="deans",
+            entity_id=dean_dict["id"],
+            actor_id=current_user["id"],
+            description=f"Se desasignó el decano de la facultad {faculty.name}",
+        )
+
+        return dean_dict
+
+    async def _retire_dean_role(self, user_id: int) -> None:
+        """Drop `DECANO` from a user who just lost their `deans` row,
+        keeping their other roles. Mirrors
+        DirectorService._retire_director_role."""
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            return
+
+        current_roles = self.users_repository.get_user_role_names(user.id)
+
+        if RoleName.DECANO.value not in current_roles:
+            return
+
+        remaining_roles = [
+            role for role in current_roles if role != RoleName.DECANO.value
+        ]
+
+        # A user needs at least one role (`UserUpdate.roles` rejects an empty
+        # list); if this was their only one, leave it — unassigning a dean
+        # doesn't mean to strip the user's last role and lock them out.
+        if remaining_roles:
+            await self.user_service.update_user(
+                user.uid, UserUpdate(roles=remaining_roles)
+            )
