@@ -8,8 +8,10 @@ from sqlalchemy.orm import Session, selectinload
 
 from api.core.pagination import PaginationParams
 from api.database import get_db
+from api.models.dean import DeanModel
 from api.models.department import DepartmentModel
 from api.models.director import DirectorsModel
+from api.models.faculty import FacultyModel
 from api.models.role import RoleModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
@@ -212,6 +214,22 @@ class UsersRepository(BaseRepository[UserModel]):
         result = (
             self.db.query(DepartmentModel.name)
             .filter(DepartmentModel.id == department_id)
+            .first()
+        )
+
+        return result[0] if result else None
+
+    def get_dean_by_user_id(self, user_id: int) -> DeanModel | None:
+        """Retrieve a dean model associated with a specific user ID."""
+
+        return self.db.query(DeanModel).filter(DeanModel.user_id == user_id).first()
+
+    def get_faculty_name(self, faculty_id: int) -> str | None:
+        """Retrieve the name of a faculty by its ID."""
+
+        result = (
+            self.db.query(FacultyModel.name)
+            .filter(FacultyModel.id == faculty_id)
             .first()
         )
 

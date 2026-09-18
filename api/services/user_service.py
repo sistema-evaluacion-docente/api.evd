@@ -294,17 +294,21 @@ class UserService:
         return self._build_user_response(user)
 
     def _build_user_response(self, user) -> dict:
-        """Build a dictionary representation of the user, including roles and department info."""
+        """Build a dictionary representation of the user, including roles, department and faculty info."""
 
         roles = self.users_repository.get_user_role_names(user.id)
         department_id = self._resolve_department_id(user, roles)
         department_name = self._resolve_department_name(department_id)
+        faculty_id = self._resolve_faculty_id(user, roles)
+        faculty_name = self._resolve_faculty_name(faculty_id)
 
         return user_to_dict(
             user,
             roles=roles,
             department_id=department_id,
             department_name=department_name,
+            faculty_id=faculty_id,
+            faculty_name=faculty_name,
         )
 
     def _resolve_department_name(self, department_id: int | None) -> str | None:
@@ -328,6 +332,28 @@ class UserService:
 
             if teacher:
                 return teacher.department_id
+        return None
+
+    def _resolve_faculty_name(self, faculty_id: int | None) -> str | None:
+        """Resolve the faculty name for the given faculty ID."""
+
+        if faculty_id is None:
+            return None
+
+        return self.users_repository.get_faculty_name(faculty_id)
+
+    def _resolve_faculty_id(self, user, roles: list[str]) -> int | None:
+        """Resolve the faculty ID for the user based on their roles.
+
+        Only a DECANO is tied to a faculty (mirrors _resolve_department_id
+        for DIRECTOR DE DEPARTAMENTO/DOCENTE).
+        """
+
+        if "DECANO" in roles:
+            dean = self.users_repository.get_dean_by_user_id(user.id)
+
+            if dean:
+                return dean.faculty_id
         return None
 
     def _ensure_teacher(
