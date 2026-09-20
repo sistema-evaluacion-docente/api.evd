@@ -619,6 +619,29 @@ class TestActaLock:
         assert result["acta_status"] == "BORRADOR"
         mock_repository.set_acta_status.assert_awaited_once_with(7, "BORRADOR")
 
+    async def test_a_signed_acta_is_not_reopened_this_way(
+        self, service, mock_repository
+    ):
+        # The second door onto unsigning, which used to be wide open: any ADMIN
+        # could unlock a signed agreement without touching the scan, leaving a
+        # signature on file over commitments that could then change underneath
+        # it. Undoing a signature belongs to delete_signed — director-only, and
+        # it tells the teacher.
+        mock_repository.get_by_id.return_value = _plan(acta_status="FIRMADA")
+
+        with pytest.raises(ValidationError):
+            await service.reopen_acta(7, ADMIN)
+
+        mock_repository.set_acta_status.assert_not_awaited()
+
+    async def test_the_refusal_says_what_to_do_instead(self, service, mock_repository):
+        mock_repository.get_by_id.return_value = _plan(acta_status="FIRMADA")
+
+        with pytest.raises(ValidationError) as raised:
+            await service.reopen_acta(7, ADMIN)
+
+        assert "Ficha de acuerdo firmada" in str(raised.value)
+
 
 class TestGetAll:
     """Listing resolves the caller's department scope before delegating."""

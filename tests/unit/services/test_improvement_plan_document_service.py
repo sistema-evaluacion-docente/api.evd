@@ -534,6 +534,98 @@ class TestTellingTheTeacherItIsSigned:
         mock_documents_repository.set_signed.assert_called_once()
 
 
+class TestTellingTheTeacherItWasUnsigned:
+    """Detaching a signed scan deletes the file, so the teacher must hear it.
+
+    The twin of ``TestTellingTheTeacherItIsSigned``, and the one that matters
+    most: after this runs there is no copy left of what the teacher signed. The
+    audit trail records it, but no teacher ever reads an audit trail — without
+    the notice the agreement they signed just stops existing.
+    """
+
+    async def _unsign(self, service, slug="formato-2", actor=DIRECTOR):
+        with patch("api.services.improvement_plan_document_service.delete_plan_file"):
+            await service.delete_signed(7, slug, actor)
+
+    @pytest.fixture(autouse=True)
+    def _signed(self, mock_documents_repository, mock_plan_service):
+        mock_documents_repository.clear_signed.return_value = "/uploads/firmado.pdf"
+        mock_plan_service.get_by_id.return_value = _plan(acta_status="FIRMADA")
+
+    async def test_the_bell_says_the_signed_form_is_gone(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._unsign(service)
+
+        notification = mock_notification_service.create.call_args[0][0]
+        assert notification.user_id == TEACHER_CONTACT["user_id"]
+        assert notification.title == "Se eliminó el Formato 2 firmado"
+        assert notification.link == "/mis-planes/7"
+
+    async def test_the_acta_notice_says_the_plan_is_editable_again(
+        self, service, mock_notification_service, sent_email
+    ):
+        # The consequence, not just the event: the commitments can change
+        # before the next signature, and the teacher is the one who has to
+        # notice. A notice that only says "a document was removed" gives them
+        # no reason to go back and re-read anything.
+        await self._unsign(service)
+
+        assert "edición" in mock_notification_service.create.call_args[0][0].message
+        assert "compromisos" in sent_email.call_args[0][0].text
+
+    async def test_the_same_goes_out_by_email(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._unsign(service)
+
+        message = sent_email.call_args[0][0]
+        assert message.to == TEACHER_CONTACT["email"]
+        assert "Formato 2" in message.subject
+        assert "/mis-planes/7" in message.text
+
+    async def test_the_seguimiento_is_announced_too(
+        self, service, mock_notification_service, sent_email
+    ):
+        await self._unsign(service, slug="formato-3", actor=ADMIN)
+
+        notification = mock_notification_service.create.call_args[0][0]
+        assert notification.title == "Se eliminó el Formato 3 firmado"
+        # Only the acta puts the plan back into edition; Formato 3 does not,
+        # so its notice must not claim otherwise.
+        assert "edición" not in notification.message
+
+    async def test_the_caso_reportado_is_not(
+        self, service, mock_notification_service, sent_email
+    ):
+        # Same reasoning as when it is attached: Formato 1 is internal to the
+        # direction and never shown to the teacher.
+        await self._unsign(service, slug="formato-1", actor=ADMIN)
+
+        mock_notification_service.create.assert_not_awaited()
+        sent_email.assert_not_called()
+
+    async def test_a_teacher_with_no_account_is_simply_skipped(
+        self, service, mock_plans_repository, mock_notification_service, sent_email
+    ):
+        mock_plans_repository.get_teacher_contact.return_value = None
+
+        await self._unsign(service)
+
+        mock_notification_service.create.assert_not_awaited()
+        sent_email.assert_not_called()
+
+    async def test_a_mail_server_that_is_down_does_not_undo_the_deletion(
+        self, service, mock_documents_repository, sent_email
+    ):
+        sent_email.side_effect = OSError("connection refused")
+
+        await self._unsign(service)
+
+        # The scan is already gone and audited by the time the notice goes.
+        mock_documents_repository.clear_signed.assert_called_once()
+
+
 class TestRenderWord:
     """The editable copy, rendered on the fly and never stored."""
 
