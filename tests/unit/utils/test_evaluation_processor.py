@@ -10,6 +10,7 @@ Covers:
     with risk_level == HIGH_RISK_LEVEL_ID (ALTO).
 """
 
+import logging
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -40,10 +41,13 @@ def _risk_level(level_id: int, name: str) -> MagicMock:
 
 
 def _category(category_id: int, label: str) -> MagicMock:
-    """A pedagogical category as the AI model actually sees it: matched by
-    ``description`` (the readable label the model's id2label outputs, e.g.
-    "CLARIDAD"), not ``name`` (the catalogue's internal code, e.g. "LABEL_0")
-    — see evaluation_processor.py's category_description_to_id."""
+    """One row of the catalogue: `name` is the model-side code (`LABEL_0`) and
+    `description` the readable name ("DESEMPEÑO DOCENTE").
+
+    Which of the two a category model answers with depends on whether its
+    `id2label` was filled in when it was fine-tuned, so the lookup accepts
+    either — see the tests below, which cover both.
+    """
 
     category = MagicMock()
     category.id = category_id
@@ -380,6 +384,78 @@ class TestAnalyzeEvaluationCommentsPedagogicalCategories:
         assert {link.pedagogical_category_id for link in links} == {1, 2}
         assert {link.score for link in links} == {0.9, 0.6}
         assert all(isinstance(link, CommentPedagogicalCategoryModel) for link in links)
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_a_model_answering_with_bare_label_codes_is_understood(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager
+    ):
+        # The regression. A model fine-tuned without `id2label` answers with the
+        # bare `LABEL_n` HuggingFace falls back to — which is the catalogue's
+        # `name` — and the lookup only ever consulted `description`. Every
+        # comment of a full analysis came out with its risk stored and no
+        # category at all, and nothing anywhere said so: the card just drew two
+        # empty axes.
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=36)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD"), _category(2, "PUNTUALIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [{"label": "LABEL_1", "score": 0.8}],
+            "category_model": "DevOB/modelo-distilbeto-categorias-3",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        analyze_evaluation_comments(evaluation.id)
+
+        links = comment.pedagogical_categories
+        assert [link.pedagogical_category_id for link in links] == [1]
+        assert comment.pedagogical_category_ai_model == (
+            "DevOB/modelo-distilbeto-categorias-3"
+        )
+
+    @patch("api.utils.evaluation_processor.notification_manager")
+    @patch("api.utils.evaluation_processor.analyze_comment")
+    @patch("api.utils.evaluation_processor.SessionLocal")
+    def test_a_label_outside_the_catalogue_is_reported_not_swallowed(
+        self, mock_session_local, mock_analyze_comment, mock_notification_manager, caplog
+    ):
+        # Dropping it stays the behaviour — there is no row to point at — but
+        # silence is what let the mismatch above run in production unnoticed.
+        evaluation = self._make_evaluation()
+        comment = self._make_comment(comment_id=37)
+
+        db = _make_db(
+            evaluation=evaluation,
+            comments=[comment],
+            risk_levels=[_risk_level(1, "BAJO")],
+            categories=[_category(1, "CLARIDAD")],
+            director=None,
+        )
+        mock_session_local.return_value = db
+        mock_analyze_comment.return_value = {
+            "risk_label": "BAJO",
+            "risk_score": 0.1,
+            "category_labels": [{"label": "NO_EXISTE", "score": 0.9}],
+            "category_model": "org/category-model-v1",
+        }
+        mock_notification_manager.broadcast = AsyncMock()
+
+        with caplog.at_level(logging.WARNING):
+            analyze_evaluation_comments(evaluation.id)
+
+        assert comment.pedagogical_categories == []
+        assert "NO_EXISTE" in caplog.text
 
     @patch("api.utils.evaluation_processor.notification_manager")
     @patch("api.utils.evaluation_processor.analyze_comment")

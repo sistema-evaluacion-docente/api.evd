@@ -865,14 +865,22 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             r.name.lower(): r.id for r in all_risk_levels
         }
 
-        # The category model's id2label outputs the readable category name
-        # ("DESEMPEÑO DOCENTE"), not the catalogue's internal code
-        # ("LABEL_1") — that code only lives in `name`, matched against
-        # `description` instead, is what the AI actually returns.
+        # Which of the two a category model answers with depends on whether
+        # whoever fine-tuned it filled in `id2label`. The one configured here
+        # (`modelo-distilbeto-categorias-3`) did not, so it emits the bare
+        # `LABEL_0`..`LABEL_4` — which is the catalogue's `name` — while a model
+        # that did would emit the readable "DESEMPEÑO DOCENTE", the `description`.
+        # Both are accepted, so swapping the model never silently stops the
+        # classification from being stored: this used to look against
+        # `description` alone, and every comment came out of a full analysis
+        # with its risk saved and no category at all, no error anywhere.
         all_categories = db.query(PedagogicalCategoryModel).all()
-        category_description_to_id: dict[str, int] = {
-            (c.description or "").lower(): c.id for c in all_categories
-        }
+        category_label_to_id: dict[str, int] = {}
+
+        for c in all_categories:
+            for key in (c.name, c.description):
+                if key:
+                    category_label_to_id.setdefault(key.strip().lower(), c.id)
 
         director = (
             db.query(DirectorsModel)
@@ -928,10 +936,6 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
             category_labels = result.get("category_labels", [])
             category_model = result.get("category_model")
 
-            print(
-                f"Comment {comment.original_text} risk: {risk_label}, categories: {category_labels}"
-            )
-
             # Nothing to replace the current classification with when the model
             # did not run (not configured, or inference failed): the categories
             # of the previous analysis are left as they are.
@@ -942,9 +946,25 @@ def analyze_evaluation_comments(evaluation_id: int) -> None:
                     category_label = category["label"]
 
                     if category_label not in category_cache:
-                        category_cache[category_label] = category_description_to_id.get(
-                            category_label.lower()
+                        resolved = category_label_to_id.get(
+                            category_label.strip().lower()
                         )
+
+                        # Once per label, not once per comment: a model whose
+                        # labels are not in the catalogue would otherwise drop
+                        # every classification without a word, which is exactly
+                        # how this went unnoticed before.
+                        if resolved is None:
+                            logger.warning(
+                                "La categoría '%s' que devuelve el modelo %s no "
+                                "existe en el catálogo; no se guardará. "
+                                "Catálogo: %s",
+                                category_label,
+                                category_model,
+                                sorted(category_label_to_id),
+                            )
+
+                        category_cache[category_label] = resolved
 
                     category_id = category_cache[category_label]
 
