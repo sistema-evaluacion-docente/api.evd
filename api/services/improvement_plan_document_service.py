@@ -17,7 +17,7 @@ from api.services.improvement_plan_service import ImprovementPlanService
 from api.services.notification_service import NotificationService
 from api.utils.dimensions import ASPECTS, STUDENT_COMMENTS_ASPECT
 from api.utils.email_sender import send_email
-from api.utils.plan_email import render_document_signed
+from api.utils.plan_email import render_document_signed, render_document_unsigned
 from api.utils.plan_links import teacher_plan_path
 from api.utils.improvement_plan_pdf import (
     FORMAT_TEMPLATES,
@@ -360,6 +360,106 @@ class ImprovementPlanDocumentService:
                 plan["id"],
             )
 
+    async def _announce_unsigned(
+        self, plan: dict, format_type: str, current_user
+    ) -> None:
+        """Tell the teacher a signed form of their plan was removed.
+
+        The mirror of ``_announce_signed``, and the one that carries the most
+        weight: ``delete_signed`` deletes the scan from disk, so once it runs
+        there is no copy left of what the teacher signed. The audit trail keeps
+        the record, but a teacher never sees the audit trail — without this the
+        agreement they signed simply stops existing, silently.
+
+        For the Ficha de acuerdo that also means the plan is editable again, so
+        the notice says so: the commitments can change before the next
+        signature, and the teacher is the one who has to notice.
+
+        Best-effort, like every other notice in the module — the scan is
+        already gone and audited by the time this runs, so nothing here may
+        turn a successful deletion into a 500.
+        """
+
+        naming = SIGNED_FORMAT_NAMES.get(format_type)
+
+        # Formato 1 is the case the programme referred to the department; it is
+        # never shown to the teacher, so its removal is not theirs to hear.
+        if not naming:
+            return
+
+        format_name, format_label = naming
+        reopens_plan = format_type == ACTA_FORMAT
+
+        try:
+            contact = self.improvement_plans_repository.get_teacher_contact(
+                plan["teacher_id"]
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception("No se pudo resolver el contacto del docente")
+            return
+
+        if not contact:
+            return
+
+        try:
+            await self.notification_service.create(
+                NotificationCreate(
+                    user_id=contact["user_id"],
+                    title=f"Se eliminó el {format_name} firmado",
+                    message=(
+                        f"El {format_name} ({format_label}) firmado de tu plan "
+                        f"«{plan['title']}» fue eliminado por la dirección."
+                        + (
+                            " El acuerdo vuelve a estar en edición: revisa los "
+                            "compromisos antes de firmarlo de nuevo."
+                            if reopens_plan
+                            else ""
+                        )
+                    ),
+                    type=NotificationType.WARNING,
+                    link=teacher_plan_path(plan["id"]),
+                ),
+                actor_id=(current_user or {}).get("id"),
+            )
+        except Exception:
+            logger.exception(
+                "No se pudo notificar la eliminación del formato firmado del plan %s",
+                plan["id"],
+            )
+
+        if not contact.get("email"):
+            return
+
+        try:
+            department = (
+                self.improvement_plans_repository.get_department_context(
+                    plan.get("department_id")
+                )
+                if plan.get("department_id")
+                else {}
+            )
+
+            message = render_document_unsigned(
+                plan_id=plan["id"],
+                plan_title=plan["title"],
+                format_name=format_name,
+                format_label=format_label,
+                teacher_name=contact["name"],
+                teacher_email=contact["email"],
+                director_name=(current_user or {}).get("name") or "",
+                department_name=department.get("department_name"),
+                reopens_plan=reopens_plan,
+            )
+
+            # smtplib blocks, and this runs on the event loop.
+            await asyncio.to_thread(send_email, message)
+        except Exception:
+            logger.exception(
+                "No se pudo enviar el correo de la eliminación del formato "
+                "firmado del plan %s",
+                plan["id"],
+            )
+
     async def delete_signed(self, plan_id: int, slug: str, current_user) -> dict:
         """Detach the signed copy of a form — the escape hatch for a wrong scan.
 
@@ -397,6 +497,8 @@ class ImprovementPlanDocumentService:
                 f"Eliminó el {format_type.replace('_', ' ').lower()} firmado del plan"
             ),
         )
+
+        await self._announce_unsigned(plan, format_type, current_user)
 
         return await self.plan_service.get_by_id(plan_id, current_user)
 

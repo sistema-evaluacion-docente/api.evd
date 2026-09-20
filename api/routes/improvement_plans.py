@@ -274,7 +274,12 @@ async def reopen_acta(
     current_user=Depends(require_roles([RoleName.ADMIN])),
     controller: ImprovementPlansController = Depends(get_improvement_plans_controller),
 ):
-    """Reopen a closed acta to correct it (ADMIN only)."""
+    """Reopen a CERRADA acta to correct it (ADMIN only).
+
+    Refused on a FIRMADA acta: taking a signature back goes through deleting
+    the signed Formato 2, which only the plan's own department director may do
+    and which notifies the teacher.
+    """
 
     return await controller.reopen_acta(plan_id, current_user)
 

@@ -595,3 +595,61 @@ def render_document_signed(
             signer_title=director_title(department_name),
         )
     )
+
+
+def render_document_unsigned(
+    *,
+    plan_id: int,
+    plan_title: str,
+    format_name: str,
+    format_label: str,
+    teacher_name: str,
+    teacher_email: str,
+    director_name: str,
+    department_name: str | None,
+    reopens_plan: bool,
+) -> OutgoingEmail:
+    """The message a teacher gets when a signed form of their plan is removed.
+
+    The twin of ``render_document_signed``, and the more important of the two.
+    Detaching the scan deletes the file, so afterwards there is no copy of what
+    the teacher actually put their signature on — the audit trail records that
+    it happened, but the teacher never sees the audit trail. This message is
+    the only thing that reaches them.
+
+    For the Ficha de acuerdo it also carries the consequence: unsigning it puts
+    the plan back into edition, so the commitments can change before it is
+    signed again. Saying so is the point — a teacher who is told only that "a
+    document was removed" has no reason to go and re-read anything.
+    """
+
+    body = (
+        f"Se eliminó de su plan de mejoramiento «{plan_title}» el "
+        f"{format_name} ({format_label}) que estaba firmado."
+    )
+
+    if reopens_plan:
+        body += (
+            " Con ello el acuerdo vuelve a estar en edición, así que los "
+            "compromisos y las observaciones pueden cambiar antes de que se "
+            "recojan de nuevo las firmas."
+        )
+
+    cta = (
+        "Le recomendamos revisar el estado actual del plan antes de volver a firmarlo:"
+        if reopens_plan
+        else "Puede consultar el estado actual del plan en el siguiente enlace:"
+    )
+
+    return _render_evidence_event(
+        _EvidenceEvent(
+            to=teacher_email,
+            subject=f"Se eliminó el {format_name} firmado de su plan de mejoramiento: {plan_title}",
+            greeting=_teacher_greeting(teacher_name),
+            body=body,
+            cta=cta,
+            url=plan_url(plan_id),
+            signer_name=director_name,
+            signer_title=director_title(department_name),
+        )
+    )
