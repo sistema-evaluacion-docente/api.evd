@@ -35,3 +35,4 @@ loadtest/stress_users.json
 loadtest/docente_teacher_ids.json
 loadtest/reporte_*.html
 loadtest/resultados_*
+docs/requisitos

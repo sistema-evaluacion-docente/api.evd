@@ -4,8 +4,6 @@
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
 ' =============================================================================
-title Casos de uso del Docente — Mis resultados\nRequisitos RF-3.6, RF-5.3 a RF-5.5, RF-5.10 y RF-5.11
-
 left to right direction
 
 skinparam backgroundColor #FFFFFF

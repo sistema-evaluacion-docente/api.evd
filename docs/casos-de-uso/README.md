@@ -1,42 +1,49 @@
 # Casos de uso — Sistema de Evaluación Docente (SET)
 
 Los 21 diagramas de casos de uso en PlantUML, organizados por actor y área funcional.
-Tabla de contenido lista para pegar en el documento de tesis:
+`render-pdf.sh` genera los PDF en `pdf/` y `casos-de-uso-latex.txt` es la subsección completa
+para la tesis. Tabla de contenido lista para pegar en el documento de tesis:
 
 ```latex
-\begin{table}[H]
-    \caption{Diagramas de casos de uso por actor y área funcional. Fuente: elaboración propia.}
-    \label{tab:cudiagramas}
-    \centering
-    \small
-    \begin{tabular}{p{4.6cm} p{5.4cm} c c}
-        \hline
-        \textbf{Actor} & \textbf{Área funcional} & \textbf{Casos} & \textbf{Figura} \\
-        \hline
-        Todos & Vista de contexto & 10 & \ref{fig:cu00contexto} \\
-        Visitante · Usuario autenticado & Acceso, sesión y notificaciones & 6 & \ref{fig:cu01visitantesesion} \\
-        Administrador & Estructura institucional & 7 & \ref{fig:cu02adminestructura} \\
-        Administrador & Usuarios, auditoría y configuración & 6 & \ref{fig:cu03adminusuarios} \\
-        Director & Docentes y oferta académica & 6 & \ref{fig:cu04dirdocentes} \\
-        Director & Carga y procesamiento & 6 & \ref{fig:cu05dircarga} \\
-        Director & Consulta y descarga & 6 & \ref{fig:cu06dirconsulta} \\
-        Director & Comentarios y alertas & 4 & \ref{fig:cu07dircomentarios} \\
-        Director & Reportes del departamento & 5 & \ref{fig:cu08dirreportesdepto} \\
-        Director & Reportes del docente & 7 & \ref{fig:cu09dirreportesdocente} \\
-        Director & Planes: ciclo de vida & 8 & \ref{fig:cu10dirplanesciclo} \\
-        Director & Planes: formatos oficiales & 8 & \ref{fig:cu11dirplanesformatos} \\
-        Director & Planes: evidencias & 6 & \ref{fig:cu12dirplanesevidencias} \\
-        Director & Planes: acciones sugeridas & 5 & \ref{fig:cu13dirplanesacciones} \\
-        Docente & Resultados propios & 8 & \ref{fig:cu14docresultados} \\
-        Docente & Planes propios & 8 & \ref{fig:cu15docplanes} \\
-        Sistema & Procesamiento del PDF y análisis con IA & 9 & \ref{fig:cu16sisprocesamiento} \\
-        Sistema & Verificación automática & 10 & \ref{fig:cu17sisverificacion} \\
-        Sistema & Automatismos del plan & 3 & \ref{fig:cu18sisciclo} \\
-        Sistema & Notificaciones y correo & 4 & \ref{fig:cu19sisavisos} \\
-        Sistema & Seguridad, ámbito y auditoría & 6 & \ref{fig:cu20sisseguridad} \\
-        \hline
-    \end{tabular}
-\end{table}
+\begin{longtable}{|>{\footnotesize\raggedright\arraybackslash\hspace{0pt}}p{0.25\textwidth}|>{\footnotesize\raggedright\arraybackslash\hspace{0pt}}p{0.37\textwidth}|>{\footnotesize\centering\arraybackslash\hspace{0pt}}p{0.08\textwidth}|>{\footnotesize\centering\arraybackslash\hspace{0pt}}p{0.09\textwidth}|}
+\caption{Diagramas de casos de uso por actor y área funcional. Fuente: elaboración propia.}\label{tab:cudiagramas}\\
+\hline
+\textbf{\footnotesize Actor} & \textbf{\footnotesize Área funcional} & \textbf{\footnotesize Casos} & \textbf{\footnotesize Figura} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{l}{\small\itshape Continuación de la Tabla \ref{tab:cudiagramas}}\\
+\hline
+\textbf{\footnotesize Actor} & \textbf{\footnotesize Área funcional} & \textbf{\footnotesize Casos} & \textbf{\footnotesize Figura} \\ \hline
+\endhead
+
+\multicolumn{4}{r}{\small Continúa en la siguiente página}\\
+\endfoot
+
+\hline
+\endlastfoot
+
+Todos & Vista de contexto & 10 & \ref{fig:cu00contexto} \\ \hline
+Visitante · Usuario autenticado & Acceso, sesión y notificaciones & 5 & \ref{fig:cu01visitantesesion} \\ \hline
+Administrador & Estructura institucional & 7 & \ref{fig:cu02adminestructura} \\ \hline
+Administrador & Usuarios, auditoría y configuración & 6 & \ref{fig:cu03adminusuarios} \\ \hline
+Director & Docentes y oferta académica & 6 & \ref{fig:cu04dirdocentes} \\ \hline
+Director & Carga y procesamiento & 6 & \ref{fig:cu05dircarga} \\ \hline
+Director & Consulta y descarga & 6 & \ref{fig:cu06dirconsulta} \\ \hline
+Director & Comentarios y alertas & 4 & \ref{fig:cu07dircomentarios} \\ \hline
+Director & Reportes del departamento & 5 & \ref{fig:cu08dirreportesdepto} \\ \hline
+Director & Reportes del docente & 7 & \ref{fig:cu09dirreportesdocente} \\ \hline
+Director & Planes: ciclo de vida & 8 & \ref{fig:cu10dirplanesciclo} \\ \hline
+Director & Planes: formatos oficiales & 7 & \ref{fig:cu11dirplanesformatos} \\ \hline
+Director & Planes: evidencias & 6 & \ref{fig:cu12dirplanesevidencias} \\ \hline
+Director & Planes: acciones sugeridas & 5 & \ref{fig:cu13dirplanesacciones} \\ \hline
+Docente & Resultados propios & 8 & \ref{fig:cu14docresultados} \\ \hline
+Docente & Planes propios & 8 & \ref{fig:cu15docplanes} \\ \hline
+Sistema & Procesamiento del PDF y análisis con IA & 8 & \ref{fig:cu16sisprocesamiento} \\ \hline
+Sistema & Verificación automática & 6 & \ref{fig:cu17sisverificacion} \\ \hline
+Sistema & Automatismos del plan & 3 & \ref{fig:cu18sisciclo} \\ \hline
+Sistema & Notificaciones y correo & 4 & \ref{fig:cu19sisavisos} \\ \hline
+Sistema & Seguridad, ámbito y auditoría & 6 & \ref{fig:cu20sisseguridad} \\
+\end{longtable}
 ```
 
 | Figura | Archivo |

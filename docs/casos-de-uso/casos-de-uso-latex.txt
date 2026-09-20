@@ -1,0 +1,256 @@
+% =============================================================================
+% 4.3.3 Diagramas de casos de uso del sistema
+% Va a continuación de 4.3.2.2 «Restricciones y supuestos».
+%
+% - Sube los 21 PDF de docs/casos-de-uso/pdf/ a Anexos/CasosDeUso/ en Overleaf.
+%   Los anteriores (10-visitante-y-sesion.pdf, 20-admin-..., 54-sistema-...)
+%   tenían otra numeración y ya no se usan: bórralos.
+% - No hacen falta paquetes nuevos: graphicx y float ya los carga la plantilla.
+% - Si en otra parte de la tesis quedó \ref{anexoJ}, cámbialo por
+%   \ref{sec:casos-de-uso}.
+%
+% Maquetación: cada \clearpage cierra una página de dos o tres figuras; la vista
+% de contexto va sola. Cada figura lleva el width con el que su página cabe
+% completa (calculado con la plantilla IngelectronicaAPA: interlineado 1.8 y
+% captions a doble espacio), así que la letra varía un poco entre páginas. Si
+% cambias un diagrama, docs/casos-de-uso/render-pdf.sh regenera el PDF; si su
+% tamaño cambia, ajusta el width de esa figura y comprueba que la página siga
+% entrando entera.
+% =============================================================================
+
+\subsection{Diagramas de casos de uso del sistema}\label{sec:casos-de-uso}
+
+Este apartado reúne los 21 diagramas de casos de uso del Sistema de Evaluación Docente. Los actores y su ámbito provienen de la Tabla~\ref{tab:actores} y los requisitos que originan cada caso de uso, de la Tabla~\ref{tab:requerimientos-funcionales}. El contenido corresponde a la implementación efectiva del backend y del frontend, no a un diseño preliminar.
+
+Los diagramas se organizan por actor y por área funcional. El de acceso reúne al visitante y al usuario autenticado, y cada uno de los demás detalla un solo actor junto con los servicios externos con los que interactúa. Ninguno pasa de ocho casos de uso, de modo que cada página reúne dos o tres diagramas. Un caso que dos roles comparten se modela una vez en el diagrama de cada rol, porque el alcance de lo que cada uno ve es distinto. El primero es la vista de contexto y agrupa en áreas funcionales lo que los veinte restantes detallan.
+
+\subsubsection{Notación}
+La notación es común a los 21 diagramas y se enuncia una sola vez.
+
+\begin{itemize}
+    \item Cada caso de uso lleva bajo su nombre, en gris, el requisito funcional de la Tabla~\ref{tab:requerimientos-funcionales} que lo origina.
+    \item Los óvalos amarillos pertenecen al actor Sistema, es decir, procesos que se ejecutan sin intervención humana.
+    \item Los actores con el estereotipo «externo», Firebase Auth y el servidor de correo, son servicios ajenos al sistema con los que este se comunica.
+    \item Tres casos de uso son transversales a toda la aplicación y no se repiten en los demás diagramas: \textit{Autorizar según el rol del usuario}, \textit{Confinar a cada rol a su ámbito} y \textit{Registrar el evento de auditoría de cada mutación}, recogidos en la Figura~\ref{fig:cu20sisseguridad}. Toda petición pasa por los dos primeros y toda mutación queda registrada por el tercero; dibujar la inclusión desde cada caso de uso volvía ilegibles los diagramas.
+    \item Solo se conservan las relaciones \textit{include} y \textit{extend} que describen una inclusión o una extensión real. Las precondiciones, como que el acta deba estar completa antes de cerrarla, se documentan en la especificación de cada caso y no como relación del diagrama.
+    \item El actor se asocia únicamente con los casos de uso que inicia. Los que se ejecutan como parte de otro entran por \textit{include} y los que dependen de una condición, por \textit{extend}.
+\end{itemize}
+
+\subsubsection{Índice de los diagramas}
+La Tabla~\ref{tab:cudiagramas} relaciona cada diagrama con su actor, su área funcional, el número de casos de uso que reúne y la figura donde aparece.
+
+\begin{longtable}{|>{\footnotesize\raggedright\arraybackslash\hspace{0pt}}p{0.25\textwidth}|>{\footnotesize\raggedright\arraybackslash\hspace{0pt}}p{0.37\textwidth}|>{\footnotesize\centering\arraybackslash\hspace{0pt}}p{0.08\textwidth}|>{\footnotesize\centering\arraybackslash\hspace{0pt}}p{0.09\textwidth}|}
+\caption{Diagramas de casos de uso por actor y área funcional. Fuente: elaboración propia.}\label{tab:cudiagramas}\\
+\hline
+\textbf{\footnotesize Actor} & \textbf{\footnotesize Área funcional} & \textbf{\footnotesize Casos} & \textbf{\footnotesize Figura} \\ \hline
+\endfirsthead
+
+\multicolumn{4}{l}{\small\itshape Continuación de la Tabla \ref{tab:cudiagramas}}\\
+\hline
+\textbf{\footnotesize Actor} & \textbf{\footnotesize Área funcional} & \textbf{\footnotesize Casos} & \textbf{\footnotesize Figura} \\ \hline
+\endhead
+
+\multicolumn{4}{r}{\small Continúa en la siguiente página}\\
+\endfoot
+
+\hline
+\endlastfoot
+
+Todos & Vista de contexto & 10 & \ref{fig:cu00contexto} \\ \hline
+Visitante · Usuario autenticado & Acceso, sesión y notificaciones & 5 & \ref{fig:cu01visitantesesion} \\ \hline
+Administrador & Estructura institucional & 7 & \ref{fig:cu02adminestructura} \\ \hline
+Administrador & Usuarios, auditoría y configuración & 6 & \ref{fig:cu03adminusuarios} \\ \hline
+Director & Docentes y oferta académica & 6 & \ref{fig:cu04dirdocentes} \\ \hline
+Director & Carga y procesamiento & 6 & \ref{fig:cu05dircarga} \\ \hline
+Director & Consulta y descarga & 6 & \ref{fig:cu06dirconsulta} \\ \hline
+Director & Comentarios y alertas & 4 & \ref{fig:cu07dircomentarios} \\ \hline
+Director & Reportes del departamento & 5 & \ref{fig:cu08dirreportesdepto} \\ \hline
+Director & Reportes del docente & 7 & \ref{fig:cu09dirreportesdocente} \\ \hline
+Director & Planes: ciclo de vida & 8 & \ref{fig:cu10dirplanesciclo} \\ \hline
+Director & Planes: formatos oficiales & 7 & \ref{fig:cu11dirplanesformatos} \\ \hline
+Director & Planes: evidencias & 6 & \ref{fig:cu12dirplanesevidencias} \\ \hline
+Director & Planes: acciones sugeridas & 5 & \ref{fig:cu13dirplanesacciones} \\ \hline
+Docente & Resultados propios & 8 & \ref{fig:cu14docresultados} \\ \hline
+Docente & Planes propios & 8 & \ref{fig:cu15docplanes} \\ \hline
+Sistema & Procesamiento del PDF y análisis con IA & 8 & \ref{fig:cu16sisprocesamiento} \\ \hline
+Sistema & Verificación automática & 6 & \ref{fig:cu17sisverificacion} \\ \hline
+Sistema & Automatismos del plan & 3 & \ref{fig:cu18sisciclo} \\ \hline
+Sistema & Notificaciones y correo & 4 & \ref{fig:cu19sisavisos} \\ \hline
+Sistema & Seguridad, ámbito y auditoría & 6 & \ref{fig:cu20sisseguridad} \\
+\end{longtable}
+
+\clearpage
+\subsubsection{Vista de contexto}
+La Figura~\ref{fig:cu00contexto} resume las áreas funcionales del sistema.
+
+\begin{figure}[H]
+    \caption{Diagrama de contexto de los casos de uso del Sistema de Evaluación Docente. Fuente: elaboración propia.}
+    \label{fig:cu00contexto}
+    \centering
+    \includegraphics[width=\textwidth,height=0.75\textheight,keepaspectratio]{Anexos/CasosDeUso/00-contexto.pdf}
+\end{figure}
+\clearpage
+
+\subsubsection{Visitante y usuario autenticado}
+Lo recoge la Figura~\ref{fig:cu01visitantesesion}.
+
+\begin{figure}[H]
+    \caption{Casos de uso del Visitante y del usuario autenticado en el acceso, la sesión y las notificaciones. Fuente: elaboración propia.}
+    \label{fig:cu01visitantesesion}
+    \centering
+    \includegraphics[width=0.632\textwidth]{Anexos/CasosDeUso/01-visitante-y-sesion.pdf}
+\end{figure}
+
+\subsubsection{Administrador}
+Lo recogen las Figuras~\ref{fig:cu02adminestructura} y~\ref{fig:cu03adminusuarios}.
+
+\begin{figure}[H]
+    \caption{Casos de uso del Administrador en la estructura institucional. Fuente: elaboración propia.}
+    \label{fig:cu02adminestructura}
+    \centering
+    \includegraphics[width=0.386\textwidth]{Anexos/CasosDeUso/02-admin-estructura-institucional.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Administrador en usuarios, auditoría y configuración institucional. Fuente: elaboración propia.}
+    \label{fig:cu03adminusuarios}
+    \centering
+    \includegraphics[width=0.453\textwidth]{Anexos/CasosDeUso/03-admin-usuarios-auditoria-configuracion.pdf}
+\end{figure}
+
+\subsubsection{Director de Departamento}
+Lo recogen las Figuras~\ref{fig:cu04dirdocentes} a~\ref{fig:cu13dirplanesacciones}.
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director sobre los docentes y la oferta académica. Fuente: elaboración propia.}
+    \label{fig:cu04dirdocentes}
+    \centering
+    \includegraphics[width=0.518\textwidth]{Anexos/CasosDeUso/04-director-docentes-y-oferta.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en la carga y el procesamiento de evaluaciones. Fuente: elaboración propia.}
+    \label{fig:cu05dircarga}
+    \centering
+    \includegraphics[width=0.516\textwidth]{Anexos/CasosDeUso/05-director-carga-de-evaluaciones.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en la consulta y la descarga de evaluaciones. Fuente: elaboración propia.}
+    \label{fig:cu06dirconsulta}
+    \centering
+    \includegraphics[width=0.542\textwidth]{Anexos/CasosDeUso/06-director-consulta-de-evaluaciones.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director sobre los comentarios y las alertas. Fuente: elaboración propia.}
+    \label{fig:cu07dircomentarios}
+    \centering
+    \includegraphics[width=0.332\textwidth]{Anexos/CasosDeUso/07-director-comentarios-y-alertas.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en los reportes del departamento. Fuente: elaboración propia.}
+    \label{fig:cu08dirreportesdepto}
+    \centering
+    \includegraphics[width=0.335\textwidth]{Anexos/CasosDeUso/08-director-reportes-del-departamento.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en los reportes del docente. Fuente: elaboración propia.}
+    \label{fig:cu09dirreportesdocente}
+    \centering
+    \includegraphics[width=0.355\textwidth]{Anexos/CasosDeUso/09-director-reportes-del-docente.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en el ciclo de vida del plan de mejoramiento. Fuente: elaboración propia.}
+    \label{fig:cu10dirplanesciclo}
+    \centering
+    \includegraphics[width=0.452\textwidth]{Anexos/CasosDeUso/10-director-planes-ciclo-de-vida.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en los formatos oficiales del plan de mejoramiento. Fuente: elaboración propia.}
+    \label{fig:cu11dirplanesformatos}
+    \centering
+    \includegraphics[width=0.483\textwidth]{Anexos/CasosDeUso/11-director-planes-formatos.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director en el ciclo de evidencias del plan de mejoramiento. Fuente: elaboración propia.}
+    \label{fig:cu12dirplanesevidencias}
+    \centering
+    \includegraphics[width=0.623\textwidth]{Anexos/CasosDeUso/12-director-planes-evidencias.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Director sobre las acciones sugeridas del departamento. Fuente: elaboración propia.}
+    \label{fig:cu13dirplanesacciones}
+    \centering
+    \includegraphics[width=0.960\textwidth]{Anexos/CasosDeUso/13-director-planes-acciones-sugeridas.pdf}
+\end{figure}
+\clearpage
+
+\subsubsection{Docente}
+Lo recogen las Figuras~\ref{fig:cu14docresultados} y~\ref{fig:cu15docplanes}.
+
+\begin{figure}[H]
+    \caption{Casos de uso del Docente sobre sus propios resultados. Fuente: elaboración propia.}
+    \label{fig:cu14docresultados}
+    \centering
+    \includegraphics[width=0.287\textwidth]{Anexos/CasosDeUso/14-docente-mis-resultados.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Docente sobre sus propios planes de mejoramiento. Fuente: elaboración propia.}
+    \label{fig:cu15docplanes}
+    \centering
+    \includegraphics[width=0.290\textwidth]{Anexos/CasosDeUso/15-docente-mis-planes.pdf}
+\end{figure}
+\clearpage
+
+\subsubsection{Sistema}
+Lo recogen las Figuras~\ref{fig:cu16sisprocesamiento} a~\ref{fig:cu20sisseguridad}.
+
+\begin{figure}[H]
+    \caption{Casos de uso del Sistema en el procesamiento del PDF y el análisis con inteligencia artificial. Fuente: elaboración propia.}
+    \label{fig:cu16sisprocesamiento}
+    \centering
+    \includegraphics[width=\textwidth]{Anexos/CasosDeUso/16-sistema-procesamiento-y-analisis.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Sistema en la verificación automática de los planes. Fuente: elaboración propia.}
+    \label{fig:cu17sisverificacion}
+    \centering
+    \includegraphics[width=\textwidth]{Anexos/CasosDeUso/17-sistema-verificacion-de-planes.pdf}
+\end{figure}
+\clearpage
+
+\begin{figure}[H]
+    \caption{Casos de uso del Sistema en los automatismos del plan de mejoramiento. Fuente: elaboración propia.}
+    \label{fig:cu18sisciclo}
+    \centering
+    \includegraphics[width=0.400\textwidth]{Anexos/CasosDeUso/18-sistema-ciclo-de-planes.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Sistema en las notificaciones y el correo institucional. Fuente: elaboración propia.}
+    \label{fig:cu19sisavisos}
+    \centering
+    \includegraphics[width=0.849\textwidth]{Anexos/CasosDeUso/19-sistema-avisos-y-correo.pdf}
+\end{figure}
+
+\begin{figure}[H]
+    \caption{Casos de uso del Sistema en la seguridad, el ámbito y la auditoría. Fuente: elaboración propia.}
+    \label{fig:cu20sisseguridad}
+    \centering
+    \includegraphics[width=0.746\textwidth]{Anexos/CasosDeUso/20-sistema-seguridad-y-auditoria.pdf}
+\end{figure}
+\clearpage

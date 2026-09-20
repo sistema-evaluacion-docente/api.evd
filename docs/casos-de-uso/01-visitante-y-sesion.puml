@@ -4,8 +4,6 @@
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
 ' =============================================================================
-title Casos de uso del Visitante y de la sesión\nRequisitos RF-1.1, RF-1.2 y RF-7.1
-
 left to right direction
 
 skinparam backgroundColor #FFFFFF

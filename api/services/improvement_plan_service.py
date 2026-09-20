@@ -720,7 +720,20 @@ class ImprovementPlanService:
         return updated
 
     async def reopen_acta(self, plan_id: int, current_user) -> dict:
-        """Reopen a closed acta. ADMIN-only escape hatch for corrections."""
+        """Undo the CERRADA freeze. ADMIN-only escape hatch for corrections.
+
+        Only from CERRADA: an acta frozen for printing but not yet signed, where
+        reopening costs nothing because nobody has committed to anything.
+
+        A FIRMADA acta is refused, and that refusal is the point. Taking a
+        signature back is ``delete_signed``'s job, which is restricted to the
+        director who owns the plan — deliberately, so an ADMIN cannot undo an
+        agreement signed by someone else — and which tells the teacher it
+        happened. This method used to be a second door to the same outcome,
+        open to any ADMIN and silent, and it left the signed scan attached
+        while unlocking the content: the plan became editable with a signature
+        on file over commitments that could then change underneath it.
+        """
 
         if not self._is_admin(current_user):
             raise PermissionDeniedError("Solo un administrador puede reabrir un acta")
@@ -729,6 +742,12 @@ class ImprovementPlanService:
 
         if plan.get("acta_status") == "BORRADOR":
             raise ValidationError("El acta ya está en borrador")
+
+        if plan.get("acta_status") == "FIRMADA":
+            raise ValidationError(
+                "El acta está firmada; para volver a editarla, el director del "
+                "departamento debe eliminar la Ficha de acuerdo firmada"
+            )
 
         updated = await self.improvement_plans_repository.set_acta_status(
             plan_id, "BORRADOR"

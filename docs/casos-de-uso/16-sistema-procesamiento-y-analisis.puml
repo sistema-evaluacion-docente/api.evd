@@ -4,8 +4,6 @@
 ' Fuente: Tabla 36 (actores) y Tabla 37 (requisitos funcionales) del documento de
 '         tesis, con la implementación de DistilUmbert-back y DistilUmbert-front.
 ' =============================================================================
-title Casos de uso del Sistema — Procesamiento del PDF y análisis con IA\nRequisitos RF-1.5, RF-3.1 a RF-3.4 y RF-4.1
-
 left to right direction
 
 skinparam backgroundColor #FFFFFF
