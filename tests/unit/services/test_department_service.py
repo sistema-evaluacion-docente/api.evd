@@ -178,6 +178,41 @@ class TestDepartmentService:
             await service.get_by_id(1, dean_user)
 
     @pytest.mark.asyncio
+    async def test_get_all_dean_without_faculty_raises_permission_denied(
+        self, service, mock_departments_repo
+    ):
+        """Test a DECANO with no faculty assigned gets a 403 instead of every
+        department (a None faculty filter would mean no filter at all)."""
+
+        from api.exceptions import PermissionDeniedError
+
+        filters = DepartmentFilters()
+        pagination = PaginationParams(page=1, limit=10)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_all(
+                filters, pagination, {"id": 2, "roles": ["DECANO"], "faculty_id": None}
+            )
+
+        mock_departments_repo.search.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_dean_without_faculty_cannot_see_facultyless_department(
+        self, service, mock_departments_repo, mock_department
+    ):
+        """Test None == None never grants a dean without faculty access."""
+
+        from api.exceptions import PermissionDeniedError
+
+        mock_department.faculty_id = None
+        mock_departments_repo.get_by_id.return_value = mock_department
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_id(
+                1, {"id": 2, "roles": ["DECANO"], "faculty_id": None}
+            )
+
+    @pytest.mark.asyncio
     async def test_get_by_id_dean_inside_faculty_succeeds(
         self, service, mock_departments_repo, mock_department
     ):

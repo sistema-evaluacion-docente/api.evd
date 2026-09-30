@@ -180,6 +180,31 @@ class TestStatsService:
         mock_stats_repo.get_department_cases_by_period.assert_awaited_once_with(3, 1)
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "method,args",
+        [
+            ("get_department_averages_by_period", (None,)),
+            ("get_department_uploads_by_period", (3,)),
+            ("get_department_cases_by_period", (3,)),
+            ("get_faculty_averages_by_period", (1,)),
+        ],
+    )
+    async def test_dean_without_faculty_is_rejected(
+        self, service, mock_stats_repo, method, args
+    ):
+        """Test a DECANO role with no faculty never falls back to "no filter"."""
+
+        from api.exceptions import PermissionDeniedError
+
+        setattr(mock_stats_repo, method, AsyncMock())
+        dean_without_faculty = {"id": 2, "roles": ["DECANO"], "faculty_id": None}
+
+        with pytest.raises(PermissionDeniedError):
+            await getattr(service, method)(*args, dean_without_faculty)
+
+        getattr(mock_stats_repo, method).assert_not_awaited()
+
+    @pytest.mark.asyncio
     async def test_get_faculty_averages_by_period_delegates_to_repository(
         self, service, mock_stats_repo, admin_user
     ):

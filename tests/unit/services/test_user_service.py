@@ -8,6 +8,7 @@ import pytest
 from api.core.pagination import PaginationParams
 from api.services.user_service import UserService
 from api.schemas.user import (
+    UserAdminUpdate,
     UserCreate,
     UserUpdate,
     UserFilters,
@@ -18,7 +19,11 @@ from api.schemas.user import (
 from api.exceptions import (
     PermissionDeniedError,
     InvalidRoleError,
+    ResourceAlreadyExistsError,
+    ResourceNotFoundError,
+    UserAlreadyExistsError,
     UserNotFoundError,
+    ValidationError,
 )
 
 
@@ -492,3 +497,300 @@ class TestUserService:
         assert result is not None
         mock_users_repo.replace_user_roles.assert_called_once()
         mock_users_repo.create_teacher.assert_called_once()
+
+
+def _role(role_id, name):
+    role = MagicMock(id=role_id)
+    role.name = name
+    return role
+
+
+class TestAdminUpdateUser:
+    """Tests for UserService.admin_update_user, get_by_id and update_user_by_id."""
+
+    @pytest.fixture
+    def mock_users_repo(self):
+        """Mock UsersRepository with a DOCENTE user and no conflicts."""
+
+        repo = MagicMock()
+        repo.get_user_role_names.return_value = ["DOCENTE"]
+        repo.get_by_email.return_value = None
+        repo.get_by_institutional_code.return_value = None
+        repo.department_exists.return_value = True
+        repo.get_director_by_user_id.return_value = None
+        repo.get_dean_by_user_id.return_value = None
+        return repo
+
+    @pytest.fixture
+    def mock_audit_service(self):
+        """Mock AuditService."""
+
+        service = MagicMock()
+        service.log = AsyncMock()
+        return service
+
+    @pytest.fixture
+    def service(self, mock_users_repo, mock_audit_service):
+        """Create service instance with mocked dependencies."""
+
+        return UserService(mock_users_repo, mock_audit_service)
+
+    @pytest.fixture
+    def user(self, mock_users_repo):
+        """A linked (already logged in) DOCENTE user with a teacher record."""
+
+        from api.models.user import UserModel
+
+        user = MagicMock(spec=UserModel)
+        user.id = 5
+        user.uid = "firebase-uid"
+        user.email = "old@ufps.edu.co"
+        user.name = "Old Name"
+        user.institutional_code = "1111"
+        user.active = True
+        user.avatar_url = None
+        mock_users_repo.get.return_value = user
+        mock_users_repo.get_teacher_by_user_id.return_value = MagicMock(
+            department_id=1
+        )
+        return user
+
+    @pytest.fixture
+    def admin(self):
+        """The acting administrator."""
+
+        return {"id": 99, "roles": ["ADMIN"]}
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_when_missing_returns_none(self, service, mock_users_repo):
+        mock_users_repo.get.return_value = None
+
+        assert await service.get_by_id(404) is None
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_found_returns_user(self, service, user):
+        result = await service.get_by_id(5)
+
+        assert result["id"] == 5
+
+    @pytest.mark.asyncio
+    async def test_update_user_by_id_reaches_a_user_without_uid(
+        self, service, mock_users_repo, user
+    ):
+        """Test roles can be changed for a user who never logged in."""
+
+        user.uid = None
+        mock_users_repo.get_roles_by_names.return_value = [_role(2, "DECANO")]
+
+        await service.update_user_by_id(5, UserUpdate(roles=[RoleName.DECANO]))
+
+        mock_users_repo.get.assert_called_once_with(5)
+        mock_users_repo.get_by_uid.assert_not_called()
+        mock_users_repo.replace_user_roles.assert_called_once_with(5, [2])
+
+    @pytest.mark.asyncio
+    async def test_update_user_by_id_when_missing_raises(self, service, mock_users_repo):
+        mock_users_repo.get.return_value = None
+
+        with pytest.raises(UserNotFoundError):
+            await service.update_user_by_id(404, UserUpdate(name="X"))
+
+    @pytest.mark.asyncio
+    async def test_admin_update_when_missing_returns_none(
+        self, service, mock_users_repo, admin
+    ):
+        mock_users_repo.get.return_value = None
+
+        result = await service.admin_update_user(404, UserAdminUpdate(name="X"), admin)
+
+        assert result is None
+        mock_users_repo.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_update_changes_name_email_and_code(
+        self, service, mock_users_repo, mock_audit_service, user, admin
+    ):
+        """Test the fields are written once and the audit names each change."""
+
+        data = UserAdminUpdate(
+            name="New Name", email="NEW@ufps.edu.co", institutional_code="2222"
+        )
+
+        await service.admin_update_user(5, data, admin)
+
+        written = mock_users_repo.assign_fields.call_args.args[1]
+        assert written["name"] == "New Name"
+        assert written["email"] == "new@ufps.edu.co"
+        assert written["institutional_code"] == "2222"
+        mock_users_repo.commit.assert_called_once()
+        description = mock_audit_service.log.call_args.kwargs["description"]
+        assert "email cambió" in description
+        assert "institutional_code cambió" in description
+
+    @pytest.mark.asyncio
+    async def test_admin_update_deactivates_the_user(
+        self, service, mock_users_repo, user, admin
+    ):
+        await service.admin_update_user(5, UserAdminUpdate(active=False), admin)
+
+        assert mock_users_repo.assign_fields.call_args.args[1] == {"active": False}
+
+    @pytest.mark.asyncio
+    async def test_admin_update_email_of_linked_user_clears_uid(
+        self, service, mock_users_repo, user, admin
+    ):
+        """Test a new email unlinks Firebase so the next login re-links."""
+
+        await service.admin_update_user(
+            5, UserAdminUpdate(email="new@ufps.edu.co"), admin
+        )
+
+        written = mock_users_repo.assign_fields.call_args.args[1]
+        assert "uid" in written
+        assert written["uid"] is None
+
+    @pytest.mark.asyncio
+    async def test_admin_update_email_of_unlinked_user_keeps_uid_untouched(
+        self, service, mock_users_repo, user, admin
+    ):
+        user.uid = None
+
+        await service.admin_update_user(
+            5, UserAdminUpdate(email="new@ufps.edu.co"), admin
+        )
+
+        assert "uid" not in mock_users_repo.assign_fields.call_args.args[1]
+
+    @pytest.mark.asyncio
+    async def test_admin_update_same_email_does_not_unlink(
+        self, service, mock_users_repo, user, admin
+    ):
+        await service.admin_update_user(
+            5, UserAdminUpdate(email="old@ufps.edu.co"), admin
+        )
+
+        mock_users_repo.assign_fields.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_update_email_taken_by_another_user_raises(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.get_by_email.return_value = MagicMock(id=6)
+
+        with pytest.raises(UserAlreadyExistsError):
+            await service.admin_update_user(
+                5, UserAdminUpdate(email="taken@ufps.edu.co"), admin
+            )
+
+        mock_users_repo.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_update_code_taken_by_another_user_raises(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.get_by_institutional_code.return_value = MagicMock(id=6)
+
+        with pytest.raises(ResourceAlreadyExistsError):
+            await service.admin_update_user(
+                5, UserAdminUpdate(institutional_code="3333"), admin
+            )
+
+    @pytest.mark.asyncio
+    async def test_admin_update_replaces_roles(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.get_roles_by_names.return_value = [
+            _role(1, "DOCENTE"),
+            _role(4, "DECANO"),
+        ]
+
+        await service.admin_update_user(
+            5, UserAdminUpdate(roles=[RoleName.DOCENTE, RoleName.DECANO]), admin
+        )
+
+        mock_users_repo.replace_user_roles.assert_called_once_with(5, [1, 4])
+
+    @pytest.mark.asyncio
+    async def test_admin_update_with_unknown_role_raises(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.get_roles_by_names.return_value = []
+
+        with pytest.raises(InvalidRoleError):
+            await service.admin_update_user(
+                5, UserAdminUpdate(roles=[RoleName.DECANO]), admin
+            )
+
+    @pytest.mark.asyncio
+    async def test_admin_cannot_remove_their_own_admin_role(
+        self, service, mock_users_repo, user
+    ):
+        mock_users_repo.get_user_role_names.return_value = ["ADMIN"]
+        mock_users_repo.get_roles_by_names.return_value = [_role(1, "DOCENTE")]
+
+        with pytest.raises(ValidationError):
+            await service.admin_update_user(
+                5, UserAdminUpdate(roles=[RoleName.DOCENTE]), {"id": 5}
+            )
+
+        mock_users_repo.replace_user_roles.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_update_moves_the_teacher_to_another_department(
+        self, service, mock_users_repo, user, admin
+    ):
+        teacher = mock_users_repo.get_teacher_by_user_id.return_value
+
+        await service.admin_update_user(5, UserAdminUpdate(department_id=3), admin)
+
+        mock_users_repo.set_teacher_department.assert_called_once_with(teacher, 3)
+
+    @pytest.mark.asyncio
+    async def test_admin_update_null_department_clears_it(
+        self, service, mock_users_repo, user, admin
+    ):
+        teacher = mock_users_repo.get_teacher_by_user_id.return_value
+
+        await service.admin_update_user(
+            5, UserAdminUpdate(department_id=None), admin
+        )
+
+        mock_users_repo.set_teacher_department.assert_called_once_with(teacher, None)
+
+    @pytest.mark.asyncio
+    async def test_admin_update_department_for_non_teacher_raises(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.get_user_role_names.return_value = ["DECANO"]
+
+        with pytest.raises(ValidationError):
+            await service.admin_update_user(5, UserAdminUpdate(department_id=3), admin)
+
+        mock_users_repo.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_admin_update_unknown_department_raises(
+        self, service, mock_users_repo, user, admin
+    ):
+        mock_users_repo.department_exists.return_value = False
+
+        with pytest.raises(ResourceNotFoundError):
+            await service.admin_update_user(
+                5, UserAdminUpdate(department_id=999), admin
+            )
+
+    @pytest.mark.asyncio
+    async def test_admin_update_granting_docente_creates_teacher_in_department(
+        self, service, mock_users_repo, user, admin
+    ):
+        """Test a user turned DOCENTE gets a teacher record in the given department."""
+
+        mock_users_repo.get_user_role_names.return_value = ["DECANO"]
+        mock_users_repo.get_teacher_by_user_id.return_value = None
+        mock_users_repo.get_roles_by_names.return_value = [_role(1, "DOCENTE")]
+
+        await service.admin_update_user(
+            5, UserAdminUpdate(roles=[RoleName.DOCENTE], department_id=3), admin
+        )
+
+        assert mock_users_repo.create_teacher.call_args.kwargs["department_id"] == 3

@@ -6,13 +6,18 @@ from api.core.pagination import PaginationParams
 from api.exceptions import (
     InvalidRoleError,
     PermissionDeniedError,
+    ResourceAlreadyExistsError,
+    ResourceNotFoundError,
+    UserAlreadyExistsError,
     UserNotFoundError,
+    ValidationError,
 )
 from api.services.audit_service import AuditService
 from api.repositories.users import UsersRepository
 from api.schemas.pagination import build_paginated_response
 from api.schemas.user import (
     RoleName,
+    UserAdminUpdate,
     UserCreate,
     UserFilters,
     UserRolesUpdate,
@@ -219,6 +224,169 @@ class UserService:
 
         if not user:
             raise UserNotFoundError(uid)
+
+        return self._apply_update(user, data)
+
+    async def update_user_by_id(self, user_id: int, data: UserUpdate) -> dict:
+        """Same as ``update_user`` but by database id, so it also reaches a
+        user who never logged in (and therefore has no uid yet)."""
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            raise UserNotFoundError(str(user_id))
+
+        return self._apply_update(user, data)
+
+    async def get_by_id(self, user_id: int) -> dict | None:
+        """Retrieve user details by database id."""
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            return None
+
+        return self._build_user_response(user)
+
+    async def admin_update_user(
+        self, user_id: int, data: UserAdminUpdate, current_user: dict
+    ) -> dict | None:
+        """Let an administrator edit name, email, institutional code, roles and
+        the teacher's department of any user.
+
+        Changing the email of a user who already logged in clears their uid:
+        login looks the account up by email, so the next sign-in with the new
+        address links it again and the old Firebase account loses access.
+        """
+
+        user = self.users_repository.get(user_id)
+
+        if not user:
+            return None
+
+        payload = data.model_dump(exclude_unset=True)
+        fields: dict = {}
+        changes: list[str] = []
+
+        new_email = payload.get("email")
+
+        if new_email is not None and new_email != user.email:
+            existing = self.users_repository.get_by_email(new_email)
+
+            if existing and existing.id != user.id:
+                raise UserAlreadyExistsError(new_email)
+
+            fields["email"] = new_email
+            changes.append(f"email cambió de {user.email} a {new_email}")
+
+            if user.uid:
+                fields["uid"] = None
+                changes.append("se desvinculó la cuenta de Firebase")
+
+        new_code = payload.get("institutional_code")
+
+        if new_code is not None and new_code != user.institutional_code:
+            existing = self.users_repository.get_by_institutional_code(new_code)
+
+            if existing and existing.id != user.id:
+                raise ResourceAlreadyExistsError(
+                    "usuario", "código institucional", new_code
+                )
+
+            fields["institutional_code"] = new_code
+            changes.append(
+                f"institutional_code cambió de {user.institutional_code} a {new_code}"
+            )
+
+        new_name = payload.get("name")
+
+        if new_name is not None and new_name != user.name:
+            fields["name"] = new_name
+            changes.append(f"name cambió de {user.name} a {new_name}")
+
+        new_active = payload.get("active")
+
+        if new_active is not None and new_active != user.active:
+            fields["active"] = new_active
+            changes.append(f"active cambió de {user.active} a {new_active}")
+
+        current_roles = self.users_repository.get_user_role_names(user.id)
+        final_roles = current_roles
+        role_models = None
+
+        if "roles" in payload:
+            final_roles = self._normalize_role_names(payload["roles"])
+            role_models = self.users_repository.get_roles_by_names(final_roles)
+
+            if len(role_models) != len(final_roles):
+                found = {r.name for r in role_models}
+                raise InvalidRoleError([r for r in final_roles if r not in found])
+
+            if (
+                user.id == current_user.get("id")
+                and RoleName.ADMIN.value in current_roles
+                and RoleName.ADMIN.value not in final_roles
+            ):
+                raise ValidationError("No puedes quitarte tu propio rol ADMIN")
+
+            if set(final_roles) != set(current_roles):
+                changes.append(f"roles cambiaron de {current_roles} a {final_roles}")
+
+        department_set = "department_id" in payload
+        department_id = payload.get("department_id")
+
+        if department_set:
+            if RoleName.DOCENTE.value not in final_roles:
+                raise ValidationError(
+                    "El departamento solo se puede asignar a usuarios con rol DOCENTE"
+                )
+
+            if department_id is not None and not self.users_repository.department_exists(
+                department_id
+            ):
+                raise ResourceNotFoundError("Department", department_id)
+
+        if fields:
+            self.users_repository.assign_fields(user, fields)
+
+        if role_models is not None:
+            self.users_repository.replace_user_roles(
+                user.id, [r.id for r in role_models]
+            )
+
+        self._ensure_teacher(
+            user,
+            final_roles,
+            department_id=department_id if department_set else None,
+        )
+
+        if department_set:
+            teacher = self.users_repository.get_teacher_by_user_id(user.id)
+
+            if teacher and teacher.department_id != department_id:
+                changes.append(
+                    f"department_id cambió de {teacher.department_id} a {department_id}"
+                )
+                self.users_repository.set_teacher_department(teacher, department_id)
+
+        self.users_repository.commit()
+        self.users_repository.refresh(user)
+
+        detail = "; ".join(changes) if changes else "No se realizaron cambios"
+        description = f"Se actualizó el usuario {user.email}: {detail}"
+
+        await self.audit_service.log(
+            action="UPDATE",
+            entity_name="users",
+            entity_id=user.id,
+            actor_id=current_user.get("id"),
+            description=description,
+        )
+
+        return self._build_user_response(user)
+
+    def _apply_update(self, user, data: UserUpdate) -> dict:
+        """Apply a ``UserUpdate`` (fields and/or roles) to a loaded user."""
 
         payload = data.model_dump(exclude_unset=True)
         requested_roles = payload.pop("roles", None)

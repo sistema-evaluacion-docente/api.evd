@@ -5,6 +5,7 @@ from fastapi.param_functions import Depends
 from api.core.pagination import PaginationParams
 from api.dependencies.users import get_user_service
 from api.schemas.user import (
+    UserAdminUpdate,
     UserCreate,
     UserFilters,
     UserRolesUpdate,
@@ -39,6 +40,18 @@ class UsersController:
         """Retrieve a user by their unique identifier."""
 
         return await self.service.get_by_uid(uid)
+
+    async def get_by_id(self, user_id: int):
+        """Retrieve a user by database id."""
+
+        return await self.service.get_by_id(user_id)
+
+    async def admin_update(
+        self, user_id: int, payload: UserAdminUpdate, current_user: dict
+    ):
+        """Edit any user by database id. Reserved for an administrator by the route."""
+
+        return await self.service.admin_update_user(user_id, payload, current_user)
 
     async def update(self, payload: UserSelfUpdate, current_user):
         """Update the caller's own account.

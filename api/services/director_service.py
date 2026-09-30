@@ -290,7 +290,9 @@ class DirectorService:
 
         if RoleName.DIRECTOR_DE_DEPARTAMENTO.value not in current_roles:
             new_roles = current_roles + [RoleName.DIRECTOR_DE_DEPARTAMENTO.value]
-            await self.user_service.update_user(user.uid, UserUpdate(roles=new_roles))
+            await self.user_service.update_user_by_id(
+                user.id, UserUpdate(roles=new_roles)
+            )
 
         director = self.directors_repository.assign_director(user_id, department_id)
 
@@ -371,6 +373,6 @@ class DirectorService:
         # list); if this was their only one, leave it — deleting/unassigning a
         # director doesn't mean to strip the user's last role and lock them out.
         if remaining_roles:
-            await self.user_service.update_user(
-                user.uid, UserUpdate(roles=remaining_roles)
+            await self.user_service.update_user_by_id(
+                user.id, UserUpdate(roles=remaining_roles)
             )

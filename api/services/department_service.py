@@ -17,6 +17,7 @@ from api.schemas.department import (
 from api.schemas.pagination import build_paginated_response
 from api.serializers.departments import department_to_dict
 from api.services.audit_service import AuditService
+from api.utils.scope import dean_faculty_id
 from api.utils.scope import is_scoped_dean as _is_scoped_dean
 
 
@@ -46,7 +47,7 @@ class DepartmentService:
         """
 
         if _is_scoped_dean(current_user):
-            filters.faculty_id = current_user.get("faculty_id")
+            filters.faculty_id = dean_faculty_id(current_user)
 
         departments, total = self.departments_repository.search(filters, pagination)
 
@@ -83,8 +84,8 @@ class DepartmentService:
         if not department:
             return None
 
-        if _is_scoped_dean(current_user) and department.faculty_id != current_user.get(
-            "faculty_id"
+        if _is_scoped_dean(current_user) and department.faculty_id != dean_faculty_id(
+            current_user
         ):
             raise PermissionDeniedError(
                 "No tienes permiso para ver este departamento"
