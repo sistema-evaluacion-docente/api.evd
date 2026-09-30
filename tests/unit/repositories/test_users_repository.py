@@ -49,6 +49,56 @@ class TestUsersRepository:
 
         assert result is None
 
+    def test_get_by_uid_with_none_returns_none_without_querying(self, repo, mock_db):
+        """Test a missing uid never becomes an `IS NULL` match on another user."""
+
+        assert repo.get_by_uid(None) is None
+        mock_db.query.assert_not_called()
+
+    def test_get_by_institutional_code_found(self, repo, mock_db, mock_user_model):
+        """Test get_by_institutional_code returns the matching user."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (
+            mock_user_model
+        )
+
+        assert repo.get_by_institutional_code("1152185") == mock_user_model
+
+    def test_department_exists_true(self, repo, mock_db):
+        """Test department_exists is True when the department is found."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = (7,)
+
+        assert repo.department_exists(7) is True
+
+    def test_department_exists_false(self, repo, mock_db):
+        """Test department_exists is False when the department is missing."""
+
+        mock_db.query.return_value.filter.return_value.first.return_value = None
+
+        assert repo.department_exists(999) is False
+
+    def test_assign_fields_writes_none_and_does_not_commit(self, repo, mock_db):
+        """Test assign_fields can clear uid and leaves the commit to the caller."""
+
+        user = MagicMock(uid="old-uid", email="old@ufps.edu.co")
+
+        repo.assign_fields(user, {"uid": None, "email": "new@ufps.edu.co"})
+
+        assert user.uid is None
+        assert user.email == "new@ufps.edu.co"
+        mock_db.commit.assert_not_called()
+
+    def test_set_teacher_department_does_not_commit(self, repo, mock_db):
+        """Test set_teacher_department sets the field without committing."""
+
+        teacher = MagicMock(department_id=1)
+
+        repo.set_teacher_department(teacher, None)
+
+        assert teacher.department_id is None
+        mock_db.commit.assert_not_called()
+
     def test_get_by_email_found(self, repo, mock_db, mock_user_model):
         """Test get_by_email returns user when found."""
 

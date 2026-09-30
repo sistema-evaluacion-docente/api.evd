@@ -29,6 +29,11 @@ class UsersRepository(BaseRepository[UserModel]):
     def get_by_uid(self, uid: str) -> UserModel | None:
         """Retrieve a user by their unique identifier (UID)."""
 
+        # `uid == None` compiles to `IS NULL` and would match any user that
+        # never logged in.
+        if not uid:
+            return None
+
         return (
             self.db.query(UserModel)
             .options(selectinload(UserModel.teacher))
@@ -40,6 +45,39 @@ class UsersRepository(BaseRepository[UserModel]):
         """Retrieve a user by their email address."""
 
         return self.db.query(UserModel).filter(UserModel.email == email).first()
+
+    def get_by_institutional_code(self, code: str) -> UserModel | None:
+        """Retrieve a user by their institutional code."""
+
+        return (
+            self.db.query(UserModel)
+            .filter(UserModel.institutional_code == code)
+            .first()
+        )
+
+    def department_exists(self, department_id: int) -> bool:
+        """Check whether a department exists."""
+
+        return (
+            self.db.query(DepartmentModel.id)
+            .filter(DepartmentModel.id == department_id)
+            .first()
+            is not None
+        )
+
+    def assign_fields(self, user: UserModel, data: dict) -> None:
+        """Set user attributes without committing. Unlike ``update_fields``,
+        a None value is written (e.g. clearing ``uid``)."""
+
+        for field, value in data.items():
+            setattr(user, field, value)
+
+    def set_teacher_department(
+        self, teacher: TeacherModel, department_id: int | None
+    ) -> None:
+        """Set a teacher's department without committing."""
+
+        teacher.department_id = department_id
 
     def search(
         self,
