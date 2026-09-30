@@ -8,6 +8,7 @@ import pytest
 from api.controllers.users import UsersController
 from api.core.pagination import PaginationParams
 from api.schemas.user import (
+    UserAdminUpdate,
     UserCreate,
     UserUpdate,
     UserFilters,
@@ -32,7 +33,35 @@ class TestUsersController:
         service.update_user = AsyncMock()
         service.replace_roles = AsyncMock()
         service.update_status = AsyncMock()
+        service.get_by_id = AsyncMock()
+        service.admin_update_user = AsyncMock()
         return service
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_delegates_to_service(self, controller, mock_service):
+        """Test get_by_id delegates to service."""
+
+        mock_service.get_by_id.return_value = {"id": 5}
+
+        result = await controller.get_by_id(5)
+
+        mock_service.get_by_id.assert_awaited_once_with(5)
+        assert result == {"id": 5}
+
+    @pytest.mark.asyncio
+    async def test_admin_update_delegates_to_service(self, controller, mock_service):
+        """Test admin_update passes the id, payload and acting user through."""
+
+        payload = UserAdminUpdate(name="Nuevo")
+        current_user = {"id": 99, "roles": ["ADMIN"]}
+        mock_service.admin_update_user.return_value = {"id": 5, "name": "Nuevo"}
+
+        result = await controller.admin_update(5, payload, current_user)
+
+        mock_service.admin_update_user.assert_awaited_once_with(
+            5, payload, current_user
+        )
+        assert result["name"] == "Nuevo"
 
     @pytest.fixture
     def controller(self, mock_service):

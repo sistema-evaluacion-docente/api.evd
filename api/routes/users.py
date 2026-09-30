@@ -9,6 +9,7 @@ from api.core.pagination import PaginationDep
 from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.user import (
     RoleName,
+    UserAdminUpdate,
     UserCreate,
     UserFiltersDep,
     UserOut,
@@ -76,6 +77,58 @@ async def login_user(
 
     if not user:
         raise AuthenticationError("Autenticación fallida")
+
+    return user
+
+
+@router.get(
+    "/by-id/{user_id}",
+    response_model=UserOut,
+)
+async def get_user_by_id(
+    user_id: int,
+    _=Depends(require_roles([RoleName.ADMIN])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """
+    Get any user by database id, including their department/faculty.
+    Works for users who never logged in (no uid yet). ADMIN only.
+
+    Response: ResponseEnvelope[UserOut]
+    """
+
+    user = await controller.get_by_id(user_id)
+
+    if not user:
+        raise UserNotFoundError(str(user_id))
+
+    return user
+
+
+@router.put(
+    "/by-id/{user_id}",
+    response_model=UserOut,
+)
+async def admin_update_user(
+    user_id: int,
+    payload: UserAdminUpdate,
+    current_user=Depends(require_roles([RoleName.ADMIN])),
+    controller: UsersController = Depends(get_users_controller),
+):
+    """
+    Edit name, email, institutional code, roles and the teacher's department
+    of any user. ADMIN only.
+
+    Changing the email of a user who already logged in unlinks their Firebase
+    account; the next sign-in with the new email links it again.
+
+    Response: ResponseEnvelope[UserOut]
+    """
+
+    user = await controller.admin_update(user_id, payload, current_user)
+
+    if not user:
+        raise UserNotFoundError(str(user_id))
 
     return user
 

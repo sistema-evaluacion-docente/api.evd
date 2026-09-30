@@ -39,6 +39,8 @@ def controller():
     mock.update = AsyncMock()
     mock.replace_roles = AsyncMock()
     mock.update_status = AsyncMock()
+    mock.get_by_id = AsyncMock()
+    mock.admin_update = AsyncMock()
     return mock
 
 
@@ -181,6 +183,80 @@ class TestReplaceUserRoles:
         )
 
         assert response.status_code == 403
+
+
+class TestGetUserById:
+    """GET /users/by-id/{user_id}"""
+
+    def test_for_an_admin_returns_200(self, client, controller):
+        controller.get_by_id.return_value = USER
+
+        assert client.get("/users/by-id/3").status_code == 200
+
+    def test_when_user_missing_returns_404(self, client, controller):
+        controller.get_by_id.return_value = None
+
+        assert client.get("/users/by-id/999").status_code == 404
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        assert client.get("/users/by-id/3").status_code == 403
+
+
+class TestAdminUpdateUser:
+    """PUT /users/by-id/{user_id}"""
+
+    def test_for_an_admin_passes_id_payload_and_user(self, client, controller):
+        controller.admin_update.return_value = {**USER, "name": "Nuevo"}
+
+        response = client.put(
+            "/users/by-id/3",
+            json={"name": "Nuevo", "email": "Nuevo@ufps.edu.co", "department_id": 7},
+        )
+
+        assert response.status_code == 200
+        user_id, payload, current_user = controller.admin_update.await_args.args
+        assert user_id == 3
+        assert payload.email == "nuevo@ufps.edu.co"
+        assert payload.department_id == 7
+        assert "ADMIN" in current_user["roles"]
+
+    def test_when_user_missing_returns_404(self, client, controller):
+        controller.admin_update.return_value = None
+
+        assert client.put("/users/by-id/999", json={"name": "X"}).status_code == 404
+
+    def test_for_a_director_returns_403(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+
+        response = client.put("/users/by-id/3", json={"name": "X"})
+
+        assert response.status_code == 403
+        controller.admin_update.assert_not_called()
+
+    def test_with_non_numeric_code_returns_422(self, client, controller):
+        response = client.put(
+            "/users/by-id/3", json={"institutional_code": "12A4"}
+        )
+
+        assert response.status_code == 422
+        controller.admin_update.assert_not_called()
+
+    def test_with_blank_name_returns_422(self, client, controller):
+        assert client.put("/users/by-id/3", json={"name": "  "}).status_code == 422
+
+    def test_with_invalid_email_returns_422(self, client, controller):
+        assert (
+            client.put("/users/by-id/3", json={"email": "sin-arroba"}).status_code
+            == 422
+        )
+
+    def test_with_null_active_returns_422(self, client, controller):
+        assert client.put("/users/by-id/3", json={"active": None}).status_code == 422
+
+    def test_with_empty_roles_returns_422(self, client, controller):
+        assert client.put("/users/by-id/3", json={"roles": []}).status_code == 422
 
 
 class TestUpdateUserStatus:
