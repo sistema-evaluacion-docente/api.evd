@@ -8,7 +8,7 @@ from enum import Enum
 from typing import Annotated, Optional
 
 from fastapi import Depends, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class RoleName(str, Enum):
@@ -49,6 +49,69 @@ class UserUpdate(BaseModel):
     active: Optional[bool] = None
     avatar_url: Optional[str] = None
     roles: Optional[list[RoleName]] = Field(default=None, min_length=1)
+
+
+class UserAdminUpdate(BaseModel):
+    """Schema for an administrator editing any user.
+
+    ``department_id`` is the teacher record's department, so it only applies to
+    a user who ends up with the DOCENTE role; sending it as ``null`` clears it.
+    Director and dean assignments keep their own endpoints.
+    """
+
+    name: Optional[str] = None
+    email: Optional[str] = None
+    institutional_code: Optional[str] = None
+    roles: Optional[list[RoleName]] = Field(default=None, min_length=1)
+    department_id: Optional[int] = None
+    active: Optional[bool] = None
+
+    @field_validator("active")
+    @classmethod
+    def validate_active(cls, v: Optional[bool]) -> bool:
+        """Reject an explicit null: a user is either active or not."""
+
+        if v is None:
+            raise ValueError("active no puede ser nulo")
+
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: Optional[str]) -> str:
+        """Reject a blank or null name."""
+
+        if v is None or not v.strip():
+            raise ValueError("El nombre no puede estar vacío")
+
+        return v.strip()
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v: Optional[str]) -> str:
+        """Normalize the email the way Firebase reports it on login."""
+
+        if v is None or not v.strip():
+            raise ValueError("El correo no puede estar vacío")
+
+        v = v.strip().lower()
+
+        if "@" not in v:
+            raise ValueError("El correo no es válido")
+
+        return v
+
+    @field_validator("institutional_code")
+    @classmethod
+    def validate_institutional_code(cls, v: Optional[str]) -> str:
+        """Same rule as teachers: an integer without decimals."""
+
+        if v is None or not v.strip().isdigit():
+            raise ValueError(
+                "institutional_code debe ser un número entero sin decimales"
+            )
+
+        return v.strip()
 
 
 class UserSelfUpdate(BaseModel):
