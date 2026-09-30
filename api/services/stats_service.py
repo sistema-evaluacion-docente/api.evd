@@ -7,7 +7,11 @@ from api.exceptions import PermissionDeniedError, ValidationError
 from api.repositories.stats import StatsRepository
 from api.schemas.pagination import build_paginated_response
 from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
-from api.utils.scope import assert_department_in_dean_scope, is_scoped_dean
+from api.utils.scope import (
+    assert_department_in_dean_scope,
+    dean_faculty_id,
+    is_scoped_dean,
+)
 
 _PERIOD_CODE_PATTERN = re.compile(r"^\d{4}-[12]$")
 
@@ -36,7 +40,7 @@ class StatsService:
                     current_user, self.stats_repository.db, department_id
                 )
             else:
-                faculty_id = current_user.get("faculty_id")
+                faculty_id = dean_faculty_id(current_user)
 
         return await self.stats_repository.get_department_averages_by_period(
             department_id, faculty_id
@@ -53,7 +57,7 @@ class StatsService:
         faculty_id = None
 
         if is_scoped_dean(current_user):
-            faculty_id = current_user.get("faculty_id")
+            faculty_id = dean_faculty_id(current_user)
 
         return await self.stats_repository.get_department_uploads_by_period(
             academic_period_id, faculty_id
@@ -70,7 +74,7 @@ class StatsService:
         faculty_id = None
 
         if is_scoped_dean(current_user):
-            faculty_id = current_user.get("faculty_id")
+            faculty_id = dean_faculty_id(current_user)
 
         return await self.stats_repository.get_department_cases_by_period(
             academic_period_id, faculty_id
@@ -81,8 +85,8 @@ class StatsService:
     ) -> list[dict]:
         """Get a faculty's global average per academic period."""
 
-        if is_scoped_dean(current_user) and faculty_id != current_user.get(
-            "faculty_id"
+        if is_scoped_dean(current_user) and faculty_id != dean_faculty_id(
+            current_user
         ):
             raise PermissionDeniedError(
                 "No tienes permiso para ver información de esta facultad"

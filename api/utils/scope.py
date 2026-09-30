@@ -28,6 +28,21 @@ def is_scoped_dean(current_user: dict) -> bool:
     return RoleName.DECANO.value in roles
 
 
+def dean_faculty_id(current_user: dict) -> int:
+    """The faculty a scoped DECANO is confined to.
+
+    A DECANO role without a `deans` row has no faculty; passing that None on
+    as a filter would mean "no filter" and expose every faculty, so it is
+    rejected instead."""
+
+    faculty_id = current_user.get("faculty_id")
+
+    if faculty_id is None:
+        raise PermissionDeniedError("No tienes una facultad asignada")
+
+    return faculty_id
+
+
 def department_faculty_id(db: Session, department_id: int) -> int | None:
     """Return the `faculty_id` of a department, or raise if it doesn't exist."""
 
@@ -46,9 +61,9 @@ def assert_department_in_dean_scope(
 ) -> None:
     """Raise 403 if a DECANO requests a department outside their faculty."""
 
-    faculty_id = department_faculty_id(db, department_id)
+    own_faculty_id = dean_faculty_id(current_user)
 
-    if faculty_id != current_user.get("faculty_id"):
+    if department_faculty_id(db, department_id) != own_faculty_id:
         raise PermissionDeniedError(
             "No tienes permiso para ver información de este departamento"
         )
