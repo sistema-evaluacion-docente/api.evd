@@ -192,7 +192,9 @@ class FacultyService:
 
         if RoleName.DECANO.value not in current_roles:
             new_roles = current_roles + [RoleName.DECANO.value]
-            await self.user_service.update_user(user.uid, UserUpdate(roles=new_roles))
+            await self.user_service.update_user_by_id(
+                user.id, UserUpdate(roles=new_roles)
+            )
 
         dean = self.faculties_repository.assign_dean(user_id, faculty_id)
 
@@ -267,6 +269,6 @@ class FacultyService:
         # list); if this was their only one, leave it — unassigning a dean
         # doesn't mean to strip the user's last role and lock them out.
         if remaining_roles:
-            await self.user_service.update_user(
-                user.uid, UserUpdate(roles=remaining_roles)
+            await self.user_service.update_user_by_id(
+                user.id, UserUpdate(roles=remaining_roles)
             )

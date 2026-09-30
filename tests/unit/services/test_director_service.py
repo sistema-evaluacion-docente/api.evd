@@ -48,7 +48,7 @@ class TestDirectorService:
         """Mock UserService."""
         service = MagicMock()
         service.create_user_with_roles = AsyncMock()
-        service.update_user = AsyncMock()
+        service.update_user_by_id = AsyncMock()
         return service
 
     @pytest.fixture
@@ -368,8 +368,8 @@ class TestDirectorService:
 
         await service.delete(1, current_user)
 
-        mock_user_service.update_user.assert_awaited_once_with(
-            "uid-10", UserUpdate(roles=["DOCENTE"])
+        mock_user_service.update_user_by_id.assert_awaited_once_with(
+            10, UserUpdate(roles=["DOCENTE"])
         )
 
     @pytest.mark.asyncio
@@ -391,7 +391,7 @@ class TestDirectorService:
 
         await service.delete(1, current_user)
 
-        mock_user_service.update_user.assert_not_awaited()
+        mock_user_service.update_user_by_id.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_update_director_department_already_assigned(
@@ -474,14 +474,43 @@ class TestDirectorService:
         user.name = "Ana"
         mock_users_repo.get.return_value = user
         mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
-        mock_user_service.update_user = AsyncMock()
+        mock_user_service.update_user_by_id = AsyncMock()
         mock_directors_repo.assign_director.return_value = mock_director
         mock_directors_repo.get.return_value = mock_director
 
         result = await service.assign_director(1, 10, current_user)
 
         assert result is not None
-        mock_user_service.update_user.assert_awaited_once()
+        mock_user_service.update_user_by_id.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_assign_director_to_a_user_who_never_logged_in_updates_that_user(
+        self,
+        service,
+        mock_departments_repo,
+        mock_users_repo,
+        mock_directors_repo,
+        mock_user_service,
+        mock_director,
+        current_user,
+    ):
+        """Regression: with uid=None the role update used to look the user up
+        by `uid IS NULL` and could hit a different user. It goes by id now."""
+        department = MagicMock(id=1, code="SIS")
+        department.name = "Sistemas"
+        mock_departments_repo.get.return_value = department
+        user = MagicMock(id=10, uid=None, email="ana@ufps.edu.co", avatar_url=None)
+        user.name = "Ana"
+        mock_users_repo.get.return_value = user
+        mock_users_repo.get_user_role_names.return_value = ["DOCENTE"]
+        mock_directors_repo.assign_director.return_value = mock_director
+        mock_directors_repo.get.return_value = mock_director
+
+        await service.assign_director(1, 10, current_user)
+
+        mock_user_service.update_user_by_id.assert_awaited_once_with(
+            10, UserUpdate(roles=["DOCENTE", RoleName.DIRECTOR_DE_DEPARTAMENTO.value])
+        )
 
     @pytest.mark.asyncio
     async def test_assign_director_keeps_the_role_when_already_present(
@@ -502,13 +531,13 @@ class TestDirectorService:
         user.name = "Ana"
         mock_users_repo.get.return_value = user
         mock_users_repo.get_user_role_names.return_value = ["DIRECTOR DE DEPARTAMENTO"]
-        mock_user_service.update_user = AsyncMock()
+        mock_user_service.update_user_by_id = AsyncMock()
         mock_directors_repo.assign_director.return_value = mock_director
         mock_directors_repo.get.return_value = mock_director
 
         await service.assign_director(1, 10, current_user)
 
-        mock_user_service.update_user.assert_not_called()
+        mock_user_service.update_user_by_id.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_unassign_director_department_not_found(
@@ -575,8 +604,8 @@ class TestDirectorService:
 
         await service.unassign_director(1, current_user)
 
-        mock_user_service.update_user.assert_awaited_once_with(
-            "uid-10", UserUpdate(roles=["DOCENTE"])
+        mock_user_service.update_user_by_id.assert_awaited_once_with(
+            10, UserUpdate(roles=["DOCENTE"])
         )
 
     @pytest.mark.asyncio
@@ -600,4 +629,4 @@ class TestDirectorService:
 
         await service.unassign_director(1, current_user)
 
-        mock_user_service.update_user.assert_not_awaited()
+        mock_user_service.update_user_by_id.assert_not_awaited()

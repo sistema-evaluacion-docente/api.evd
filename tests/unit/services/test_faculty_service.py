@@ -54,7 +54,7 @@ class TestFacultyService:
         """Mock UserService."""
 
         service = MagicMock()
-        service.update_user = AsyncMock()
+        service.update_user_by_id = AsyncMock()
         return service
 
     @pytest.fixture
@@ -419,7 +419,7 @@ class TestFacultyService:
         result = await service.assign_dean(1, 10, current_user)
 
         assert result is not None
-        mock_user_service.update_user.assert_awaited_once()
+        mock_user_service.update_user_by_id.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_assign_dean_keeps_the_role_when_already_present(
@@ -442,7 +442,7 @@ class TestFacultyService:
 
         await service.assign_dean(1, 10, current_user)
 
-        mock_user_service.update_user.assert_not_called()
+        mock_user_service.update_user_by_id.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_unassign_dean_faculty_not_found(
@@ -517,8 +517,8 @@ class TestFacultyService:
 
         from api.schemas.user import UserUpdate
 
-        mock_user_service.update_user.assert_awaited_once_with(
-            "uid-10", UserUpdate(roles=["DOCENTE"])
+        mock_user_service.update_user_by_id.assert_awaited_once_with(
+            10, UserUpdate(roles=["DOCENTE"])
         )
 
     @pytest.mark.asyncio
@@ -541,4 +541,4 @@ class TestFacultyService:
 
         await service.unassign_dean(1, current_user)
 
-        mock_user_service.update_user.assert_not_awaited()
+        mock_user_service.update_user_by_id.assert_not_awaited()
