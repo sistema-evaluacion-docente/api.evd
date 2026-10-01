@@ -38,18 +38,10 @@ class TestTeachersController:
         return service
 
     @pytest.fixture
-    def mock_dashboard_service(self):
-        """Mock DashboardService."""
-
-        service = MagicMock()
-        service.get_dashboard = AsyncMock()
-        return service
-
-    @pytest.fixture
-    def controller(self, mock_service, mock_dashboard_service):
+    def controller(self, mock_service):
         """Create controller instance with mocked service."""
 
-        return TeachersController(mock_service, mock_dashboard_service)
+        return TeachersController(mock_service)
 
     @pytest.mark.asyncio
     async def test_get_all_delegates_to_service(self, controller, mock_service):

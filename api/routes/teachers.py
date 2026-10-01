@@ -12,7 +12,6 @@ from api.middlewares.auth import get_current_user, require_roles
 from api.schemas.academic_group import Modality
 from api.schemas.evaluation_summary import (
     CourseHistoryOut,
-    TeacherDashboardOut,
     TeacherHistoryOut,
 )
 from api.schemas.teacher import (
@@ -219,26 +218,6 @@ async def get_teacher_history(
         raise HTTPException(status_code=404, detail="Teacher not found")
 
     return history
-
-
-@router.get("/{teacher_id}/dashboard", response_model=TeacherDashboardOut)
-async def get_teacher_dashboard(
-    teacher_id: int,
-    period_name: str = Query(..., description="Academic period name"),
-    department_id: int = Query(..., description="Department ID"),
-    _=Depends(require_roles(_ROLES)),
-    controller: TeachersController = Depends(get_teachers_controller),
-):
-    """Get combined dashboard data for a teacher (evaluation detail, period comparison, comments, matrix)."""
-
-    result = await controller.get_dashboard(teacher_id, period_name, department_id)
-
-    if not result:
-        raise HTTPException(
-            status_code=404, detail="Docente o evaluación no encontrada"
-        )
-
-    return result
 
 
 @router.get(

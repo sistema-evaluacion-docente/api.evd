@@ -41,7 +41,6 @@ def controller():
     mock.update = AsyncMock()
     mock.delete = AsyncMock()
     mock.get_history = AsyncMock()
-    mock.get_dashboard = AsyncMock()
     mock.get_evaluation_report = AsyncMock()
     return mock
 
@@ -561,28 +560,6 @@ class TestGetTeacherCourseHistory:
         controller.get_course_history.return_value = None
 
         response = client.get("/teachers/5/courses/BD101/history")
-
-        assert response.status_code == 404
-
-
-class TestGetTeacherDashboard:
-    """GET /teachers/{teacher_id}/dashboard"""
-
-    async def test_returns_the_dashboard(self, client, controller):
-        controller.get_dashboard.return_value = {"teacher_id": 5}
-
-        response = client.get(
-            "/teachers/5/dashboard?period_name=2026-1&department_id=7"
-        )
-
-        assert response.status_code == 200
-
-    async def test_returns_404_when_missing(self, client, controller):
-        controller.get_dashboard.return_value = None
-
-        response = client.get(
-            "/teachers/5/dashboard?period_name=2026-1&department_id=7"
-        )
 
         assert response.status_code == 404
 
