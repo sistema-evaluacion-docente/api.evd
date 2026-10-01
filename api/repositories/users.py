@@ -99,8 +99,27 @@ class UsersRepository(BaseRepository[UserModel]):
                         UserModel.uid.ilike(like_term),
                         UserModel.email.ilike(like_term),
                         UserModel.name.ilike(like_term),
+                        UserModel.institutional_code.ilike(like_term),
                     )
                 )
+
+        if filters.department_id is not None:
+            # "Belongs to the department" = teaches there or directs it. An
+            # inactive director row no longer directs it, so it is left out.
+            teachers_subquery = select(TeacherModel.user_id).where(
+                TeacherModel.department_id == filters.department_id
+            )
+            directors_subquery = select(DirectorsModel.user_id).where(
+                DirectorsModel.department_id == filters.department_id,
+                DirectorsModel.active.isnot(False),
+            )
+
+            query = query.filter(
+                or_(
+                    UserModel.id.in_(teachers_subquery),
+                    UserModel.id.in_(directors_subquery),
+                )
+            )
 
         if filters.active is not None:
             query = query.filter(UserModel.active == filters.active)

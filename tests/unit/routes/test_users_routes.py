@@ -100,6 +100,20 @@ class TestListUsers:
 
         assert response.status_code == 403
 
+    def test_passes_the_department_filter_to_the_controller(self, client, controller):
+        """Test ?department_id= reaches the controller's filters."""
+
+        controller.get_all.return_value = paginated([])
+
+        response = client.get("/users/?department_id=7")
+
+        assert response.status_code == 200
+        filters = controller.get_all.await_args.args[0]
+        assert filters.department_id == 7
+
+    def test_with_non_numeric_department_returns_422(self, client, controller):
+        assert client.get("/users/?department_id=abc").status_code == 422
+
 
 class TestLoginUser:
     """GET /users/auth"""

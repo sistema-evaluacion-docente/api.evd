@@ -407,6 +407,48 @@ class TestUsersRepository:
         assert items == [mock_user_model]
         mock_query.filter.assert_called_once()
 
+    def test_search_with_department_filter(self, repo, mock_db, mock_user_model):
+        """Test search applies the teacher-or-director department filter."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 1
+        mock_query.offset.return_value.limit.return_value.all.return_value = [
+            mock_user_model
+        ]
+
+        filters = UserFilters(department_id=7)
+        pagination = PaginationParams(page=1, limit=10)
+
+        items, total = repo.search(filters, pagination)
+
+        assert items == [mock_user_model]
+        mock_query.filter.assert_called_once()
+        compiled = str(mock_query.filter.call_args.args[0])
+        assert "teachers" in compiled
+        assert "directors" in compiled
+
+    def test_search_term_also_matches_institutional_code(
+        self, repo, mock_db, mock_user_model
+    ):
+        """Test the search box finds users by their institutional code."""
+
+        mock_query = MagicMock()
+        mock_db.query.return_value = mock_query
+        mock_query.filter.return_value = mock_query
+        mock_query.options.return_value = mock_query
+        mock_query.order_by.return_value = mock_query
+        mock_query.count.return_value = 0
+        mock_query.offset.return_value.limit.return_value.all.return_value = []
+
+        repo.search(UserFilters(search="1152"), PaginationParams(page=1, limit=10))
+
+        compiled = str(mock_query.filter.call_args.args[0])
+        assert "institutional_code" in compiled
+
     def test_search_pagination_offset(self, repo, mock_db, mock_user_model):
         """Test search calculates correct offset for page > 1."""
 
