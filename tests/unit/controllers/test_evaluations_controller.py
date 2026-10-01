@@ -94,9 +94,9 @@ class TestEvaluationsController:
         current_user = {"roles": ["ADMIN"]}
         mock_service.get_by_period.return_value = {"id": 1, "academic_period_id": 5}
 
-        result = await controller.get_by_period(5, current_user)
+        result = await controller.get_by_period(5, current_user, 7)
 
-        mock_service.get_by_period.assert_called_once_with(5, current_user)
+        mock_service.get_by_period.assert_called_once_with(5, current_user, 7)
         assert result["academic_period_id"] == 5
 
     @pytest.mark.asyncio
@@ -198,10 +198,11 @@ class TestEvaluationsController:
             "overall_average": 4.5,
         }
 
-        result = await controller.get_teacher_detail("2024-1", 10)
+        current_user = {"id": 3, "roles": ["DOCENTE"]}
+        result = await controller.get_teacher_detail("2024-1", 10, current_user)
 
         mock_service.get_teacher_detail.assert_called_once_with(
-            "2024-1", 10, None, False
+            "2024-1", 10, current_user, False
         )
         assert result["teacher_id"] == 10
 
@@ -216,9 +217,10 @@ class TestEvaluationsController:
             "courses": [],
         }
 
-        result = await controller.get_teacher_comments(1, 10)
+        current_user = {"id": 3, "roles": ["DOCENTE"]}
+        result = await controller.get_teacher_comments(1, 10, current_user)
 
-        mock_service.get_teacher_comments.assert_called_once_with(1, 10)
+        mock_service.get_teacher_comments.assert_called_once_with(1, 10, current_user)
         assert result["teacher_id"] == 10
 
     @pytest.mark.asyncio

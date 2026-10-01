@@ -263,15 +263,6 @@ class EvaluationDimensionDetailResponse(BaseModel):
     path: str
 
 
-class TeacherDashboardOut(BaseModel):
-    """Combined dashboard data for a teacher: evaluation detail, period comparison, comments, and matrix."""
-
-    evaluation_detail: TeacherEvaluationDetail
-    period_comparison: dict
-    comments: TeacherCommentsOut
-    matrix: dict
-
-
 class DimensionAveragesOut(BaseModel):
     """Response envelope for the dimension averages endpoint."""
 

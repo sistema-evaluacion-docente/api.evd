@@ -321,17 +321,70 @@ class TestEvaluationService:
         mock_evaluations_repo.get_dimension_averages.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_get_by_period_returns_evaluation(
-        self, service, mock_evaluations_repo, current_user
+    async def test_get_by_period_for_a_director_uses_their_department(
+        self, service, mock_evaluations_repo
     ):
-        """Test get_by_period returns evaluation dict."""
+        """A director gets their own department's evaluation of the period,
+        never "the first one" of whichever department loaded it first."""
 
-        mock_evaluations_repo.get_by_period_id.return_value = {"id": 1, "department_id": 1}
+        director = {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+        mock_evaluations_repo.get_by_period_and_department.return_value = {"id": 1}
 
-        result = await service.get_by_period(1, current_user)
+        result = await service.get_by_period(3, director)
 
-        assert result == {"id": 1, "department_id": 1}
-        mock_evaluations_repo.get_by_period_id.assert_called_once_with(1)
+        assert result == {"id": 1}
+        mock_evaluations_repo.get_by_period_and_department.assert_called_once_with(3, 7)
+
+    @pytest.mark.asyncio
+    async def test_get_by_period_rejects_a_director_asking_for_another_department(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_period(3, director, department_id=8)
+
+        mock_evaluations_repo.get_by_period_and_department.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_period_rejects_a_director_without_department(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": None}
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_by_period(3, director)
+
+    @pytest.mark.asyncio
+    async def test_get_by_period_for_an_admin_requires_the_department(
+        self, service, mock_evaluations_repo
+    ):
+        """An ADMIN has no department of their own: they must name one."""
+
+        with pytest.raises(ValidationError):
+            await service.get_by_period(3, {"roles": ["ADMIN"]})
+
+        mock_evaluations_repo.get_by_period_and_department.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_by_period_for_an_admin_with_any_department(
+        self, service, mock_evaluations_repo
+    ):
+        mock_evaluations_repo.get_by_period_and_department.return_value = {"id": 2}
+
+        result = await service.get_by_period(3, {"roles": ["ADMIN"]}, department_id=9)
+
+        assert result == {"id": 2}
+        mock_evaluations_repo.get_by_period_and_department.assert_called_once_with(3, 9)
+
+    @pytest.mark.asyncio
+    async def test_get_by_period_returns_none_when_the_department_has_none(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+        mock_evaluations_repo.get_by_period_and_department.return_value = None
+
+        assert await service.get_by_period(3, director) is None
 
     @pytest.mark.asyncio
     async def test_get_summary_returns_statistics(
@@ -556,6 +609,15 @@ class TestEvaluationService:
 
         mock_evaluations_repo.get_dimension_detail.assert_not_called()
 
+    ADMIN = {"id": 1, "roles": ["ADMIN"]}
+
+    @staticmethod
+    def _period(period_id, code):
+        period = MagicMock()
+        period.id = period_id
+        period.code = code
+        return period
+
     @pytest.mark.asyncio
     async def test_get_teacher_detail_returns_none_when_period_not_found(
         self, service, mock_academic_periods_repo
@@ -564,7 +626,7 @@ class TestEvaluationService:
 
         mock_academic_periods_repo.get_by_name.return_value = None
 
-        result = await service.get_teacher_detail("2099-1", 10)
+        result = await service.get_teacher_detail("2099-1", 10, self.ADMIN)
 
         assert result is None
 
@@ -574,17 +636,14 @@ class TestEvaluationService:
     ):
         """Test get_teacher_detail doesn't fetch or attach previous_period by default."""
 
-        period = MagicMock()
-        period.id = 2
-        period.code = "2024-1"
-        mock_academic_periods_repo.get_by_name.return_value = period
-        mock_evaluations_repo.get_by_period_id.return_value = {"id": 5}
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2024-1")
+        mock_evaluations_repo.get_teacher_evaluation_for_period.return_value = {"id": 5}
         mock_evaluations_repo.get_teacher_detail.return_value = {
             "teacher_id": 10,
             "overall_average": 4.0,
         }
 
-        result = await service.get_teacher_detail("2024-1", 10)
+        result = await service.get_teacher_detail("2024-1", 10, self.ADMIN)
 
         assert "previous_period" not in result
         mock_evaluations_repo.get_teacher_detail.assert_called_once_with(5, 10)
@@ -596,17 +655,10 @@ class TestEvaluationService:
     ):
         """Test compare_previous=True attaches the detail from the prior semester."""
 
-        period = MagicMock()
-        period.id = 2
-        period.code = "2024-2"
-        prev_period = MagicMock()
-        prev_period.id = 1
-        prev_period.code = "2024-1"
-
-        mock_academic_periods_repo.get_by_name.return_value = period
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2024-2")
         mock_academic_periods_repo.get_previous_period_code.return_value = "2024-1"
-        mock_academic_periods_repo.get_by_code.return_value = prev_period
-        mock_evaluations_repo.get_by_period_id.side_effect = [
+        mock_academic_periods_repo.get_by_code.return_value = self._period(1, "2024-1")
+        mock_evaluations_repo.get_teacher_evaluation_for_period.side_effect = [
             {"id": 5},
             {"id": 4},
         ]
@@ -618,7 +670,9 @@ class TestEvaluationService:
             previous_detail,
         ]
 
-        result = await service.get_teacher_detail("2024-2", 10, compare_previous=True)
+        result = await service.get_teacher_detail(
+            "2024-2", 10, self.ADMIN, compare_previous=True
+        )
 
         assert result["previous_period"] == previous_detail
         mock_academic_periods_repo.get_previous_period_code.assert_called_once_with(
@@ -634,22 +688,161 @@ class TestEvaluationService:
     ):
         """Test previous_period is None when the teacher has no evaluation that semester."""
 
-        period = MagicMock()
-        period.id = 2
-        period.code = "2024-1"
-
-        mock_academic_periods_repo.get_by_name.return_value = period
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2024-1")
         mock_academic_periods_repo.get_previous_period_code.return_value = "2023-2"
         mock_academic_periods_repo.get_by_code.return_value = None
-        mock_evaluations_repo.get_by_period_id.return_value = {"id": 5}
+        mock_evaluations_repo.get_teacher_evaluation_for_period.return_value = {"id": 5}
         mock_evaluations_repo.get_teacher_detail.return_value = {
             "teacher_id": 10,
             "overall_average": 4.0,
         }
 
-        result = await service.get_teacher_detail("2024-1", 10, compare_previous=True)
+        result = await service.get_teacher_detail(
+            "2024-1", 10, self.ADMIN, compare_previous=True
+        )
 
         assert result["previous_period"] is None
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_finds_the_evaluation_by_the_teachers_grades(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """Regression: a docente used to get "the first evaluation of the
+        period" — another department's — and a 404. The lookup now goes by
+        where the teacher has grades, without any department filter."""
+
+        own = {"id": 335, "roles": ["DOCENTE"]}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 335
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2026-1")
+        mock_evaluations_repo.get_teacher_evaluation_for_period.return_value = {"id": 116}
+        mock_evaluations_repo.get_teacher_detail.return_value = {"teacher_id": 332}
+
+        result = await service.get_teacher_detail("2026-1", 332, own)
+
+        assert result == {"teacher_id": 332}
+        mock_evaluations_repo.get_teacher_evaluation_for_period.assert_called_once_with(
+            332, 2, None
+        )
+        mock_evaluations_repo.get_by_period_and_department.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_confines_a_director_to_their_department(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """A director only gets an evaluation of their own department — for
+        the current period and for the comparison with the previous one."""
+
+        director = {"id": 2, "roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2024-2")
+        mock_academic_periods_repo.get_previous_period_code.return_value = "2024-1"
+        mock_academic_periods_repo.get_by_code.return_value = self._period(1, "2024-1")
+        mock_evaluations_repo.get_teacher_evaluation_for_period.side_effect = [
+            {"id": 5},
+            None,
+        ]
+        mock_evaluations_repo.get_teacher_detail.return_value = {"teacher_id": 10}
+
+        await service.get_teacher_detail("2024-2", 10, director, compare_previous=True)
+
+        calls = mock_evaluations_repo.get_teacher_evaluation_for_period.call_args_list
+        assert [c.args for c in calls] == [(10, 2, 7), (10, 1, 7)]
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_for_a_director_also_teaching_reads_own_history_unscoped(
+        self, service, mock_evaluations_repo, mock_academic_periods_repo
+    ):
+        """A director who is also a docente reads their own evaluations
+        wherever they were evaluated, not only in the department they direct."""
+
+        both = {
+            "id": 5,
+            "roles": ["DOCENTE", "DIRECTOR DE DEPARTAMENTO"],
+            "department_id": 7,
+        }
+        mock_evaluations_repo.get_teacher_user_id.return_value = 5
+        mock_academic_periods_repo.get_by_name.return_value = self._period(2, "2024-1")
+        mock_evaluations_repo.get_teacher_evaluation_for_period.return_value = {"id": 9}
+        mock_evaluations_repo.get_teacher_detail.return_value = {"teacher_id": 10}
+
+        await service.get_teacher_detail("2024-1", 10, both)
+
+        mock_evaluations_repo.get_teacher_evaluation_for_period.assert_called_once_with(
+            10, 2, None
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_rejects_a_docente_reading_another_teacher(
+        self, service, mock_evaluations_repo
+    ):
+        """A docente cannot read someone else's evaluation by changing the id."""
+
+        other = {"id": 3, "roles": ["DOCENTE"]}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_teacher_detail("2024-1", 10, other)
+
+        mock_evaluations_repo.get_teacher_evaluation_for_period.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_detail_rejects_a_director_without_department(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"id": 2, "roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": None}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_teacher_detail("2024-1", 10, director)
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_comments_rejects_a_director_of_another_department(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"id": 2, "roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(department_id=8)
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_teacher_comments(12, 10, director)
+
+        mock_evaluations_repo.get_teacher_comments.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_comments_for_the_directors_own_department(
+        self, service, mock_evaluations_repo
+    ):
+        director = {"id": 2, "roles": ["DIRECTOR DE DEPARTAMENTO"], "department_id": 7}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+        mock_evaluations_repo.get_by_id.return_value = MagicMock(department_id=7)
+        mock_evaluations_repo.get_teacher_comments.return_value = {"teacher_id": 10}
+
+        result = await service.get_teacher_comments(12, 10, director)
+
+        assert result == {"teacher_id": 10}
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_comments_own_teacher_in_any_department(
+        self, service, mock_evaluations_repo
+    ):
+        own = {"id": 335, "roles": ["DOCENTE"]}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 335
+        mock_evaluations_repo.get_teacher_comments.return_value = {"teacher_id": 332}
+
+        result = await service.get_teacher_comments(116, 332, own)
+
+        assert result == {"teacher_id": 332}
+        mock_evaluations_repo.get_by_id.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_teacher_comments_rejects_a_docente_reading_another_teacher(
+        self, service, mock_evaluations_repo
+    ):
+        other = {"id": 3, "roles": ["DOCENTE"]}
+        mock_evaluations_repo.get_teacher_user_id.return_value = 99
+
+        with pytest.raises(PermissionDeniedError):
+            await service.get_teacher_comments(12, 10, other)
 
     @pytest.mark.asyncio
     async def test_trigger_analysis_raises_when_not_found(

@@ -108,17 +108,31 @@ async def get_all_evaluations(
 @router.get(
     "/by-period/{period_id}",
     response_model=EvaluationOut,
-    responses={403: {"description": "Forbidden"}},
+    responses={
+        400: {"description": "ADMIN without department_id"},
+        403: {"description": "Forbidden"},
+        404: {"description": "Not found"},
+    },
 )
 async def get_evaluation_by_period(
     period_id: int,
+    department_id: int | None = Query(
+        default=None,
+        description=(
+            "Departamento de la evaluación. Obligatorio para ADMIN; un director "
+            "usa el suyo y solo puede pedir ese."
+        ),
+    ),
     current_user=Depends(require_roles(_EVAL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Endpoint to get an evaluation by academic period ID. Only ADMIN or the
-    director of its department may access it."""
+    """The evaluation of one department in an academic period.
 
-    evaluation = await controller.get_by_period(period_id, current_user)
+    Each department has its own evaluation per period, so the department is
+    always resolved: a director gets their own department's, an ADMIN must
+    say which one."""
+
+    evaluation = await controller.get_by_period(period_id, current_user, department_id)
 
     if not evaluation:
         raise HTTPException(
@@ -310,12 +324,17 @@ async def get_evaluation_dimension_detail(
 async def get_teacher_comments(
     evaluation_id: int,
     teacher_id: int,
-    _=Depends(require_roles(_ALL_ROLES)),
+    current_user=Depends(require_roles(_ALL_ROLES)),
     controller: EvaluationsController = Depends(get_evaluations_controller),
 ):
-    """Return comments grouped by course for a teacher within an evaluation."""
+    """Return comments grouped by course for a teacher within an evaluation.
 
-    result = await controller.get_teacher_comments(evaluation_id, teacher_id)
+    A DOCENTE only reaches their own; a director only evaluations of their
+    department."""
+
+    result = await controller.get_teacher_comments(
+        evaluation_id, teacher_id, current_user
+    )
 
     if not result:
         raise HTTPException(
@@ -343,21 +362,15 @@ async def get_teacher_evaluation_detail(
     (e.g. "2025-2" -> "2025-1"), or null if the teacher has no evaluation there.
     By default only the detail for `period_name` is returned.
 
-    Periods are shared across departments (e.g. every department has its own
-    "2026-1"), so without a department to disambiguate, a director could be
-    handed another department's evaluation for that same period name — a
-    director's own `department_id` is already on the token, so it costs
-    nothing to pass it through and remove the ambiguity for that role.
+    Every department has its own evaluation for a period, so the one shown is
+    the evaluation that holds this teacher's grades — never "the first of the
+    period". A DOCENTE only reaches their own history (in whichever
+    department it was evaluated); a director only evaluations of their own
+    department.
     """
 
-    department_id = (
-        current_user.get("department_id")
-        if RoleName.DIRECTOR_DE_DEPARTAMENTO in current_user.get("roles", [])
-        else None
-    )
-
     detail = await controller.get_teacher_detail(
-        period_name, teacher_id, department_id=department_id, compare_previous=compare_previous
+        period_name, teacher_id, current_user, compare_previous=compare_previous
     )
 
     if not detail:

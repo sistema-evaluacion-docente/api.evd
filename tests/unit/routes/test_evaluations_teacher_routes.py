@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from api.controllers.evaluations import get_evaluations_controller
+from api.exceptions import PermissionDeniedError
 from api.routes.evaluations import router
-from tests.unit.routes.conftest import DIRECTOR_USER, DOCENTE_USER
+from tests.unit.routes.conftest import ADMIN_USER, DIRECTOR_USER, DOCENTE_USER
 
 TEACHER_DETAIL = {
     "evaluation_id": 12,
@@ -72,8 +73,8 @@ class TestGetTeacherEvaluationDetail:
         client.get("/evaluations/teachers/5/detail", params={"period_name": "2025-1"})
 
         args = controller.get_teacher_detail.call_args
-        assert args.args == ("2025-1", 5)
-        assert args.kwargs == {"department_id": None, "compare_previous": False}
+        assert args.args == ("2025-1", 5, ADMIN_USER)
+        assert args.kwargs == {"compare_previous": False}
 
     async def test_forwards_compare_previous(self, client, controller):
         """The flag reaches the controller as a keyword argument."""
@@ -86,41 +87,35 @@ class TestGetTeacherEvaluationDetail:
         )
 
         assert controller.get_teacher_detail.call_args.kwargs == {
-            "department_id": None,
             "compare_previous": True,
         }
 
-    async def test_scopes_the_lookup_to_the_directors_own_department(
+    async def test_forwards_the_requesting_user_for_scoping(
         self, client, controller, auth
     ):
-        """A director's own department_id is forwarded, resolving the
-        ambiguity when another department has an evaluation for the same
-        period name."""
+        """The route no longer picks a department: it hands the user to the
+        service, which decides what that user may see."""
 
         auth.as_user(DIRECTOR_USER)
         controller.get_teacher_detail.return_value = TEACHER_DETAIL
 
         client.get("/evaluations/teachers/5/detail", params={"period_name": "2025-1"})
 
-        assert controller.get_teacher_detail.call_args.kwargs == {
-            "department_id": DIRECTOR_USER["department_id"],
-            "compare_previous": False,
-        }
+        assert controller.get_teacher_detail.call_args.args[2] == DIRECTOR_USER
 
-    async def test_does_not_scope_the_lookup_for_a_docente(self, client, controller, auth):
-        """A DOCENTE has no department_id of their own on the token, so the
-        lookup stays unscoped for that role — same behavior as before this
-        department_id was introduced."""
+    async def test_permission_denied_becomes_403(self, client, controller, auth):
+        """A docente reading someone else's detail is rejected by the service."""
 
         auth.as_user(DOCENTE_USER)
-        controller.get_teacher_detail.return_value = TEACHER_DETAIL
+        controller.get_teacher_detail.side_effect = PermissionDeniedError(
+            "Solo puedes consultar tus propias evaluaciones"
+        )
 
-        client.get("/evaluations/teachers/5/detail", params={"period_name": "2025-1"})
+        response = client.get(
+            "/evaluations/teachers/5/detail", params={"period_name": "2025-1"}
+        )
 
-        assert controller.get_teacher_detail.call_args.kwargs == {
-            "department_id": None,
-            "compare_previous": False,
-        }
+        assert response.status_code == 403
 
     async def test_requires_the_period_name(self, client, controller):
         """period_name has no default."""
@@ -199,7 +194,17 @@ class TestGetTeacherComments:
 
         client.get("/evaluations/12/teachers/5/comments")
 
-        assert controller.get_teacher_comments.call_args.args == (12, 5)
+        assert controller.get_teacher_comments.call_args.args == (12, 5, ADMIN_USER)
+
+    async def test_permission_denied_becomes_403(self, client, controller, auth):
+        """A docente reading someone else's comments is rejected by the service."""
+
+        auth.as_user(DOCENTE_USER)
+        controller.get_teacher_comments.side_effect = PermissionDeniedError(
+            "Solo puedes consultar tus propias evaluaciones"
+        )
+
+        assert client.get("/evaluations/12/teachers/5/comments").status_code == 403
 
     async def test_returns_404_when_there_are_no_comments(self, client, controller):
         """A falsy result from the controller becomes a 404."""

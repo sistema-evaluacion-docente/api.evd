@@ -301,23 +301,6 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
 
         return query
 
-    def get_by_period_id(self, academic_period_id: int) -> dict | None:
-        """Get an evaluation by academic period ID."""
-
-        evaluation = (
-            self.db.query(EvaluationModel)
-            .filter(
-                EvaluationModel.academic_period_id == academic_period_id,
-                EvaluationModel.active == True,
-            )
-            .first()
-        )
-
-        if not evaluation:
-            return None
-
-        return evaluation_to_dict(evaluation)
-
     def get_by_period_and_department(
         self, academic_period_id: int, department_id: int
     ) -> dict | None:
@@ -337,6 +320,61 @@ class EvaluationsRepository(BaseRepository[EvaluationModel]):
             return None
 
         return evaluation_to_dict(evaluation)
+
+    def get_teacher_evaluation_for_period(
+        self,
+        teacher_id: int,
+        academic_period_id: int,
+        department_id: int | None = None,
+    ) -> dict | None:
+        """The active evaluation of a period that holds this teacher's graded
+        groups, optionally only if it belongs to `department_id`.
+
+        Found through the grades, not through the teacher's current
+        department: a period has one evaluation per department, and a teacher
+        who moved keeps their old ones. Should two evaluations of the same
+        period hold the teacher (test data), the most recent one wins.
+        """
+
+        query = (
+            self.db.query(EvaluationModel)
+            .join(
+                EvaluationScoreModel,
+                EvaluationScoreModel.evaluation_id == EvaluationModel.id,
+            )
+            .join(
+                AcademicGroupModel,
+                AcademicGroupModel.id == EvaluationScoreModel.academic_group_id,
+            )
+            .filter(
+                EvaluationModel.academic_period_id == academic_period_id,
+                EvaluationModel.active == True,
+                AcademicGroupModel.teacher_id == teacher_id,
+            )
+        )
+
+        if department_id is not None:
+            query = query.filter(EvaluationModel.department_id == department_id)
+
+        evaluation = query.order_by(
+            EvaluationModel.created_at.desc(), EvaluationModel.id.desc()
+        ).first()
+
+        if not evaluation:
+            return None
+
+        return evaluation_to_dict(evaluation)
+
+    def get_teacher_user_id(self, teacher_id: int) -> int | None:
+        """The user account behind a teacher record, if any."""
+
+        row = (
+            self.db.query(TeacherModel.user_id)
+            .filter(TeacherModel.id == teacher_id)
+            .first()
+        )
+
+        return row[0] if row else None
 
     def has_evaluations_for_period(self, academic_period_id: int) -> bool:
         """Check if any evaluations exist for a given academic period."""
