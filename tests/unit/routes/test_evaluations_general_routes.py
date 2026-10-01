@@ -97,6 +97,26 @@ class TestGetEvaluationByPeriod:
 
         assert response.status_code == 404
 
+    def test_forwards_the_department_and_user(self, client, controller):
+        controller.get_by_period.return_value = EVALUATION
+
+        client.get("/evaluations/by-period/1?department_id=7")
+
+        assert controller.get_by_period.call_args.args == (1, ADMIN_USER, 7)
+
+    def test_without_department_forwards_none(self, client, controller, auth):
+        auth.as_user(DIRECTOR_USER)
+        controller.get_by_period.return_value = EVALUATION
+
+        client.get("/evaluations/by-period/1")
+
+        assert controller.get_by_period.call_args.args == (1, DIRECTOR_USER, None)
+
+    def test_for_a_teacher_returns_403(self, client, controller, auth):
+        auth.as_user(DOCENTE_USER)
+
+        assert client.get("/evaluations/by-period/1").status_code == 403
+
 
 class TestGetEvaluationById:
     """GET /evaluations/{evaluation_id}"""

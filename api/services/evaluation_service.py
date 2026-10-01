@@ -245,18 +245,45 @@ class EvaluationService:
 
         return comparison
 
-    async def get_by_period(self, period_id: int, current_user: dict) -> dict | None:
-        """Retrieve an evaluation by academic period ID. Only ADMIN or the
-        director of its department may access it."""
+    async def get_by_period(
+        self, period_id: int, current_user: dict, department_id: int | None = None
+    ) -> dict | None:
+        """Retrieve one department's evaluation for an academic period.
 
-        evaluation = self.evaluations_repository.get_by_period_id(period_id)
+        Every department has its own evaluation per period, so "the evaluation
+        of a period" only exists once the department is known. A director is
+        confined to theirs (asking for another is rejected, not ignored); an
+        ADMIN must name one.
+        """
 
-        if not evaluation:
-            return None
+        roles = set(current_user.get("roles", []))
+        is_admin = RoleName.ADMIN.value in roles
+        own_department_id = (
+            current_user.get("department_id")
+            if RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles
+            else None
+        )
 
-        self._assert_can_view_department(current_user, evaluation.get("department_id"))
+        if department_id is None:
+            department_id = own_department_id
 
-        return evaluation
+            if department_id is None:
+                if is_admin:
+                    raise ValidationError(
+                        "Indica el departamento (department_id) de la evaluación"
+                    )
+
+                raise PermissionDeniedError(
+                    "El director no tiene un departamento asignado"
+                )
+        elif not is_admin and department_id != own_department_id:
+            raise PermissionDeniedError(
+                "Solo el director del departamento asociado puede consultar esta evaluación"
+            )
+
+        return self.evaluations_repository.get_by_period_and_department(
+            period_id, department_id
+        )
 
     async def get_pdf_path(
         self,
@@ -365,14 +392,55 @@ class EvaluationService:
             evaluation_id, teacher_id, course_id, validated_modality(modality)
         )
 
+    def _teacher_evaluation_scope(
+        self, teacher_id: int, current_user: dict
+    ) -> int | None:
+        """Department the requester is confined to when reading a teacher's
+        evaluations, or None for no restriction.
+
+        ADMIN and the teacher themself are unrestricted — a teacher sees their
+        whole history, whichever department evaluated them. A director only
+        sees evaluations of their own department. Anyone else is rejected.
+        """
+
+        roles = set(current_user.get("roles", []))
+
+        if RoleName.ADMIN.value in roles:
+            return None
+
+        is_own_teacher = (
+            RoleName.DOCENTE.value in roles
+            and current_user.get("id") is not None
+            and self.evaluations_repository.get_teacher_user_id(teacher_id)
+            == current_user.get("id")
+        )
+
+        if is_own_teacher:
+            return None
+
+        if RoleName.DIRECTOR_DE_DEPARTAMENTO.value in roles:
+            department_id = current_user.get("department_id")
+
+            if department_id is None:
+                raise PermissionDeniedError(
+                    "El director no tiene un departamento asignado"
+                )
+
+            return department_id
+
+        raise PermissionDeniedError("Solo puedes consultar tus propias evaluaciones")
+
     async def get_teacher_detail(
         self,
         period_name: str,
         teacher_id: int,
-        department_id: int | None = None,
+        current_user: dict,
         compare_previous: bool = False,
     ) -> dict | None:
         """Get per-course and per-dimension detail for a teacher in an evaluation.
+
+        The evaluation is the one of the period that holds the teacher's
+        grades, within the requester's scope (see `_teacher_evaluation_scope`).
 
         If `compare_previous` is True, the returned dict also includes a
         `previous_period` key with the same detail for the semester immediately
@@ -380,16 +448,15 @@ class EvaluationService:
         no evaluation for that teacher in that period.
         """
 
+        department_id = self._teacher_evaluation_scope(teacher_id, current_user)
+
         period = self.academic_periods_repository.get_by_name(period_name)
         if not period:
             return None
 
-        if department_id is not None:
-            evaluation_data = self.evaluations_repository.get_by_period_and_department(
-                period.id, department_id
-            )
-        else:
-            evaluation_data = self.evaluations_repository.get_by_period_id(period.id)
+        evaluation_data = self.evaluations_repository.get_teacher_evaluation_for_period(
+            teacher_id, period.id, department_id
+        )
 
         if not evaluation_data:
             return None
@@ -422,16 +489,11 @@ class EvaluationService:
         if not prev_period:
             return None
 
-        if department_id is not None:
-            prev_evaluation_data = (
-                self.evaluations_repository.get_by_period_and_department(
-                    prev_period.id, department_id
-                )
+        prev_evaluation_data = (
+            self.evaluations_repository.get_teacher_evaluation_for_period(
+                teacher_id, prev_period.id, department_id
             )
-        else:
-            prev_evaluation_data = self.evaluations_repository.get_by_period_id(
-                prev_period.id
-            )
+        )
 
         if not prev_evaluation_data:
             return None
@@ -441,9 +503,23 @@ class EvaluationService:
         )
 
     async def get_teacher_comments(
-        self, evaluation_id: int, teacher_id: int
+        self, evaluation_id: int, teacher_id: int, current_user: dict
     ) -> dict | None:
-        """Get comments grouped by course for a teacher in an evaluation."""
+        """Get comments grouped by course for a teacher in an evaluation.
+
+        Same scope as `get_teacher_detail`: the teacher themself and ADMIN see
+        any of their evaluations; a director only one of their department.
+        """
+
+        department_id = self._teacher_evaluation_scope(teacher_id, current_user)
+
+        if department_id is not None:
+            evaluation = self.evaluations_repository.get_by_id(evaluation_id)
+
+            if evaluation and evaluation.department_id != department_id:
+                raise PermissionDeniedError(
+                    "Solo el director del departamento asociado puede consultar esta evaluación"
+                )
 
         return self.evaluations_repository.get_teacher_comments(
             evaluation_id, teacher_id

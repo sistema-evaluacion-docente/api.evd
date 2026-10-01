@@ -31,10 +31,12 @@ class EvaluationsController:
 
         return await self.service.get_by_id(evaluation_id, current_user, modality)
 
-    async def get_by_period(self, period_id: int, current_user: dict):
-        """Retrieve an evaluation by academic period ID."""
+    async def get_by_period(
+        self, period_id: int, current_user: dict, department_id: int | None = None
+    ):
+        """Retrieve one department's evaluation for an academic period."""
 
-        return await self.service.get_by_period(period_id, current_user)
+        return await self.service.get_by_period(period_id, current_user, department_id)
 
     async def get_pdf_path(
         self,
@@ -77,19 +79,23 @@ class EvaluationsController:
         self,
         period_name: str,
         teacher_id: int,
-        department_id: int | None = None,
+        current_user: dict,
         compare_previous: bool = False,
     ):
         """Get per-course and per-dimension detail for a teacher in an evaluation."""
 
         return await self.service.get_teacher_detail(
-            period_name, teacher_id, department_id, compare_previous
+            period_name, teacher_id, current_user, compare_previous
         )
 
-    async def get_teacher_comments(self, evaluation_id: int, teacher_id: int):
+    async def get_teacher_comments(
+        self, evaluation_id: int, teacher_id: int, current_user: dict
+    ):
         """Get comments grouped by course for a teacher in an evaluation."""
 
-        return await self.service.get_teacher_comments(evaluation_id, teacher_id)
+        return await self.service.get_teacher_comments(
+            evaluation_id, teacher_id, current_user
+        )
 
     async def get_teachers_by_period(
         self,
