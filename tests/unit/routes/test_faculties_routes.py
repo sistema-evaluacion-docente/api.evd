@@ -66,12 +66,18 @@ class TestListFaculties:
     """GET /faculties/"""
 
     def test_returns_items_and_pagination(self, client, controller):
-        controller.get_all.return_value = paginated([FACULTY])
+        controller.get_all.return_value = paginated([FACULTY], total=13)
 
         response = client.get("/faculties/")
 
         assert response.status_code == 200
         assert response.json()["data"] == [FACULTY]
+        assert response.json()["pagination"] == {
+            "total": 13,
+            "page": 1,
+            "limit": 10,
+            "pages": 2,
+        }
 
     def test_for_a_decano_returns_200(self, client, controller, auth):
         auth.as_user(DECANO_USER)

@@ -29,8 +29,7 @@ async def get_all_directors(
 ):
     """List all directors with optional filters and pagination."""
 
-    result = await controller.get_all(filters, pagination)
-    return result["items"]
+    return await controller.get_all(filters, pagination)
 
 
 @router.get("/{director_id}", response_model=DirectorOut)
