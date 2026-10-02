@@ -27,6 +27,9 @@ def user_to_dict(
         "institutional_code": user.institutional_code,
         "roles": roles or [],
         "teacher_id": user.teacher.id if user.teacher else None,
+        # The teacher record's own department. Not the same as department_id,
+        # which for a director is the department they direct.
+        "teacher_department_id": user.teacher.department_id if user.teacher else None,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
     }
