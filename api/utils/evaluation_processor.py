@@ -9,6 +9,8 @@ import asyncio
 import logging
 from urllib.parse import quote
 
+from sqlalchemy import func
+
 from api.routes.ws_evaluations import manager as connection_manager
 from api.core.websockets.events import EvaluationProgressEvent, EvaluationLogEvent
 from api.database import SessionLocal
@@ -35,6 +37,7 @@ from api.services.improvement_plan_service import (
     DEFAULT_SCORE_THRESHOLD,
     SCORE_THRESHOLD_SETTING,
 )
+from api.utils.institutional_codes import code_key
 from api.utils.modalities import normalize_modality
 from api.utils.plan_suggestion import suggestion_reasons
 from api.utils.plan_verification import (
@@ -65,6 +68,28 @@ MAX_LISTED_TEACHERS = 5
 # these are stored under the name the university uses for them. Codes without
 # a known name (OTC, MTC) are stored as they come.
 CONTRACT_TYPE_NAMES = {"TC": "Planta", "CT": "Catedra"}
+
+
+def _find_user_by_code(db, teacher_code: str) -> UserModel | None:
+    """The user with this institutional code, ignoring leading zeros.
+
+    A teacher registered from a spreadsheet may carry "45" where the PDF
+    prints "00045" (see api.utils.institutional_codes): it is the same person,
+    so they are matched, and the PDF's form is adopted as the stored one. An
+    exact match wins over a zero-insensitive one.
+    """
+
+    user = (
+        db.query(UserModel)
+        .filter(func.ltrim(UserModel.institutional_code, "0") == code_key(teacher_code))
+        .order_by((UserModel.institutional_code == teacher_code).desc())
+        .first()
+    )
+
+    if user and user.institutional_code != teacher_code:
+        user.institutional_code = teacher_code
+
+    return user
 
 
 def _contract_type_name(raw: str | None) -> str | None:
@@ -549,11 +574,7 @@ def process_evaluation(evaluation_id: int, parsed: dict) -> None:
             teacher_code = teacher_data["code"]
             contract_type = _contract_type_name(teacher_data.get("contract_type"))
 
-            user = (
-                db.query(UserModel)
-                .filter(UserModel.institutional_code == teacher_code)
-                .first()
-            )
+            user = _find_user_by_code(db, teacher_code)
 
             if not user:
                 user = UserModel(
