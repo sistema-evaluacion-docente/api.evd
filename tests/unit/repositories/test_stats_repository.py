@@ -220,3 +220,33 @@ class TestStatsRepository:
         result = repo._get_department_comment_pedagogical_category_counts(1, [10, 11])
 
         assert result == {"LABEL_0": 5, "LABEL_1": 2}
+
+
+class TestGetDepartmentEvaluatedPeriods:
+    """Only periods with completed evaluations of the department."""
+
+    @pytest.mark.asyncio
+    async def test_maps_the_periods_it_finds(self, mock_db):
+        """Test each row becomes an option of the summary's period select."""
+
+        row = MagicMock(id=2, code="2025-1")
+        row.name = "Primer semestre 2025"
+        query = _chain(all_=[row])
+        query.distinct.return_value = query
+        mock_db.query.return_value = query
+
+        result = await StatsRepository(mock_db).get_department_evaluated_periods(10)
+
+        assert result == [
+            {"id": 2, "code": "2025-1", "name": "Primer semestre 2025"}
+        ]
+
+    @pytest.mark.asyncio
+    async def test_a_department_without_evaluations_has_no_periods(self, mock_db):
+        """Test a department with nothing uploaded offers no period at all."""
+
+        query = _chain(all_=[])
+        query.distinct.return_value = query
+        mock_db.query.return_value = query
+
+        assert await StatsRepository(mock_db).get_department_evaluated_periods(10) == []

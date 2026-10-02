@@ -36,6 +36,7 @@ class TestStatsController:
         service.get_teacher_matrix = AsyncMock()
         service.get_subjects = AsyncMock()
         service.get_subject_teachers = AsyncMock()
+        service.get_department_evaluated_periods = AsyncMock()
         service.get_department_period_range_report = AsyncMock()
         service.get_department_period_range_subjects = AsyncMock()
         return service
@@ -285,6 +286,20 @@ class TestStatsController:
 
         mock_service.get_subject_teachers.assert_awaited_once_with(1, 1)
         assert result["course_id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_get_department_evaluated_periods(self, controller, mock_service):
+        """Test get_department_evaluated_periods delegates to service."""
+
+        mock_service.get_department_evaluated_periods.return_value = [{"id": 2}]
+
+        current_user = {"id": 99, "roles": ["ADMIN"]}
+        result = await controller.get_department_evaluated_periods(1, current_user)
+
+        mock_service.get_department_evaluated_periods.assert_awaited_once_with(
+            1, current_user
+        )
+        assert result == [{"id": 2}]
 
     @pytest.mark.asyncio
     async def test_get_department_period_range_report(self, controller, mock_service):

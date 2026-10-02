@@ -25,6 +25,7 @@ from api.models.pedagogical_category import PedagogicalCategoryModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.repositories.evaluated_periods import query_evaluated_periods
 from api.schemas.stats import DepartmentPeriodRangeSubjectFilters
 from api.utils.dimensions import DIMENSION_MAP, QUESTION_TEXT, QUESTIONS
 
@@ -1786,6 +1787,12 @@ class StatsRepository:
         )
 
         return dict(rows)
+
+    async def get_department_evaluated_periods(self, department_id: int) -> list[dict]:
+        """Academic periods the department has completed evaluations for,
+        newest first."""
+
+        return query_evaluated_periods(self.db, department_id)
 
     async def get_department_period_range_report(
         self,
