@@ -3,7 +3,7 @@
 from typing import Annotated
 
 from fastapi.params import Depends
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from api.core.pagination import PaginationParams
@@ -18,6 +18,7 @@ from api.models.user import UserModel
 from api.models.user_role import UserRoleModel
 from api.repositories.base import BaseRepository
 from api.schemas.user import UserFilters
+from api.utils.institutional_codes import code_key
 
 
 class UsersRepository(BaseRepository[UserModel]):
@@ -45,6 +46,40 @@ class UsersRepository(BaseRepository[UserModel]):
         """Retrieve a user by their email address."""
 
         return self.db.query(UserModel).filter(UserModel.email == email).first()
+
+    def get_by_institutional_codes(self, codes: list[str]) -> dict[str, UserModel]:
+        """Users with any of these institutional codes, keyed by `code_key`
+        (leading zeros ignored, see `api.utils.institutional_codes`), with
+        their teacher record loaded in the same round trip."""
+
+        keys = {code_key(code) for code in codes}
+
+        if not keys:
+            return {}
+
+        users = (
+            self.db.query(UserModel)
+            .options(selectinload(UserModel.teacher))
+            .filter(func.ltrim(UserModel.institutional_code, "0").in_(keys))
+            .all()
+        )
+
+        return {code_key(user.institutional_code): user for user in users}
+
+    def get_by_emails(self, emails: list[str]) -> dict[str, UserModel]:
+        """Users with any of these emails (case-insensitive), keyed by the
+        lowercased email."""
+
+        if not emails:
+            return {}
+
+        users = (
+            self.db.query(UserModel)
+            .filter(func.lower(UserModel.email).in_([e.lower() for e in emails]))
+            .all()
+        )
+
+        return {user.email.lower(): user for user in users}
 
     def get_by_institutional_code(self, code: str) -> UserModel | None:
         """Retrieve a user by their institutional code."""

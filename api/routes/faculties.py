@@ -31,8 +31,7 @@ async def get_all_faculties(
 ):
     """Get all faculties with filters and pagination."""
 
-    result = await controller.get_all(filters, pagination)
-    return result["items"]
+    return await controller.get_all(filters, pagination)
 
 
 @router.get("/{faculty_id}", response_model=FacultyOut)

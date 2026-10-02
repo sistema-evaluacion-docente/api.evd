@@ -146,6 +146,10 @@ class UserOut(BaseModel):
     institutional_code: Optional[str] = None
     roles: list[RoleName]
     teacher_id: Optional[int] = None
+    # Department of the user's teacher record. department_id above is resolved
+    # by role, so for a director it is the department they direct, which can
+    # differ from this one.
+    teacher_department_id: Optional[int] = None
     created_at: datetime
     updated_at: datetime
 

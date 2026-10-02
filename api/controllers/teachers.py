@@ -90,7 +90,7 @@ class TeachersController:
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
     ):
-        """Bulk-upload teachers from an Excel/CSV file."""
+        """Import the department's teachers' emails from an Excel/CSV file."""
 
         return await self.service.upload_excel(
             file_bytes, filename, department_id, current_user

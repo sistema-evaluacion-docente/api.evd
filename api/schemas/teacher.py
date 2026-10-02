@@ -4,7 +4,7 @@ Schemas for request and response bodies related to teachers.
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel, field_validator
@@ -103,12 +103,44 @@ class TeacherOut(BaseModel):
     updated_at: datetime
 
 
-class BulkUploadResult(BaseModel):
-    """Schema for bulk upload result."""
+TeacherEmailImportStatus = Literal[
+    "created",
+    "updated",
+    "unchanged",
+    "already_active",
+    "other_department",
+    "error",
+]
 
-    created: list[dict]
-    skipped: list[dict]
-    errors: list[dict]
+
+class TeacherEmailImportRow(BaseModel):
+    """Outcome of one row of the teacher email import."""
+
+    row: int
+    """Row number in the file (the header is row 1), to find it there."""
+    institutional_code: str
+    email: str
+    status: TeacherEmailImportStatus
+    detail: str
+
+
+class TeacherEmailImportSummary(BaseModel):
+    """How many rows ended in each outcome."""
+
+    total: int
+    created: int
+    updated: int
+    unchanged: int
+    already_active: int
+    other_department: int
+    errors: int
+
+
+class TeacherEmailImportResult(BaseModel):
+    """Result of importing the institutional email of a department's teachers."""
+
+    summary: TeacherEmailImportSummary
+    rows: list[TeacherEmailImportRow]
 
 
 @dataclass

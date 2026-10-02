@@ -64,6 +64,39 @@ class TestUsersRepository:
 
         assert repo.get_by_institutional_code("1152185") == mock_user_model
 
+    def test_get_by_institutional_codes_ignores_leading_zeros(self):
+        """Against a real (in-memory SQLite) table: "45" from a spreadsheet
+        finds the "00045" the PDF stored, keyed by the zero-less code."""
+
+        import importlib
+        import pkgutil
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        import api.models as models_pkg
+        from api.database import Base
+
+        for module in pkgutil.iter_modules(models_pkg.__path__):
+            importlib.import_module(f"api.models.{module.name}")
+
+        engine = create_engine("sqlite://")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        db.add_all(
+            [
+                UserModel(email="a@ufps.edu.co", name="A", institutional_code="00045"),
+                UserModel(email="b@ufps.edu.co", name="B", institutional_code="1325242"),
+            ]
+        )
+        db.commit()
+
+        found = UsersRepository(db).get_by_institutional_codes(["45", "1325242", "99"])
+
+        assert set(found) == {"45", "1325242"}
+        assert found["45"].institutional_code == "00045"
+        db.close()
+
     def test_department_exists_true(self, repo, mock_db):
         """Test department_exists is True when the department is found."""
 

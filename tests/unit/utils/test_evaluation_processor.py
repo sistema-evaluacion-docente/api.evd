@@ -29,8 +29,57 @@ from api.utils.evaluation_processor import (
     _contract_type_name,
     _create_high_risk_comment_notification,
     _create_plan_suggestion_notification,
+    _find_user_by_code,
     analyze_evaluation_comments,
 )
+
+
+class TestFindUserByCode:
+    """`_find_user_by_code` against a real (in-memory SQLite) users table,
+    since what matters is the SQL `ltrim` matching."""
+
+    @pytest.fixture
+    def db(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        from api.models.user import UserModel
+
+        engine = create_engine("sqlite://")
+        UserModel.__table__.create(engine)
+        session = sessionmaker(bind=engine)()
+        yield session
+        session.close()
+
+    @staticmethod
+    def _add(db, code, email):
+        from api.models.user import UserModel
+
+        user = UserModel(email=email, name=code, institutional_code=code)
+        db.add(user)
+        db.flush()
+        return user
+
+    def test_finds_a_spreadsheet_code_without_zeros_and_adopts_the_pdf_form(self, db):
+        """A teacher registered as "45" from a spreadsheet is the PDF's "00045"."""
+
+        user = self._add(db, "45", "ana@ufps.edu.co")
+
+        found = _find_user_by_code(db, "00045")
+
+        assert found is user
+        assert user.institutional_code == "00045"
+
+    def test_an_exact_match_wins_over_a_zero_insensitive_one(self, db):
+        self._add(db, "45", "a@ufps.edu.co")
+        exact = self._add(db, "00045", "b@ufps.edu.co")
+
+        assert _find_user_by_code(db, "00045") is exact
+
+    def test_returns_none_for_an_unknown_code(self, db):
+        self._add(db, "45", "a@ufps.edu.co")
+
+        assert _find_user_by_code(db, "46") is None
 
 
 def _risk_level(level_id: int, name: str) -> MagicMock:

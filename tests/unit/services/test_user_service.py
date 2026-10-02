@@ -574,6 +574,61 @@ class TestAdminUpdateUser:
         assert result["id"] == 5
 
     @pytest.mark.asyncio
+    async def test_get_by_id_of_a_director_returns_both_departments(
+        self, service, mock_users_repo, user
+    ):
+        """Test a director's teacher department is reported apart from the one they direct.
+
+        department_id resolves to the directed department (15), so an edit form
+        prefilled with it would hide a teacher record left in another one (14).
+        """
+
+        mock_users_repo.get_user_role_names.return_value = [
+            "DOCENTE",
+            "DIRECTOR DE DEPARTAMENTO",
+        ]
+        mock_users_repo.get_director_by_user_id.return_value = MagicMock(
+            department_id=15
+        )
+        user.teacher = MagicMock(id=146, department_id=14)
+
+        result = await service.get_by_id(5)
+
+        assert result["department_id"] == 15
+        assert result["teacher_department_id"] == 14
+
+    @pytest.mark.asyncio
+    async def test_get_by_id_without_teacher_record_has_no_teacher_department(
+        self, service, user
+    ):
+        user.teacher = None
+
+        result = await service.get_by_id(5)
+
+        assert result["teacher_id"] is None
+        assert result["teacher_department_id"] is None
+
+    @pytest.mark.asyncio
+    async def test_admin_update_moves_a_directors_teacher_record(
+        self, service, mock_users_repo, user, admin
+    ):
+        """Test sending the directed department moves a teacher record left elsewhere."""
+
+        mock_users_repo.get_user_role_names.return_value = [
+            "DOCENTE",
+            "DIRECTOR DE DEPARTAMENTO",
+        ]
+        mock_users_repo.get_director_by_user_id.return_value = MagicMock(
+            department_id=15
+        )
+        teacher = MagicMock(department_id=14)
+        mock_users_repo.get_teacher_by_user_id.return_value = teacher
+
+        await service.admin_update_user(5, UserAdminUpdate(department_id=15), admin)
+
+        mock_users_repo.set_teacher_department.assert_called_once_with(teacher, 15)
+
+    @pytest.mark.asyncio
     async def test_update_user_by_id_reaches_a_user_without_uid(
         self, service, mock_users_repo, user
     ):

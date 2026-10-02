@@ -731,75 +731,240 @@ class TestTeacherService:
         assert rows[1] == ("Ana", "ana@x.com", "101", "TC")
 
     # ------------------------------------------------------------------ #
-    # upload_excel
+    # upload_excel — teacher email import
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _user(user_id, code, email, uid=None, department_id=7, teacher=True):
+        user = MagicMock(id=user_id, institutional_code=code, email=email, uid=uid)
+        user.teacher = MagicMock(department_id=department_id) if teacher else None
+        return user
+
+    @pytest.fixture
+    def import_repo(self, mock_users_repo):
+        """Users repository primed for the import: nothing found, DOCENTE role id 3."""
+
+        mock_users_repo.get_by_institutional_codes.return_value = {}
+        mock_users_repo.get_by_emails.return_value = {}
+        mock_users_repo.get_roles_by_names.return_value = [MagicMock(id=3)]
+        mock_users_repo.find_or_create_user.return_value = (MagicMock(id=50), True)
+        return mock_users_repo
+
+    async def _import(self, service, current_user, csv_text, department_id=7):
+        return await service.upload_excel(
+            csv_text.encode("utf-8-sig"), "docentes.csv", department_id, current_user
+        )
+
+    @staticmethod
+    def _status(result, code):
+        return next(r for r in result["rows"] if r["institutional_code"] == code)
+
     @pytest.mark.asyncio
     async def test_upload_excel_too_few_rows_raises(self, service, current_user):
         """Test a file with only a header raises ValidationError."""
 
-        content = "nombre,email,codigo,contrato\n".encode("utf-8-sig")
-
         with pytest.raises(ValidationError):
-            await service.upload_excel(content, "teachers.csv", 1, current_user)
+            await self._import(service, current_user, "codigo,correo\n")
 
     @pytest.mark.asyncio
-    async def test_upload_excel_missing_columns_raises(self, service, current_user):
-        """Test a file missing a required column raises ValidationError."""
-
-        content = "nombre,email,codigo\nAna,ana@x.com,101\n".encode("utf-8-sig")
-
-        with pytest.raises(ValidationError):
-            await service.upload_excel(content, "teachers.csv", 1, current_user)
-
-    @pytest.mark.asyncio
-    async def test_upload_excel_creates_skips_and_reports_errors(
-        self,
-        service,
-        mock_teachers_repo,
-        mock_users_repo,
-        mock_user_service,
-        mock_audit_service,
-        current_user,
+    async def test_upload_excel_without_code_or_email_column_raises(
+        self, service, current_user
     ):
-        """Test the full import pipeline: created/skipped/error rows and the audit log."""
+        with pytest.raises(ValidationError):
+            await self._import(service, current_user, "nombre,correo\nAna,a@ufps.edu.co\n")
 
+    @pytest.mark.asyncio
+    async def test_upload_excel_accepts_accented_headers_and_the_old_template(
+        self, service, import_repo, current_user
+    ):
+        """Headers are matched without accents or case, extra columns are ignored."""
+
+        accented = await self._import(
+            service, current_user, "Código,Correo\n101,ana@ufps.edu.co\n"
+        )
+        old_template = await self._import(
+            service,
+            current_user,
+            "nombre,email,codigo,contrato\nBea,bea@ufps.edu.co,102,TC\n",
+        )
+
+        assert accented["rows"][0]["status"] == "created"
+        assert old_template["rows"][0]["status"] == "created"
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_creates_an_unknown_code_in_the_department(
+        self, service, import_repo, current_user
+    ):
+        """A code not seen yet is registered, so the upload order doesn't matter;
+        the name stays as the code until the evaluation PDF fills it in."""
+
+        result = await self._import(service, current_user, "codigo,correo\n101,ANA@ufps.edu.co\n")
+
+        assert self._status(result, "101")["status"] == "created"
+        created = import_repo.find_or_create_user.call_args.args[0]
+        assert created["email"] == "ana@ufps.edu.co"
+        assert created["name"] == "101"
+        assert created["institutional_code"] == "101"
+        import_repo.replace_user_roles.assert_called_once_with(50, [3])
+        assert import_repo.create_teacher.call_args.kwargs["department_id"] == 7
+        import_repo.commit.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_replaces_a_placeholder_email(
+        self, service, import_repo, current_user
+    ):
+        user = self._user(1, "101", "101@temp.local")
+        import_repo.get_by_institutional_codes.return_value = {"101": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n101,ana@ufps.edu.co\n")
+
+        row = self._status(result, "101")
+        assert row["status"] == "updated"
+        assert "101@temp.local" in row["detail"]
+        import_repo.assign_fields.assert_called_once_with(user, {"email": "ana@ufps.edu.co"})
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_matches_a_code_that_lost_its_leading_zeros(
+        self, service, import_repo, current_user
+    ):
+        """Excel turns "00045" into 45; it must still update that teacher,
+        not create a duplicate one."""
+
+        user = self._user(1, "00045", "00045@temp.local")
+        import_repo.get_by_institutional_codes.return_value = {"45": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n45,ana@ufps.edu.co\n")
+
+        assert self._status(result, "45")["status"] == "updated"
+        import_repo.find_or_create_user.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_treats_45_and_00045_as_the_same_repeated_code(
+        self, service, import_repo, current_user
+    ):
+        result = await self._import(
+            service,
+            current_user,
+            "codigo,correo\n45,a@ufps.edu.co\n00045,b@ufps.edu.co\n",
+        )
+
+        assert result["rows"][1]["detail"] == "El código está repetido en el archivo"
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_keeps_the_email_of_a_teacher_who_already_logged_in(
+        self, service, import_repo, current_user
+    ):
+        user = self._user(1, "101", "ana.real@ufps.edu.co", uid="firebase-uid")
+        import_repo.get_by_institutional_codes.return_value = {"101": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n101,otra@ufps.edu.co\n")
+
+        row = self._status(result, "101")
+        assert row["status"] == "already_active"
+        assert "ana.real@ufps.edu.co" in row["detail"]
+        import_repo.assign_fields.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_leaves_a_teacher_of_another_department_untouched(
+        self, service, import_repo, current_user
+    ):
+        user = self._user(1, "101", "101@temp.local", department_id=9)
+        import_repo.get_by_institutional_codes.return_value = {"101": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n101,ana@ufps.edu.co\n")
+
+        assert self._status(result, "101")["status"] == "other_department"
+        import_repo.assign_fields.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_claims_a_teacher_without_department(
+        self, service, import_repo, current_user
+    ):
+        user = self._user(1, "101", "101@temp.local", department_id=None)
+        import_repo.get_by_institutional_codes.return_value = {"101": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n101,ana@ufps.edu.co\n")
+
+        row = self._status(result, "101")
+        assert row["status"] == "updated"
+        assert "Se asignó a tu departamento" in row["detail"]
+        import_repo.set_teacher_department.assert_called_once_with(user.teacher, 7)
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_reports_an_email_already_in_place_as_unchanged(
+        self, service, import_repo, current_user
+    ):
+        user = self._user(1, "101", "ana@ufps.edu.co")
+        import_repo.get_by_institutional_codes.return_value = {"101": user}
+        import_repo.get_by_emails.return_value = {"ana@ufps.edu.co": user}
+
+        result = await self._import(service, current_user, "codigo,correo\n101,ana@ufps.edu.co\n")
+
+        assert self._status(result, "101")["status"] == "unchanged"
+        import_repo.assign_fields.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_reports_every_kind_of_bad_row(
+        self, service, import_repo, current_user
+    ):
+        other = self._user(9, "999", "taken@ufps.edu.co")
+        import_repo.get_by_emails.return_value = {"taken@ufps.edu.co": other}
         csv_text = (
-            "nombre,email,codigo,contrato\n"
-            "Ana Perez,ana@x.com,101,TC\n"
-            "Dora Lopez,dora@x.com,111,TC\n"
+            "codigo,correo\n"
+            "101,ana@gmail.com\n"
+            "1O2,bea@ufps.edu.co\n"
+            "103,\n"
+            "104,taken@ufps.edu.co\n"
+            "105,caro@ufps.edu.co\n"
+            "105,caro2@ufps.edu.co\n"
+            "106,caro@ufps.edu.co\n"
+        )
+
+        result = await self._import(service, current_user, csv_text)
+
+        details = {r["row"]: (r["status"], r["detail"]) for r in result["rows"]}
+        assert details[2] == ("error", "El correo debe ser del dominio @ufps.edu.co")
+        assert details[3] == ("error", "El código debe ser numérico")
+        assert details[4] == ("error", "Faltan el código o el correo")
+        assert details[5][0] == "error" and "otro usuario" in details[5][1]
+        assert details[6][0] == "created"
+        assert details[7] == ("error", "El código está repetido en el archivo")
+        assert details[8] == ("error", "El correo está repetido en el archivo")
+
+    @pytest.mark.asyncio
+    async def test_upload_excel_summarizes_and_audits_once(
+        self, service, import_repo, mock_audit_service, current_user
+    ):
+        placeholder = self._user(1, "101", "101@temp.local")
+        foreign = self._user(2, "102", "102@temp.local", department_id=9)
+        import_repo.get_by_institutional_codes.return_value = {
+            "101": placeholder,
+            "102": foreign,
+        }
+        csv_text = (
+            "codigo,correo\n"
+            "101,ana@ufps.edu.co\n"
+            "102,bea@ufps.edu.co\n"
+            "103,caro@ufps.edu.co\n"
             "\n"
-            "Emi Cruz,existing@x.com,106,TC\n"
-            ",falta@x.com,105,TC\n"
-            "Bea Ruiz,bea@x.com,102,TC\n"
-            "Caro Diaz,caro@x.com,103,TC\n"
-        )
-        content = csv_text.encode("utf-8-sig")
-
-        existing_teacher = MagicMock()
-        existing_teacher.user = MagicMock(institutional_code="111")
-        mock_teachers_repo.get_by_institutional_codes.return_value = [
-            existing_teacher
-        ]
-
-        def _get_by_email(email):
-            return MagicMock(id=1) if email == "existing@x.com" else None
-
-        mock_users_repo.get_by_email.side_effect = _get_by_email
-
-        mock_user_service.create_user_with_roles = AsyncMock(
-            side_effect=[
-                {"id": 10},
-                ValueError("Rol inválido"),
-                Exception("boom"),
-            ]
+            "104,dora@gmail.com\n"
         )
 
-        result = await service.upload_excel(
-            content, "teachers.csv", 7, current_user
-        )
+        result = await self._import(service, current_user, csv_text)
 
-        assert len(result["created"]) == 1
-        assert result["created"][0]["email"] == "ana@x.com"
-        assert len(result["skipped"]) == 3
-        assert len(result["errors"]) == 2
+        assert result["summary"] == {
+            "total": 4,
+            "created": 1,
+            "updated": 1,
+            "unchanged": 0,
+            "already_active": 0,
+            "other_department": 1,
+            "errors": 1,
+        }
+        import_repo.commit.assert_called_once()
         mock_audit_service.log.assert_awaited_once()
+
+    def test_cell_text_drops_the_float_suffix_excel_adds_to_numeric_codes(self):
+        assert TeacherService._cell_text((1152185.0,), 0) == "1152185"
+        assert TeacherService._cell_text((None,), 0) == ""
+        assert TeacherService._cell_text((" a@ufps.edu.co ",), 0) == "a@ufps.edu.co"
+        assert TeacherService._cell_text((), 3) == ""

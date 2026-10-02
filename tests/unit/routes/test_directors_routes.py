@@ -1,8 +1,8 @@
 """Tests for the directors routes.
 
-What the route layer owns here: the ADMIN-only guard, unwrapping
-``get_all``'s paginated dict into a bare list, and mapping a ``None`` from
-the controller to a 404.
+What the route layer owns here: the ADMIN-only guard, passing ``get_all``'s
+paginated dict through whole (so the envelope can fill ``pagination``), and
+mapping a ``None`` from the controller to a 404.
 """
 
 from unittest.mock import AsyncMock, MagicMock
@@ -47,15 +47,21 @@ def client(make_client, controller):
 class TestListDirectors:
     """GET /directors/"""
 
-    def test_returns_the_items(self, client, controller):
-        """Test the paginated dict's items reach the response body."""
+    def test_returns_items_and_pagination(self, client, controller):
+        """Test the items reach ``data`` and the page count reaches ``pagination``."""
 
-        controller.get_all.return_value = paginated([DIRECTOR])
+        controller.get_all.return_value = paginated([DIRECTOR], total=13)
 
         response = client.get("/directors/")
 
         assert response.status_code == 200
         assert response.json()["data"] == [DIRECTOR]
+        assert response.json()["pagination"] == {
+            "total": 13,
+            "page": 1,
+            "limit": 10,
+            "pages": 2,
+        }
 
     def test_for_a_director_returns_403(self, client, controller, auth):
         """Test a director cannot list directors."""

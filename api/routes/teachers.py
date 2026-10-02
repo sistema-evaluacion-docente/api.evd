@@ -15,8 +15,8 @@ from api.schemas.evaluation_summary import (
     TeacherHistoryOut,
 )
 from api.schemas.teacher import (
-    BulkUploadResult,
     TeacherCreate,
+    TeacherEmailImportResult,
     TeacherCreateWithUser,
     TeacherFiltersDep,
     TeacherOut,
@@ -75,13 +75,20 @@ async def create_teacher_with_user(
     return await controller.create_with_user(payload, current_user)
 
 
-@router.post("/upload", response_model=BulkUploadResult, status_code=201)
+@router.post("/upload", response_model=TeacherEmailImportResult)
 async def upload_teachers_excel(
     file: UploadFile = File(...),
     current_user=Depends(require_roles(_ROLES)),
     controller: TeachersController = Depends(get_teachers_controller),
 ):
-    """Upload an Excel or CSV file to bulk-create teachers."""
+    """Import the institutional email of the department's teachers from an
+    Excel or CSV file with two columns, `codigo` and `correo`.
+
+    Rows are matched by institutional code: a teacher created from an
+    evaluation PDF (placeholder email) gets their real email so they can log
+    in; an unknown code is registered in the department; a teacher who already
+    logged in keeps their email; teachers of another department are left
+    untouched. The response reports the outcome of every row."""
 
     if not file.filename or not file.filename.lower().endswith(
         (".xlsx", ".xls", ".csv")
