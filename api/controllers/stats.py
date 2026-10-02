@@ -190,6 +190,15 @@ class StatsController:
             department_id, course_code, period_code
         )
 
+    async def get_department_evaluated_periods(
+        self, department_id: int | None, current_user: dict
+    ) -> list[dict]:
+        """Get the academic periods a department has evaluations for."""
+
+        return await self.service.get_department_evaluated_periods(
+            department_id, current_user
+        )
+
     async def get_department_period_range_report(
         self,
         department_id: int | None,

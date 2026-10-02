@@ -39,6 +39,7 @@ from api.models.program import ProgramModel
 from api.models.risk_level import RiskLevelModel
 from api.models.teacher import TeacherModel
 from api.models.user import UserModel
+from api.repositories.evaluated_periods import query_evaluated_periods
 from api.repositories.stats import StatsRepository
 from api.schemas.improvement_plan import (
     ImprovementPlanCaseReportUpsert,
@@ -1150,27 +1151,7 @@ class ImprovementPlansRepository:
         the current academic period usually has no grades yet (they arrive at
         the start of the next one)."""
 
-        rows = (
-            self.db.query(
-                AcademicPeriodModel.id,
-                AcademicPeriodModel.code,
-                AcademicPeriodModel.name,
-            )
-            .join(
-                EvaluationModel,
-                EvaluationModel.academic_period_id == AcademicPeriodModel.id,
-            )
-            .filter(
-                EvaluationModel.department_id == department_id,
-                EvaluationModel.status == "COMPLETED",
-                EvaluationModel.active.is_(True),
-            )
-            .distinct()
-            .order_by(AcademicPeriodModel.code.desc())
-            .all()
-        )
-
-        return [{"id": row.id, "code": row.code, "name": row.name} for row in rows]
+        return query_evaluated_periods(self.db, department_id)
 
     # ------------------------------------------------------------------ #
     # Candidates for a plan (auto-detección + sugerencias)

@@ -565,6 +565,14 @@ class FacultyPeriodAverage(BaseModel):
     evaluation_count: int
 
 
+class EvaluatedPeriod(BaseModel):
+    """An academic period a department has completed evaluations for."""
+
+    id: int
+    code: str
+    name: Optional[str]
+
+
 class DepartmentUploadStatus(BaseModel):
     """Whether a department uploaded an evaluation in a period, regardless of
     its analysis state. `global_average` is null until it was analysed."""

@@ -263,6 +263,32 @@ class StatsService:
                 "El periodo inicial debe ser anterior o igual al periodo final"
             )
 
+    async def get_department_evaluated_periods(
+        self, department_id: int | None, current_user: dict
+    ) -> list[dict]:
+        """
+        Academic periods a department has evaluations for — the ones its
+        period-range report can say something about.
+
+        Same scoping as `get_department_period_range_report`: a DIRECTOR
+        defaults to their own department, everyone else must provide it, and
+        a DECANO's must fall inside their own faculty.
+        """
+
+        resolved_department_id = department_id or current_user.get("department_id")
+
+        if not resolved_department_id:
+            raise ValidationError("Debe indicar un department_id")
+
+        if is_scoped_dean(current_user):
+            assert_department_in_dean_scope(
+                current_user, self.stats_repository.db, resolved_department_id
+            )
+
+        return await self.stats_repository.get_department_evaluated_periods(
+            resolved_department_id
+        )
+
     async def get_department_period_range_report(
         self,
         department_id: int | None,

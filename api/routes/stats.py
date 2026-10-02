@@ -16,6 +16,7 @@ from api.schemas.stats import (
     DepartmentCaseSummary,
     DepartmentPeriodRangeSubjectFiltersDep,
     DepartmentUploadStatus,
+    EvaluatedPeriod,
     FacultyPeriodAverage,
 )
 from api.schemas.user import RoleName
@@ -177,6 +178,30 @@ async def get_subject_teachers_comparison(
 
     return await controller.get_subject_teachers_comparison(
         department_id, course_code, period
+    )
+
+
+@router.get(
+    "/departments/periods",
+    response_model=list[EvaluatedPeriod],
+    responses={403: {"description": "Forbidden"}},
+)
+async def get_department_evaluated_periods(
+    department_id: Annotated[int | None, Query()] = None,
+    current_user=Depends(require_roles(_DEPT_STATS_ROLES)),
+    controller: StatsController = Depends(get_stats_controller),
+):
+    """
+    Academic periods a department has completed evaluations for, newest
+    first — the periods `/departments/period-range` can report on, unlike
+    the institution-wide `/academic-periods`. A DIRECTOR defaults to their
+    own department when `department_id` is omitted;
+    ADMIN/VICERRECTOR_ACADEMICO/DECANO must provide it (a DECANO's must fall
+    inside their own faculty).
+    """
+
+    return await controller.get_department_evaluated_periods(
+        department_id, current_user
     )
 
 
