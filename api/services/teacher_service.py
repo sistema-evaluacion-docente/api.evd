@@ -2,6 +2,7 @@
 
 import csv
 import io
+import unicodedata
 
 import openpyxl
 
@@ -25,6 +26,13 @@ from api.serializers.teachers import teacher_to_dict
 from api.serializers.users import user_to_dict
 from api.services.audit_service import AuditService
 from api.services.user_service import UserService
+from api.utils.institutional_codes import code_key
+
+INSTITUTIONAL_EMAIL_DOMAIN = "@ufps.edu.co"
+
+# Accepted (normalized) header names for the teacher email import.
+_CODE_HEADERS = {"codigo", "codigo institucional"}
+_EMAIL_HEADERS = {"correo", "email", "correo institucional", "correo electronico"}
 
 
 class TeacherService:
@@ -477,14 +485,25 @@ class TeacherService:
     async def upload_excel(
         self, file_bytes: bytes, filename: str, department_id: int, current_user: dict
     ) -> dict:
-        """Parse an Excel or CSV file and bulk-create teachers for the given department."""
+        """Import the institutional email of the department's teachers from a
+        CSV/XLSX with two columns: ``codigo`` and ``correo`` (``email`` works
+        too; any other column is ignored).
+
+        A teacher first seen in an evaluation PDF is created with a placeholder
+        ``{código}@temp.local`` email and cannot log in until it is replaced —
+        that is what this import does, matching rows by institutional code:
+
+        - unknown code: the teacher is created in the director's department,
+          named after the code until their evaluation fills the real name;
+        - known code, never logged in: the email is replaced;
+        - known code, already logged in: the email is kept and reported;
+        - a teacher of another department is left untouched and reported.
+
+        Everything is decided first and written in a single commit.
+        """
 
         is_csv = filename.lower().endswith(".csv")
-
-        if is_csv:
-            rows = self._parse_csv(file_bytes)
-        else:
-            rows = self._parse_excel(file_bytes)
+        rows = self._parse_csv(file_bytes) if is_csv else self._parse_excel(file_bytes)
 
         if len(rows) < 2:
             file_type = "CSV" if is_csv else "Excel"
@@ -492,133 +511,217 @@ class TeacherService:
                 f"El archivo {file_type} debe contener al menos un encabezado y una fila de datos"
             )
 
-        header = [str(c).strip().lower() if c else "" for c in rows[0]]
-        expected = {"nombre", "email", "codigo", "contrato"}
-        actual = set(header)
+        header = [self._normalize_header(cell) for cell in rows[0]]
+        code_col = next((i for i, h in enumerate(header) if h in _CODE_HEADERS), None)
+        email_col = next((i for i, h in enumerate(header) if h in _EMAIL_HEADERS), None)
 
-        if not expected.issubset(actual):
-            missing = expected - actual
+        if code_col is None or email_col is None:
             raise ValidationError(
-                f"Faltan columnas requeridas en el archivo: {', '.join(sorted(missing))}"
+                "El archivo debe tener las columnas 'codigo' y 'correo'"
             )
 
-        col_idx = {name: i for i, name in enumerate(header)}
+        entries = []
+        for row_number, row in enumerate(rows[1:], start=2):
+            code = self._cell_text(row, code_col)
+            email = self._cell_text(row, email_col).lower()
 
-        data_rows = []
-        for row in rows[1:]:
-            if not any(row):
-                continue
+            if code or email:
+                entries.append((row_number, code, email))
 
-            nombre = (
-                str(row[col_idx["nombre"]]).strip() if row[col_idx["nombre"]] else ""
+        users_by_code = self.users_repository.get_by_institutional_codes(
+            [code for _, code, _ in entries if code]
+        )
+        users_by_email = self.users_repository.get_by_emails(
+            [email for _, _, email in entries if email]
+        )
+        docente_role_ids = [
+            role.id
+            for role in self.users_repository.get_roles_by_names(
+                [RoleName.DOCENTE.value]
             )
-            email = str(row[col_idx["email"]]).strip() if row[col_idx["email"]] else ""
-            codigo = (
-                str(row[col_idx["codigo"]]).strip() if row[col_idx["codigo"]] else ""
-            )
-            contrato = (
-                str(row[col_idx["contrato"]]).strip()
-                if row[col_idx["contrato"]]
-                else ""
-            )
+        ]
 
-            data_rows.append(
+        results: list[dict] = []
+        seen_codes: set[str] = set()
+        seen_emails: set[str] = set()
+
+        for row_number, code, email in entries:
+            status, detail = self._import_teacher_email(
+                code,
+                email,
+                department_id,
+                users_by_code,
+                users_by_email,
+                docente_role_ids,
+                seen_codes,
+                seen_emails,
+            )
+            results.append(
                 {
-                    "nombre": nombre,
+                    "row": row_number,
+                    "institutional_code": code,
                     "email": email,
-                    "codigo_institucional": codigo,
-                    "tipo_contrato": contrato or None,
+                    "status": status,
+                    "detail": detail,
                 }
             )
 
-        codes = [
-            r["codigo_institucional"] for r in data_rows if r["codigo_institucional"]
-        ]
+        self.users_repository.commit()
 
-        existing_teachers = self.teachers_repository.get_by_institutional_codes(codes)
-        existing_codes = {
-            t.user.institutional_code for t in existing_teachers if t.user
+        summary = {
+            "total": len(results),
+            "created": sum(r["status"] == "created" for r in results),
+            "updated": sum(r["status"] == "updated" for r in results),
+            "unchanged": sum(r["status"] == "unchanged" for r in results),
+            "already_active": sum(r["status"] == "already_active" for r in results),
+            "other_department": sum(
+                r["status"] == "other_department" for r in results
+            ),
+            "errors": sum(r["status"] == "error" for r in results),
         }
 
-        created = []
-        skipped = []
-        errors = []
-
-        for row in data_rows:
-            if not row["nombre"] or not row["email"] or not row["codigo_institucional"]:
-                errors.append(
-                    {
-                        "fila": row,
-                        "razon": "Faltan campos obligatorios (nombre, email, codigo institucional)",
-                    }
-                )
-                continue
-
-            if row["codigo_institucional"] in existing_codes:
-                skipped.append(
-                    {
-                        "fila": row,
-                        "razon": f"El código institucional '{row['codigo_institucional']}' ya existe",
-                    }
-                )
-                continue
-
-            existing_user = self.users_repository.get_by_email(row["email"])
-            if existing_user:
-                skipped.append(
-                    {
-                        "fila": row,
-                        "razon": f"El email '{row['email']}' ya está registrado",
-                    }
-                )
-                continue
-
-            try:
-                user_data = UserCreate(
-                    email=row["email"],
-                    name=row["nombre"],
-                    active=True,
-                    institutional_code=row["codigo_institucional"],
-                    contract_type=row["tipo_contrato"],
-                )
-
-                await self.user_service.create_user_with_roles(user_data)
-
-                created.append(
-                    {
-                        "nombre": row["nombre"],
-                        "email": row["email"],
-                        "codigo_institucional": row["codigo_institucional"],
-                        "tipo_contrato": row["tipo_contrato"],
-                    }
-                )
-
-                existing_codes.add(row["codigo_institucional"])
-
-            except ValueError as e:
-                skipped.append({"fila": row, "razon": str(e)})
-            except Exception as e:
-                errors.append({"fila": row, "razon": f"Error inesperado: {str(e)}"})
-
         await self.audit_service.log(
-            action="BULK_CREATE",
+            action="IMPORT",
             entity_name="teachers",
             entity_id=department_id,
             actor_id=current_user.get("id"),
             description=(
-                f"Importación masiva de docentes. "
-                f"Total filas: {len(data_rows)}, "
-                f"Creados: {len(created)}, "
-                f"Omitidos: {len(skipped)}, "
-                f"Errores: {len(errors)}"
+                "Importación de correos de docentes. "
+                f"Filas: {summary['total']}, "
+                f"creados: {summary['created']}, "
+                f"actualizados: {summary['updated']}, "
+                f"sin cambios: {summary['unchanged']}, "
+                f"ya con acceso: {summary['already_active']}, "
+                f"de otro departamento: {summary['other_department']}, "
+                f"errores: {summary['errors']}"
             ),
         )
 
-        return {
-            "created": created,
-            "skipped": skipped,
-            "errors": errors,
-        }
+        return {"summary": summary, "rows": results}
+
+    def _import_teacher_email(
+        self,
+        code: str,
+        email: str,
+        department_id: int,
+        users_by_code: dict,
+        users_by_email: dict,
+        docente_role_ids: list[int],
+        seen_codes: set[str],
+        seen_emails: set[str],
+    ) -> tuple[str, str]:
+        """Apply one row of the email import (without committing) and return
+        its ``(status, detail)``. Keeps the lookup maps and seen sets current
+        so later rows see what earlier ones did."""
+
+        if not code or not email:
+            return "error", "Faltan el código o el correo"
+
+        if not code.isdigit():
+            return "error", "El código debe ser numérico"
+
+        if email.count("@") != 1 or not email.endswith(INSTITUTIONAL_EMAIL_DOMAIN):
+            return "error", f"El correo debe ser del dominio {INSTITUTIONAL_EMAIL_DOMAIN}"
+
+        # "45" and "00045" are the same code (see api.utils.institutional_codes).
+        key = code_key(code)
+
+        if key in seen_codes:
+            return "error", "El código está repetido en el archivo"
+
+        if email in seen_emails:
+            return "error", "El correo está repetido en el archivo"
+
+        seen_codes.add(key)
+        seen_emails.add(email)
+
+        user = users_by_code.get(key)
+        email_owner = users_by_email.get(email)
+
+        if email_owner is not None and (user is None or email_owner.id != user.id):
+            return (
+                "error",
+                "El correo ya pertenece a otro usuario "
+                f"(código {email_owner.institutional_code or 'sin código'})",
+            )
+
+        if user is None:
+            new_user, _ = self.users_repository.find_or_create_user(
+                {
+                    "uid": None,
+                    "email": email,
+                    "name": code,
+                    "institutional_code": code,
+                    "active": True,
+                }
+            )
+            self.users_repository.replace_user_roles(new_user.id, docente_role_ids)
+            self.users_repository.create_teacher(
+                user_id=new_user.id, department_id=department_id, active=True
+            )
+            users_by_code[key] = new_user
+            users_by_email[email] = new_user
+
+            return (
+                "created",
+                "Docente registrado. Su nombre se completará al subir su evaluación.",
+            )
+
+        teacher = user.teacher
+
+        if teacher is None:
+            return "error", "El código pertenece a un usuario que no es docente"
+
+        if teacher.department_id is not None and teacher.department_id != department_id:
+            return "other_department", "El docente pertenece a otro departamento"
+
+        # A teacher with no department (older imports left them unassigned)
+        # belongs to the department that claims them.
+        claimed = ""
+        if teacher.department_id is None:
+            self.users_repository.set_teacher_department(teacher, department_id)
+            claimed = " Se asignó a tu departamento."
+
+        if user.uid:
+            if user.email.lower() == email:
+                return "already_active", "Ya inicia sesión con este correo." + claimed
+
+            return (
+                "already_active",
+                f"Ya inició sesión con {user.email}; se respetó su correo." + claimed,
+            )
+
+        if user.email.lower() == email:
+            return "unchanged", "Ya tenía este correo." + claimed
+
+        previous_email = user.email
+        self.users_repository.assign_fields(user, {"email": email})
+        users_by_email[email] = user
+
+        return "updated", f"Correo actualizado: {previous_email} → {email}." + claimed
+
+    @staticmethod
+    def _normalize_header(cell) -> str:
+        """A header cell lowercased, trimmed and without accents ("Código" → "codigo")."""
+
+        text = unicodedata.normalize("NFKD", str(cell or "").strip().lower())
+
+        return "".join(ch for ch in text if not unicodedata.combining(ch))
+
+    @staticmethod
+    def _cell_text(row: tuple, index: int) -> str:
+        """A cell as trimmed text. Excel stores a numeric code as a float
+        (1152185.0), so whole numbers lose the trailing ``.0``."""
+
+        value = row[index] if index < len(row) else None
+
+        if value is None:
+            return ""
+
+        if isinstance(value, float) and value.is_integer():
+            value = int(value)
+
+        return str(value).strip()
 
     def _enrich_teacher_to_dict(self, teacher, roles: list[str] | None = None) -> dict:
         """Convert TeacherModel to dict with user data attached if available.

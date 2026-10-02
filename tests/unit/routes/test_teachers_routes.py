@@ -471,22 +471,42 @@ class TestUploadTeachersExcel:
     ):
         auth.as_user(DIRECTOR_USER)
         controller.upload_excel.return_value = {
-            "created": [], "skipped": [], "errors": []
+            "summary": {
+                "total": 1,
+                "created": 0,
+                "updated": 1,
+                "unchanged": 0,
+                "already_active": 0,
+                "other_department": 0,
+                "errors": 0,
+            },
+            "rows": [
+                {
+                    "row": 2,
+                    "institutional_code": "101",
+                    "email": "ana@ufps.edu.co",
+                    "status": "updated",
+                    "detail": "Correo actualizado: 101@temp.local → ana@ufps.edu.co.",
+                }
+            ],
         }
 
         response = client.post(
             "/teachers/upload",
             files={
                 "file": (
-                    "teachers.csv",
-                    b"nombre,email,codigo,contrato\n",
+                    "docentes.csv",
+                    b"codigo,correo\n101,ana@ufps.edu.co\n",
                     "text/csv",
                 )
             },
         )
 
-        assert response.status_code == 201
-        controller.upload_excel.assert_awaited_once()
+        assert response.status_code == 200
+        assert response.json()["data"]["summary"]["updated"] == 1
+        args = controller.upload_excel.await_args.args
+        assert args[1] == "docentes.csv"
+        assert args[2] == DIRECTOR_USER["department_id"]
 
     async def test_rejects_an_unsupported_extension(self, client, controller, auth):
         auth.as_user(DIRECTOR_USER)

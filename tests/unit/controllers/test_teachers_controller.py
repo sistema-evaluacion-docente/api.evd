@@ -225,18 +225,14 @@ class TestTeachersController:
         """Test upload_excel delegates to service."""
 
         current_user = {"id": 99}
-        mock_service.upload_excel.return_value = {
-            "created": [],
-            "skipped": [],
-            "errors": [],
-        }
+        mock_service.upload_excel.return_value = {"summary": {}, "rows": []}
 
         result = await controller.upload_excel(b"", "test.xlsx", 1, current_user)
 
         mock_service.upload_excel.assert_called_once_with(
             b"", "test.xlsx", 1, current_user
         )
-        assert "created" in result
+        assert result == {"summary": {}, "rows": []}
 
     @pytest.mark.asyncio
     async def test_get_evaluation_report_delegates_to_service(
