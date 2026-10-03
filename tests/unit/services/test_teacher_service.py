@@ -418,6 +418,7 @@ class TestTeacherService:
                 "teacher_id": 1,
                 "institutional_code": "12345",
                 "name": "Test Teacher",
+                "historical_average": 4.5,
             },
         )
         mock_teachers_repo.get_by_id.return_value = MagicMock()
@@ -436,6 +437,7 @@ class TestTeacherService:
 
         assert result["teacher_id"] == 1
         assert result["institutional_code"] == "12345"
+        assert result["historical_average"] == 4.5
         assert result["total"] == 1
         assert result["page"] == 1
         assert result["limit"] == 10

@@ -167,6 +167,9 @@ class TeacherHistoryOut(BaseModel):
     teacher_id: int
     institutional_code: str
     name: Optional[str]
+    # Mean of the per-period averages across every evaluated period (not just
+    # this page), each period weighing the same.
+    historical_average: Optional[float] = None
     items: list[TeacherPeriodHistory]
     total: int
     page: int
