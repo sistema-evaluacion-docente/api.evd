@@ -99,7 +99,7 @@ async def upload_teachers_excel(
         )
 
     file_bytes = await file.read()
-    validate_file_size(file_bytes, 5)
+    validate_file_size(file_bytes)
 
     if not file_bytes:
         raise HTTPException(status_code=400, detail="El archivo está vacío")
