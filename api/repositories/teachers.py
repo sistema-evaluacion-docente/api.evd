@@ -348,7 +348,12 @@ class TeachersRepository(BaseRepository[TeacherModel]):
         pagination: PaginationParams,
         sort_by: str | None = None,
     ) -> tuple[list[dict], int, dict | None]:
-        """Return the teacher's average score for each academic period, paginated."""
+        """Return the teacher's average score for each academic period, paginated.
+
+        The teacher info also carries ``historical_average``: the mean of the
+        per-period averages over **every** period, not just the requested
+        page, so each period weighs the same whatever its group count.
+        """
 
         teacher = self.get_by_id(teacher_id)
 
@@ -395,6 +400,13 @@ class TeachersRepository(BaseRepository[TeacherModel]):
             )
         )
 
+        period_averages = base_query.with_entities(
+            func.avg(EvaluationScoreModel.overall_average).label("avg_score")
+        ).subquery()
+        historical_average = self.db.query(
+            func.avg(period_averages.c.avg_score)
+        ).scalar()
+
         order_clause = AcademicPeriodModel.code.asc()
 
         if sort_by == "period_code_desc":
@@ -419,6 +431,9 @@ class TeachersRepository(BaseRepository[TeacherModel]):
                 teacher_user.institutional_code if teacher_user else None
             ),
             "name": teacher_user.name if teacher_user else None,
+            "historical_average": (
+                float(historical_average) if historical_average is not None else None
+            ),
         }
 
         items = [

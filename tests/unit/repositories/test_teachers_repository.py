@@ -330,3 +330,101 @@ class TestTeachersRepository:
         assert total == 1
         assert rows == [(mock_teacher_model, 4.5, 5)]
         mock_query.order_by.assert_called_once()
+
+
+class TestGetHistory:
+    """TeachersRepository.get_history against a real (in-memory SQLite) schema."""
+
+    @pytest.fixture
+    def db(self):
+        """A session over every model's table, with one teacher evaluated in
+        three periods: two groups (4.0 and 5.0) in 2024-1, one (3.0) in 2024-2
+        and one (4.0) in 2025-1."""
+
+        import importlib
+        import pkgutil
+
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import sessionmaker
+
+        import api.models as models_pkg
+        from api.database import Base
+        from api.models.academic_group import AcademicGroupModel
+        from api.models.academic_period import AcademicPeriodModel
+        from api.models.evaluation import EvaluationModel
+        from api.models.evaluation_score import EvaluationScoreModel
+        from api.models.user import UserModel
+
+        for module in pkgutil.iter_modules(models_pkg.__path__):
+            importlib.import_module(f"api.models.{module.name}")
+
+        engine = create_engine("sqlite://")
+        Base.metadata.create_all(engine)
+        session = sessionmaker(bind=engine)()
+
+        user = UserModel(email="t@ufps.edu.co", name="T", institutional_code="05647")
+        session.add(user)
+        session.flush()
+        teacher = TeacherModel(user_id=user.id)
+        session.add(teacher)
+        session.flush()
+
+        for code, scores in (("2024-1", [4.0, 5.0]), ("2024-2", [3.0]), ("2025-1", [4.0])):
+            period = AcademicPeriodModel(code=code, name=code, active=True)
+            session.add(period)
+            session.flush()
+            evaluation = EvaluationModel(academic_period_id=period.id, active=True)
+            session.add(evaluation)
+            session.flush()
+
+            for score in scores:
+                group = AcademicGroupModel(teacher_id=teacher.id, academic_period_id=period.id)
+                session.add(group)
+                session.flush()
+                session.add(
+                    EvaluationScoreModel(
+                        evaluation_id=evaluation.id,
+                        academic_group_id=group.id,
+                        respondent_count=10,
+                        overall_average=score,
+                    )
+                )
+
+        session.commit()
+        session.teacher_id = teacher.id
+        yield session
+        session.close()
+
+    def test_historical_average_weighs_each_period_the_same(self, db):
+        """Test the mean is over the period averages (4.5, 3.0, 4.0), not the groups."""
+
+        _, _, info = TeachersRepository(db).get_history(
+            db.teacher_id, PaginationParams(page=1, limit=10)
+        )
+
+        assert info["historical_average"] == pytest.approx((4.5 + 3.0 + 4.0) / 3)
+
+    def test_historical_average_covers_every_period_not_just_the_page(self, db):
+        """Test a one-period page still reports the average of all three."""
+
+        items, total, info = TeachersRepository(db).get_history(
+            db.teacher_id, PaginationParams(page=1, limit=1)
+        )
+
+        assert len(items) == 1
+        assert total == 3
+        assert info["historical_average"] == pytest.approx((4.5 + 3.0 + 4.0) / 3)
+
+    def test_historical_average_is_none_without_evaluations(self, db):
+        """Test a teacher never evaluated has no historical average."""
+
+        teacher = TeacherModel()
+        db.add(teacher)
+        db.commit()
+
+        items, total, info = TeachersRepository(db).get_history(
+            teacher.id, PaginationParams(page=1, limit=10)
+        )
+
+        assert (items, total) == ([], 0)
+        assert info["historical_average"] is None

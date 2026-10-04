@@ -26,7 +26,7 @@ ALLOWED_ORIGINS = [
     if origin.strip()
 ]
 UPLOAD_DIR = os.getenv("UPLOAD_DIR", "uploads")
-MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "10"))
+MAX_UPLOAD_SIZE_MB = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
 FIREBASE_CREDENTIALS = {
     "type": os.getenv("FIREBASE_TYPE"),
